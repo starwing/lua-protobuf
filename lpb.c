@@ -195,12 +195,13 @@ static void pb_resetbuffer(pb_Buffer *buff) {
 
 static void pb_prepbuffer(pb_Buffer *buff, size_t need) {
     need += buff->used;
-    if (need < buff->size) {
+    if (need > buff->size) {
         void *newud;
         size_t newsize = LUAL_BUFFERSIZE;
-        while (newsize < need)
+        while (need > newsize)
             newsize *= 2;
         newud = lua_newuserdata(buff->L, newsize);
+        memcpy(newud, buff->buff, buff->used);
         lua_rawsetp(buff->L, LUA_REGISTRYINDEX, buff);
         buff->buff = newud;
         buff->size = newsize;
@@ -772,7 +773,8 @@ static int Ldec_skip(lua_State *L) {
     default:
     case LPB_TGSTART: /* start group */
     case LPB_TGEND: /* end group */
-        if (pb_skipsize(dec, 1)) return 1;
+        /* TODO need implemenbt */
+        luaL_error(L, "group unsupport");
     }
     dec->p = p;
     return 0;
