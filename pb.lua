@@ -98,31 +98,43 @@ function decode(dec, ptype)
 end
 
 function encode(buff, t, ptype)
+   lvl = lvl or 1
+   local lvls = (" "):rep(lvl)
    local inner_buff
-   print("encode", require "serpent".block(ptype))
    for k,v in pairs(t) do
       local tag = ptype.map[k]
       local field = ptype[tag]
       if field then
          if field.scalar then
-            print("scalar", tag, field.type_name, v)
-            buff:add(tag, field.type_name, v)
+            if field.repeated then
+               for k,v in ipairs(v) do
+                  buff:add(tag, field.type_name, v)
+               end
+            else
+               buff:add(tag, field.type_name, v)
+            end
          else
             local ftype = field_type(field)
             if ftype.type == "message" then
                if not inner_buff then
                   inner_buff = buffer.new()
                end
-               inner_buff:clear()
-               encode(inner_buff, v, ftype)
-               print("message", tag, field.type_name, v)
-               buff:tag(tag, "bytes")
-               print("result", #inner_buff)
-               buff:bytes(inner_buff)
+               if field.repeated then
+                  for k,v in ipairs(v) do
+                     inner_buff:clear()
+                     encode(inner_buff, v, ftype)
+                     buff:tag(tag, "bytes")
+                     buff:bytes(inner_buff)
+                  end
+               else
+                  inner_buff:clear()
+                  encode(inner_buff, v, ftype)
+                  buff:tag(tag, "bytes")
+                  buff:bytes(inner_buff)
+               end
             elseif ftype.type == "enum" then
-               local value = ftype.map[k]
+               local value = ftype.map[v]
                if value then
-                  print("enum", tag, field.type_name, value)
                   buff:tag(tag, "varint")
                   buff:varint(value)
                end

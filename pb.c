@@ -352,6 +352,7 @@ static int Lbuf_bytes(lua_State *L) {
         pb_addvarint(buff, len);
         pb_prepbuffer(buff, len);
         memcpy(&buff->buff[buff->used], s, len);
+        buff->used += len;
     }
     return_self(L);
 }
@@ -397,6 +398,7 @@ static int Lbuf_add(lua_State *L) {
         pb_addvarint(buff, u.u32);
         pb_prepbuffer(buff, u.u32);
         memcpy(&buff->buff[buff->used], s, u.u32);
+        buff->used += u.u32;
         break;
     case PB_Tdouble:
         u.d = (double)luaL_checknumber(L, 4);
