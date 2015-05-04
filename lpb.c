@@ -1,3 +1,8 @@
+#ifdef _MSC_VER
+# define _CRT_NONSTDC_NO_WARNINGS
+# define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #define LUA_LIB
 #include <lua.h>
 #include <lauxlib.h>
@@ -394,16 +399,15 @@ static int Lbuf_add(lua_State *L) {
 
 static int Lbuf_clear(lua_State *L) {
     pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
-    lua_Integer n = luaL_optinteger(L, 2, buff->used);
-    if (n > buff->used) n = buff->used;
-    buff->used -= n;
-    lua_pushlstring(L, &buff->buff[buff->used], n);
+    size_t sz = (size_t)luaL_optinteger(L, 2, buff->used);
+    if (sz > buff->used) sz = buff->used;
+    buff->used -= sz;
+    lua_pushlstring(L, &buff->buff[buff->used], sz);
     return 1;
 }
 
 static int Lbuf_concat(lua_State *L) {
     pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
-    pb_Buffer *other;
     int i, top = lua_gettop(L);
     for (i = 2; i < top; ++i) {
         size_t len;
@@ -841,6 +845,79 @@ LUALIB_API int luaopen_pb_decoder(lua_State *L) {
     return 1;
 }
 
+/* io routines */
+
+#ifdef _WIN32
+# include <io.h>
+# include <fcntl.h>
+#else
+# define setmode(a,b)  ((void)0)
+#endif
+
+static int io_write(lua_State *L, FILE *f, int arg) {
+    int nargs = lua_gettop(L) - arg;
+    int status = 1;
+    for (; nargs--; arg++) {
+        size_t l;
+        const char *s = pb_tolbuffer(L, arg, &l);
+        status = status && (fwrite(s, sizeof(char), l, f) == l);
+    }
+    if (status) return 1;  /* file handle already on stack top */
+    else return luaL_fileresult(L, status, NULL);
+}
+
+static int Lio_read(lua_State *L) {
+    const char *fname = luaL_optstring(L, 1, NULL);
+    luaL_Buffer b;
+    FILE *fp = stdin;
+    size_t nr;
+    if (fname == NULL)
+        setmode(fileno(stdin), O_BINARY);
+    else if ((fp = fopen(fname, "rb")) == NULL)
+        return luaL_fileresult(L, 0, fname);
+    luaL_buffinit(L, &b);
+    do {  /* read file in chunks of LUAL_BUFFERSIZE bytes */
+        char *p = luaL_prepbuffsize(&b, LUAL_BUFFERSIZE);
+        nr = fread(p, sizeof(char), LUAL_BUFFERSIZE, fp);
+        luaL_addsize(&b, nr);
+    } while (nr == LUAL_BUFFERSIZE);
+    if (fp != stdin) fclose(fp);
+    else setmode(fileno(stdin), O_TEXT);
+    luaL_pushresult(&b);  /* close buffer */
+    return 1;
+}
+
+static int Lio_write(lua_State *L) {
+    int res;
+    setmode(fileno(stdout), O_BINARY);
+    res = io_write(L, stdin, 1);
+    setmode(fileno(stdout), O_TEXT);
+    return res;
+}
+
+static int Lio_dump(lua_State *L) {
+    const char *fname = luaL_checkstring(L, 1);
+    FILE *fp = fopen(fname, "wb");
+    int res;
+    if (fp == NULL) return luaL_fileresult(L, 0, fname);
+    res = io_write(L, stdin, 1);
+    fclose(fp);
+    return res;
+}
+
+
+LUALIB_API int luaopen_pb_io(lua_State *L) {
+    luaL_Reg libs[] = {
+#define ENTRY(name) { #name, Lio_##name }
+        ENTRY(read),
+        ENTRY(write),
+        ENTRY(dump),
+#undef  ENTRY
+        { NULL, NULL }
+    };
+    luaL_newlib(L, libs);
+    return 1;
+}
+
 /* cc: flags+='-mdll -s -O3 -DLUA_BUILD_AS_DLL'
  * cc: output='pb.dll' libs+='-llua53' */
-

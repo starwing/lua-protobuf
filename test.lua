@@ -389,10 +389,7 @@ end
 
 --------------------------------------------------
 
-local fh = assert(io.open("descriptor.pb", "rb"))
-local content = fh:read "*a"
-fh:close()
-
+local content = require "pb.io".read "descriptor.pb"
 local t = decode(decoder.new(content), types.google.protobuf.FileDescriptorSet)
 load_fileset(t)
 io.output "types.lua"
