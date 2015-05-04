@@ -33,10 +33,9 @@ local function field_type(field)
    return realtype
 end
 
-local decode, decode_field, decode_unknown_field
-local encode
+local decode, encode
 
-function decode_unknown_field(t, dec, wiretype, tag)
+local function decode_unknown_field(t, dec, wiretype, tag)
    local value = dec:fetch(wiretype)
    local uf = t.unknown_fields
    if not uf then
@@ -53,7 +52,7 @@ function decode_unknown_field(t, dec, wiretype, tag)
    end
 end
 
-function decode_field(t, dec, wiretype, tag, field)
+local function decode_field(t, dec, wiretype, tag, field)
    local value
    if field.scalar then
       value = dec:fetch(wiretype, field.type_name)
@@ -68,7 +67,7 @@ function decode_field(t, dec, wiretype, tag, field)
       else
          local len = dec:fetch "varint"
          local old = dec:len(dec:pos() + len - 1)
-         value = decode(dec, ftype)
+         value = decode(dec, ftype, table.concat(field.type_name, "."))
          dec:len(old)
       end
    end
@@ -83,8 +82,9 @@ function decode_field(t, dec, wiretype, tag, field)
    end
 end
 
-function decode(dec, ptype)
+function decode(dec, ptype, tn)
    local t = {}
+   local pos = dec:pos()
    while not dec:finished() do
       local tag, wiretype = dec:tag()
       local field = ptype[tag]
@@ -94,52 +94,131 @@ function decode(dec, ptype)
          decode_unknown_field(t, dec, wiretype, tag)
       end
    end
+   local size = dec:pos() - pos
    return t
 end
 
+local buffer_pool = {}
+local buffer_used = setmetatable({}, { __mode="k" })
+
+
+--[[
+function buffer.new()
+   local t = {}
+   function t:add(tag, type, value)
+      t[#t+1] = ("[%s %d %s]\n"):format(type, tag, tostring(value))
+   end
+   function t:tag(tag, wiretype)
+      t[#t+1] = ("[%s %d "):format(wiretype, tag)
+   end
+   function t:varint(n)
+      t[#t+1] = ("%d]\n"):format(n)
+   end
+   function t:bytes(s)
+      if type(s) == "table" then
+         s = table.concat(s)
+         t[#t+1] = ("\n"..s.."]"):gsub("\n", "\n  "):gsub("  ]%s*$", "]\n")
+      else
+         t[#t+1] = ("'%s'\n]\n"):format(s)
+      end
+   end
+   function t:clear(len, result)
+      if result then
+         result = table.concat(t)
+      end
+      for k, v in ipairs(t) do
+         t[k] = nil
+      end
+      return result
+   end
+   return t
+end
+--]]
+
+local function get_buffer()
+   local buff = next(buffer_pool)
+   if buff then
+      buffer_pool[buff] = nil
+   else
+      buff = buffer.new()
+   end
+   buffer_used[buff] = true
+   return buff
+end
+
+local function put_buffer(buff)
+   buffer_used[buff] = nil
+   buffer_pool[buff] = true
+end
+
+local function encode_message(buff, tag, msg, ftype)
+   local inner = get_buffer()
+   inner:clear()
+   encode(inner, msg, ftype)
+   buff:tag(tag, "bytes")
+   buff:bytes(inner)
+   inner:clear()
+   put_buffer(inner)
+end
+
+local function encode_enum(buff, tag, enum, ftype)
+   local value = assert(ftype.map[enum])
+   buff:tag(tag, "varint")
+   buff:varint(value)
+end
+
+local function encode_field(buff, tag, v, ptype)
+   --print(("encode_field(%d, %s)"):format(tag,
+   --require"serpent".block(v)))
+   local field = ptype[tag]
+   if not field then return end
+
+   if field.scalar then
+      -- TODO packed repeated
+      if field.repeated then
+         for k,v in ipairs(v) do
+            buff:add(tag, field.type_name, v)
+         end
+      else
+         buff:add(tag, field.type_name, v)
+      end
+      return
+   end
+
+   local ftype = field_type(field)
+   if ftype.type == "message" then
+      if not inner_buff then
+         inner_buff = buffer.new()
+      end
+      if not field.repeated then
+         encode_message(buff, tag, v, ftype)
+      else
+         for _, v in ipairs(v) do
+            encode_message(buff, tag, v, ftype)
+         end
+      end
+      return
+   end
+
+   if ftype.type == "enum" then
+      if not field.repeated then
+         encode_enum(buff, tag, v, ftype)
+      else
+         for _, v in ipairs(v) do
+            encode_enum(buff, tag, v, ftype)
+         end
+      end
+      return
+   end
+
+   error("unknown type: "..ftype.type)
+end
+
 function encode(buff, t, ptype)
-   lvl = lvl or 1
-   local lvls = (" "):rep(lvl)
-   local inner_buff
    for k,v in pairs(t) do
       local tag = ptype.map[k]
-      local field = ptype[tag]
-      if field then
-         if field.scalar then
-            if field.repeated then
-               for k,v in ipairs(v) do
-                  buff:add(tag, field.type_name, v)
-               end
-            else
-               buff:add(tag, field.type_name, v)
-            end
-         else
-            local ftype = field_type(field)
-            if ftype.type == "message" then
-               if not inner_buff then
-                  inner_buff = buffer.new()
-               end
-               if field.repeated then
-                  for k,v in ipairs(v) do
-                     inner_buff:clear()
-                     encode(inner_buff, v, ftype)
-                     buff:tag(tag, "bytes")
-                     buff:bytes(inner_buff)
-                  end
-               else
-                  inner_buff:clear()
-                  encode(inner_buff, v, ftype)
-                  buff:tag(tag, "bytes")
-                  buff:bytes(inner_buff)
-               end
-            elseif ftype.type == "enum" then
-               local value = ftype.map[v]
-               if value then
-                  buff:tag(tag, "varint")
-                  buff:varint(value)
-               end
-            end
-         end
+      if tag then
+         encode_field(buff, tag, v, ptype)
       end
    end
 end
@@ -153,12 +232,14 @@ function pb.decode(s, ptype)
    return res
 end
 
-local buff = buffer.new()
 function pb.encode(t, ptype)
    local realtype = qualitied_type(ptype)
+   local buff = get_buffer()
    buff:clear()
    encode(buff, t, realtype)
-   return buff:clear(nil, true)
+   local res = buff:clear(nil, true)
+   put_buffer(buff)
+   return res
 end
 
 ------------------------------------------------------------

@@ -270,11 +270,11 @@ static void pb_prepbuffer(pb_Buffer *buff, size_t need) {
 
 static void pb_addvarint(pb_Buffer *buff, uint64_t n) {
     pb_prepbuffer(buff, 10);
-    while (n != 0) {
+    do {
         int cur = n & 0x7F;
         n >>= 7;
         pb_addchar(buff, n != 0 ? cur | 0x80 : cur);
-    }
+    } while (n != 0);
 }
 
 static void pb_addfixed32(pb_Buffer *buff, uint32_t n) {
@@ -836,11 +836,16 @@ static int Ldec_finished(lua_State *L) {
 static int Ldec_tag(lua_State *L) {
     pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     uint64_t n = 0;
+    int wiretype;
     if (!pb_readvarint(dec, &n)) return 0;
+    wiretype = (int)(n & 0x7);
     lua_pushinteger(L, (lua_Integer)(n >> 3));
-    lua_pushinteger(L, (lua_Integer)(n & 0x7));
-    lua_pushstring(L, pb_wiretypes[n & 0x7]);
-    return 3;
+    lua_pushinteger(L, (lua_Integer)wiretype);
+    if (wiretype >= 0 && wiretype < PB_TWCOUNT) {
+        lua_pushstring(L, pb_wiretypes[wiretype]);
+        return 3;
+    }
+    return 2;
 }
 
 static int Ldec_varint(lua_State *L) {
@@ -935,8 +940,8 @@ static int skipvalue(pb_FBDecoder *dec, int wiretype) {
 
 static int Ldec_fetch(lua_State *L) {
     pb_FBDecoder dec = check_fbdecoder(L, 1);
-    int wiretype, extra = get_wiretype(L, dec.dec, 2, &wiretype);
     int type = find_type(luaL_optstring(L, 3, NULL));
+    int wiretype, extra = get_wiretype(L, dec.dec, 2, &wiretype);
     if (extra >= 0 && pb_pushscalar(&dec, wiretype, type))
         return extra + 1;
     restore_decoder(&dec);
@@ -1079,6 +1084,6 @@ LUALIB_API int luaopen_pb_io(lua_State *L) {
     return 1;
 }
 
-/* cc: flags+='-mdll -s -O3 -DLUA_BUILD_AS_DLL'
+/* cc: flags+='-s -O3 -mdll -DLUA_BUILD_AS_DLL'
  * xcc: flags+='-ID:\luajit\include' libs+='-LD:\luajit\'
  * cc: output='pb.dll' libs+='-llua53' */
