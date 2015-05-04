@@ -12,8 +12,8 @@
 #include <string.h>
 
 
-#define LPB_BUFTYPE  "lpb.Buffer"
-#define LPB_DECODER  "lpb.Decoder"
+#define PB_BUFTYPE  "lpb.Buffer"
+#define PB_DECODER  "lpb.Decoder"
 
 #define return_self(L) { lua_settop(L, 1); return 1; }
 
@@ -21,7 +21,7 @@
 /* protobuf types */
 
 /* wire type */
-#define LPB_WIRETYPES(X)      \
+#define PB_WIRETYPES(X)      \
     X(VARINT,  "varint"     ) \
     X(64BIT,   "64bit"      ) \
     X(LENGTH,  "bytes"      ) \
@@ -30,7 +30,7 @@
     X(32BIT,   "32bit"      ) \
 
 /* real types, must by ordered */
-#define LPB_TYPES(X) \
+#define PB_TYPES(X) \
     X(bool)          \
     X(bytes)         \
     X(double)        \
@@ -47,35 +47,35 @@
     X(uint32)        \
     X(uint64)        \
 
-typedef enum lpb_WireType {
-#define X(t, name) LPB_T##t,
-    LPB_WIRETYPES(X)
+typedef enum pb_WireType {
+#define X(t, name) PB_T##t,
+    PB_WIRETYPES(X)
 #undef  X
-    LPB_TWCOUNT
-} lpb_WireType;
+    PB_TWCOUNT
+} pb_WireType;
 
-typedef enum lpb_Type {
-#define X(t) LPB_T##t,
-    LPB_TYPES(X)
+typedef enum pb_Type {
+#define X(t) PB_T##t,
+    PB_TYPES(X)
 #undef  X
-    LPB_TCOUNT
-} lpb_Type;
+    PB_TCOUNT
+} pb_Type;
 
 static const char *pb_wiretypes[] = {
 #define X(t, name) name,
-    LPB_WIRETYPES(X)
+    PB_WIRETYPES(X)
 #undef  X
 };
 
 static const char *pb_types[] = {
 #define X(name) #name,
-    LPB_TYPES(X)
+    PB_TYPES(X)
 #undef  X
 };
 
 static int find_wiretype(const char *s) {
     int i;
-    for (i = 0; i < LPB_TWCOUNT; ++i) {
+    for (i = 0; i < PB_TWCOUNT; ++i) {
         if (strcmp(s, pb_wiretypes[i]) == 0)
             return i;
     }
@@ -83,7 +83,7 @@ static int find_wiretype(const char *s) {
 }
 
 static int find_type(const char *s) {
-    size_t start = 0, end = LPB_TCOUNT-1;
+    size_t start = 0, end = PB_TCOUNT-1;
     while (start <= end) {
         size_t mid = (start + end) >> 1;
         int res = strcmp(s, pb_types[mid]);
@@ -258,7 +258,7 @@ static void pb_pushfixed64(pb_Buffer *buff, uint64_t n) {
 
 static const char *pb_tolbuffer(lua_State *L, int idx, size_t *plen) {
     if (lua_type(L, idx) == LUA_TUSERDATA) {
-        pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, idx, LPB_BUFTYPE);
+        pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, idx, PB_BUFTYPE);
         if (plen) *plen = buff->used;
         return buff->buff;
     }
@@ -268,24 +268,24 @@ static const char *pb_tolbuffer(lua_State *L, int idx, size_t *plen) {
 static int Lbuf_new(lua_State *L) {
     pb_Buffer *buff = (pb_Buffer*)lua_newuserdata(L, sizeof(pb_Buffer));
     pb_initbuffer(buff, L);
-    luaL_setmetatable(L, LPB_BUFTYPE);
+    luaL_setmetatable(L, PB_BUFTYPE);
     return 1;
 }
 
 static int Lbuf_reset(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     pb_resetbuffer(buff);
     return_self(L);
 }
 
 static int Lbuf_len(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     lua_pushinteger(L, (lua_Integer)buff->used);
     return 1;
 }
 
 static int Lbuf_tag(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     int tag = (int)luaL_checkinteger(L, 2);
     int isint, wiretype = (int)lua_tointegerx(L, 3, &isint);
     if (!isint && (wiretype = find_wiretype(luaL_checkstring(L, 3)) < 0))
@@ -295,7 +295,7 @@ static int Lbuf_tag(lua_State *L) {
 }
 
 static int Lbuf_varint(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     int i, top = lua_gettop(L);
     for (i = 2; i <= top; ++i) {
         lua_Integer n = luaL_checkinteger(L, i);
@@ -305,7 +305,7 @@ static int Lbuf_varint(lua_State *L) {
 }
 
 static int Lbuf_bytes(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     int i, top = lua_gettop(L);
     for (i = 2; i <= top; ++i) {
         size_t len;
@@ -318,7 +318,7 @@ static int Lbuf_bytes(lua_State *L) {
 }
 
 static int Lbuf_fixed32(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     int i, top = lua_gettop(L);
     for (i = 2; i <= top; ++i) {
         uint32_t n =  (uint32_t)luaL_checkinteger(L, i);
@@ -328,7 +328,7 @@ static int Lbuf_fixed32(lua_State *L) {
 }
 
 static int Lbuf_fixed64(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     int i, top = lua_gettop(L);
     for (i = 2; i <= top; ++i) {
         uint64_t n =  (uint64_t)luaL_checkinteger(L, i);
@@ -338,68 +338,68 @@ static int Lbuf_fixed64(lua_State *L) {
 }
 
 static int Lbuf_add(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     uint32_t tag = (uint32_t)luaL_checkinteger(L, 2);
     const char *s, *type = luaL_checkstring(L, 3);
     union { float f; uint32_t u32;
             double d; uint64_t u64; } u;
     switch (find_type(type)) {
-    case LPB_Tbool:
+    case PB_Tbool:
         u.u32 = lua_toboolean(L, 4);
-        pb_pushvarint(buff, tag << 3 | LPB_TVARINT);
+        pb_pushvarint(buff, tag << 3 | PB_TVARINT);
         pb_prepbuffer(buff, 1);
         pb_addchar(buff, u.u32 ? 1 : 0);
         break;
-    case LPB_Tbytes:
-    case LPB_Tstring:
+    case PB_Tbytes:
+    case PB_Tstring:
         s = luaL_checklstring(L, 4, &u.u32);
-        pb_pushvarint(buff, tag << 3 | LPB_TLENGTH);
+        pb_pushvarint(buff, tag << 3 | PB_TLENGTH);
         pb_pushvarint(buff, u.u32);
         pb_prepbuffer(buff, u.u32);
         memcpy(&buff->buff[buff->used], s, u.u32);
         break;
-    case LPB_Tdouble:
+    case PB_Tdouble:
         u.d = (double)luaL_checknumber(L, 4);
-        pb_pushvarint(buff, tag << 3 | LPB_T64BIT);
+        pb_pushvarint(buff, tag << 3 | PB_T64BIT);
         pb_pushfixed64(buff, u.u64);
         break;
-    case LPB_Tfloat:
+    case PB_Tfloat:
         u.f = (float)luaL_checknumber(L, 4);
-        pb_pushvarint(buff, tag << 3 | LPB_T32BIT);
+        pb_pushvarint(buff, tag << 3 | PB_T32BIT);
         pb_pushfixed32(buff, u.u32);
         break;
-    case LPB_Tfixed32:
+    case PB_Tfixed32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
-        pb_pushvarint(buff, tag << 3 | LPB_T32BIT);
+        pb_pushvarint(buff, tag << 3 | PB_T32BIT);
         pb_pushfixed32(buff, u.u32);
         break;
-    case LPB_Tfixed64:
+    case PB_Tfixed64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
-        pb_pushvarint(buff, tag << 3 | LPB_T64BIT);
+        pb_pushvarint(buff, tag << 3 | PB_T64BIT);
         pb_pushfixed64(buff, u.u64);
         break;
-    case LPB_Tint32:
-    case LPB_Tuint32:
+    case PB_Tint32:
+    case PB_Tuint32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
-        pb_pushvarint(buff, tag << 3 | LPB_TVARINT);
+        pb_pushvarint(buff, tag << 3 | PB_TVARINT);
         pb_pushvarint(buff, (uint64_t)u.u32);
         break;
-    case LPB_Tint64:
-    case LPB_Tuint64:
+    case PB_Tint64:
+    case PB_Tuint64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
-        pb_pushvarint(buff, tag << 3 | LPB_TVARINT);
+        pb_pushvarint(buff, tag << 3 | PB_TVARINT);
         pb_pushvarint(buff, u.u64);
         break;
-    case LPB_Tsint32:
+    case PB_Tsint32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
         u.u32 = (u.u32 << 1) ^ (u.u32 >> 31);
-        pb_pushvarint(buff, tag << 3 | LPB_TVARINT);
+        pb_pushvarint(buff, tag << 3 | PB_TVARINT);
         pb_pushvarint(buff, (uint64_t)u.u32);
         break;
-    case LPB_Tsint64:
+    case PB_Tsint64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
         u.u64 = (u.u64 << 1) ^ (u.u64 >> 63);
-        pb_pushvarint(buff, tag << 3 | LPB_TVARINT);
+        pb_pushvarint(buff, tag << 3 | PB_TVARINT);
         pb_pushvarint(buff, u.u64);
         break;
     default:
@@ -410,7 +410,7 @@ static int Lbuf_add(lua_State *L) {
 }
 
 static int Lbuf_clear(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     size_t sz = (size_t)luaL_optinteger(L, 2, buff->used);
     if (sz > buff->used) sz = buff->used;
     buff->used -= sz;
@@ -422,7 +422,7 @@ static int Lbuf_clear(lua_State *L) {
 }
 
 static int Lbuf_concat(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     int i, top = lua_gettop(L);
     for (i = 2; i < top; ++i) {
         size_t len;
@@ -435,7 +435,7 @@ static int Lbuf_concat(lua_State *L) {
 }
 
 static int Lbuf_result(lua_State *L) {
-    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
     const char *s = luaL_optstring(L, 2, NULL);
     if (s == NULL)
         lua_pushlstring(L, buff->buff, buff->used);
@@ -480,7 +480,7 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
 #undef  ENTRY
         { NULL, NULL }
     };
-    if (luaL_newmetatable(L, LPB_BUFTYPE)) {
+    if (luaL_newmetatable(L, PB_BUFTYPE)) {
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
         luaL_setfuncs(L, libs, 0);
@@ -599,12 +599,12 @@ static int Ldec_new(lua_State *L) {
         dec = (pb_Decoder*)lua_newuserdata(L, sizeof(pb_Decoder));
         init_decoder(dec, L, 1);
     }
-    luaL_setmetatable(L, LPB_DECODER);
+    luaL_setmetatable(L, PB_DECODER);
     return 1;
 }
 
 static int Ldec_reset(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     lua_pushnil(L);
     lua_rawsetp(L, LUA_REGISTRYINDEX, dec);
     dec->len = 0;
@@ -613,7 +613,7 @@ static int Ldec_reset(lua_State *L) {
 }
 
 static int Ldec_source(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     size_t oi = dec->p - dec->start + 1;
     size_t oj = dec->end - dec->start;
     lua_rawgetp(L, LUA_REGISTRYINDEX, dec);
@@ -625,7 +625,7 @@ static int Ldec_source(lua_State *L) {
 }
 
 static int Ldec_pos(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     size_t pos = dec->p - dec->start + 1;
     lua_pushinteger(L, (lua_Integer)pos);
     if (lua_gettop(L) != 1) {
@@ -638,7 +638,7 @@ static int Ldec_pos(lua_State *L) {
 }
 
 static int Ldec_len(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     size_t len = dec->end - dec->start;
     lua_pushinteger(L, (lua_Integer)len);
     if (lua_gettop(L) != 1) {
@@ -651,19 +651,19 @@ static int Ldec_len(lua_State *L) {
 }
 
 static int Ldec_rawlen(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     lua_pushinteger(L, (lua_Integer)dec->len);
     return 1;
 }
 
 static int Ldec_finished(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     lua_pushboolean(L, dec->p >= dec->end);
     return 1;
 }
 
 static int Ldec_tag(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     uint64_t n = 0;
     if (!pb_readvarint(dec, &n)) return 0;
     lua_pushinteger(L, (lua_Integer)(n >> 3));
@@ -673,7 +673,7 @@ static int Ldec_tag(lua_State *L) {
 }
 
 static int Ldec_varint(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     uint64_t n = 0;
     if (!pb_readvarint(dec, &n)) return 0;
     lua_pushinteger(L, (lua_Integer)n);
@@ -681,7 +681,7 @@ static int Ldec_varint(lua_State *L) {
 }
 
 static int Ldec_fixed32(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     uint32_t n = 0;
     if (!pb_readfixed32(dec, &n)) return 0;
     lua_pushinteger(L, (lua_Integer)n);
@@ -689,7 +689,7 @@ static int Ldec_fixed32(lua_State *L) {
 }
 
 static int Ldec_fixed64(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     uint64_t n = 0;
     if (!pb_readfixed64(dec, &n)) return 0;
     lua_pushinteger(L, (lua_Integer)n);
@@ -697,7 +697,7 @@ static int Ldec_fixed64(lua_State *L) {
 }
 
 static int Ldec_bytes(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     const char *p = dec->p;
     uint64_t n = (uint64_t)luaL_optinteger(L, 2, 0);
     if (n == 0 && !pb_readvarint(dec, &n))
@@ -739,29 +739,29 @@ static int fetch_with_type(lua_State *L, pb_Decoder *dec, int wiretype) {
     uint32_t u32;
     uint64_t u64;
     switch (wiretype) {
-    case LPB_TVARINT:
+    case PB_TVARINT:
         if (!pb_readvarint(dec, &u64)) return 0;
         lua_pushinteger(L, (lua_Integer)u64);
         return 1;
-    case LPB_T64BIT:
+    case PB_T64BIT:
         if (!pb_readfixed64(dec, &u64)) return 0;
         lua_pushinteger(L, (lua_Integer)u64);
         return 1;
-    case LPB_TLENGTH:
+    case PB_TLENGTH:
         if (!pb_readvarint(dec, &u64)) return 0;
         if (dec->end - dec->p < u64) return 0;
         lua_pushlstring(L, dec->p, (size_t)u64);
         dec->p += u64;
         return 1;
-    case LPB_T32BIT:
+    case PB_T32BIT:
         if (!pb_readfixed32(dec, &u32)) return 0;
         lua_pushinteger(L, (lua_Integer)u32);
         return 1;
-    case LPB_TGSTART: /* start group */
-        lua_pushstring(L, pb_wiretypes[LPB_TGSTART]);
+    case PB_TGSTART: /* start group */
+        lua_pushstring(L, pb_wiretypes[PB_TGSTART]);
         return 1;
-    case LPB_TGEND: /* end group */
-        lua_pushstring(L, pb_wiretypes[LPB_TGEND]);
+    case PB_TGEND: /* end group */
+        lua_pushstring(L, pb_wiretypes[PB_TGEND]);
         return 1;
     default:
         return -1; /* unknown type */
@@ -769,7 +769,7 @@ static int fetch_with_type(lua_State *L, pb_Decoder *dec, int wiretype) {
 }
 
 static int Ldec_fetch(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     const char *p = dec->p;
     int res, wiretype, extra = get_wiretype(dec, L, 2, &wiretype);
     if (extra < 0) return 0;
@@ -781,29 +781,29 @@ static int Ldec_fetch(lua_State *L) {
 }
 
 static int Ldec_skip(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     const char *p = dec->p;
     int wiretype, extra = get_wiretype(dec, L, 2, &wiretype);
     uint64_t n;
     if (extra < 0) return 0;
     if (extra == 0) lua_pushboolean(L, 1);
     switch (wiretype) {
-    case LPB_TVARINT:
+    case PB_TVARINT:
         if (pb_skipvarint(dec)) return 1;
         break;
-    case LPB_T64BIT:
+    case PB_T64BIT:
         if (pb_skipsize(dec, 8)) return 1;
         break;
-    case LPB_TLENGTH:
+    case PB_TLENGTH:
         if (pb_readvarint(dec, &n) && pb_skipsize(dec, (size_t)n))
             return 1;
         break;
-    case LPB_T32BIT:
+    case PB_T32BIT:
         if (pb_skipsize(dec, 4)) return 1;
         break;
     default:
-    case LPB_TGSTART: /* start group */
-    case LPB_TGEND: /* end group */
+    case PB_TGSTART: /* start group */
+    case PB_TGEND: /* end group */
         /* TODO need implemenbt */
         luaL_error(L, "group unsupport");
     }
@@ -812,7 +812,7 @@ static int Ldec_skip(lua_State *L) {
 }
 
 static int values_iter(lua_State *L) {
-    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, LPB_DECODER);
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
     const char *p = dec->p;
     uint64_t n;
     int res;
@@ -829,7 +829,7 @@ static int values_iter(lua_State *L) {
 }
 
 static int Ldec_values(lua_State *L) {
-    luaL_checkudata(L, 1, LPB_DECODER);
+    luaL_checkudata(L, 1, PB_DECODER);
     lua_pushcfunction(L, values_iter);
     lua_pushvalue(L, 1);
     return 2;
@@ -858,7 +858,7 @@ LUALIB_API int luaopen_pb_decoder(lua_State *L) {
 #undef  ENTRY
         { NULL, NULL }
     };
-    if (luaL_newmetatable(L, LPB_DECODER)) {
+    if (luaL_newmetatable(L, PB_DECODER)) {
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
         luaL_setfuncs(L, libs, 0);
