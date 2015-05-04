@@ -8,12 +8,12 @@ local loaded_files = {}
 
 ------------------------------------------------------------
 
-local typeinfo = require "pb.typeinfo"
+local typeinfo = require "pb_typeinfo"
 
 local function qualitied_type(qname)
    local realtype = typeinfo
    local package = ""
-   for comp in ptype:gmatch "[^.]+" do
+   for comp in qname:gmatch "[^.]+" do
       realtype = realtype[comp]
       if not realtype then
          error(("no such type '%s' in package '%s'")
@@ -56,8 +56,7 @@ end
 function decode_field(t, dec, wiretype, tag, field)
    local value
    if field.scalar then
-      value = dec:fetch(wiretype)
-      value = conv_type(value, field.type_name)
+      value = dec:fetch(wiretype, field.type_name)
    else
       local ftype = field_type(field)
       if not ftype then
@@ -100,25 +99,30 @@ end
 
 function encode(buff, t, ptype)
    local inner_buff
+   print("encode", require "serpent".block(ptype))
    for k,v in pairs(t) do
       local tag = ptype.map[k]
       local field = ptype[tag]
       if field then
          if field.scalar then
+            print("scalar", tag, field.type_name, v)
             buff:add(tag, field.type_name, v)
          else
-            local ftype = field_type(field.type_name)
+            local ftype = field_type(field)
             if ftype.type == "message" then
                if not inner_buff then
                   inner_buff = buffer.new()
                end
                inner_buff:clear()
                encode(inner_buff, v, ftype)
+               print("message", tag, field.type_name, v)
                buff:tag(tag, "bytes")
+               print("result", #inner_buff)
                buff:bytes(inner_buff)
             elseif ftype.type == "enum" then
                local value = ftype.map[k]
                if value then
+                  print("enum", tag, field.type_name, value)
                   buff:tag(tag, "varint")
                   buff:varint(value)
                end
@@ -141,7 +145,7 @@ local buff = buffer.new()
 function pb.encode(t, ptype)
    local realtype = qualitied_type(ptype)
    buff:clear()
-   decode(buff, t, realtype)
+   encode(buff, t, realtype)
    return buff:clear(nil, true)
 end
 
