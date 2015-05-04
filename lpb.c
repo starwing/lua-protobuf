@@ -385,6 +385,15 @@ static int Lbuf_add(lua_State *L) {
     return_self(L);
 }
 
+static int Lbuf_clear(lua_State *L) {
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
+    lua_Integer n = luaL_optinteger(L, 2, buff->used);
+    if (n > buff->used) n = buff->used;
+    buff->used -= n;
+    lua_pushlstring(L, &buff->buff[buff->used], n);
+    return 1;
+}
+
 static int Lbuf_concat(lua_State *L) {
     pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
     pb_Buffer *other;
@@ -412,8 +421,26 @@ static int Lbuf_concat(lua_State *L) {
 
 static int Lbuf_result(lua_State *L) {
     pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, LPB_BUFTYPE);
-    lua_pushlstring(L, buff->buff, buff->used);
-    pb_resetbuffer(buff);
+    const char *s = luaL_optstring(L, 2, NULL);
+    if (s == NULL)
+        lua_pushlstring(L, buff->buff, buff->used);
+    else if (strcmp(s, "hex") == 0) {
+        const char *hexa = "0123456789ABCEF";
+        luaL_Buffer b;
+        char hex[4] = "XX ";
+        size_t i;
+        luaL_buffinit(L, &b);
+        for (i = 0; i < buff->used; ++i) {
+            hex[0] = hexa[(buff->buff[i]>>4)&0xF];
+            hex[1] = hexa[(buff->buff[i]   )&0xF];
+            if (i == buff->used-1) hex[2] = '\0';
+            luaL_addstring(&b, hex);
+        }
+        luaL_pushresult(&b);
+    }
+    else {
+        luaL_argerror(L, 2, "invalid options");
+    }
     return 1;
 }
 
@@ -433,6 +460,7 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
         ENTRY(float),
         ENTRY(double),
         ENTRY(add),
+        ENTRY(clear),
         ENTRY(result),
         ENTRY(concat),
         ENTRY(len),
