@@ -8,6 +8,39 @@
 #include <lauxlib.h>
 
 
+#if LUA_VERSION_NUM < 502
+#include <assert.h>
+
+# define luaL_newlib(L,l) (lua_newtable(L), luaL_register(L,NULL,l))
+# define luaL_setfuncs(L,l,n) (assert(n==0), luaL_register(L,NULL,l))
+# define luaL_setmetatable(L, name) \
+    (luaL_getmetatable((L), (name)), lua_setmetatable(L, -2))
+
+static int relindex(int idx, int offset) {
+    if (idx < 0 && idx > LUA_REGISTRYINDEX)
+        return idx + offset;
+    return idx;
+}
+
+static void lua_rawgetp(lua_State *L, int idx, const void *p) {
+    lua_pushlightuserdata(L, (void*)p);
+    lua_rawget(L, relindex(idx, 1));
+}
+
+static void lua_rawsetp(lua_State *L, int idx, const void *p) {
+    lua_pushlightuserdata(L, (void*)p);
+    lua_insert(L, -2);
+    lua_rawset(L, relindex(idx, 1));
+}
+
+static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isint) {
+    lua_Integer i = lua_tointeger(L, idx);
+    if (isint) *isint = (i != 0 || lua_type(L, idx) == LUA_TNUMBER);
+    return i;
+}
+#endif
+
+
 #include <stdint.h>
 #include <string.h>
 
@@ -898,7 +931,7 @@ static int Lio_read(lua_State *L) {
         return luaL_fileresult(L, 0, fname);
     luaL_buffinit(L, &b);
     do {  /* read file in chunks of LUAL_BUFFERSIZE bytes */
-        char *p = luaL_prepbuffsize(&b, LUAL_BUFFERSIZE);
+        char *p = luaL_prepbuffer(&b);
         nr = fread(p, sizeof(char), LUAL_BUFFERSIZE, fp);
         luaL_addsize(&b, nr);
     } while (nr == LUAL_BUFFERSIZE);
@@ -941,4 +974,5 @@ LUALIB_API int luaopen_pb_io(lua_State *L) {
 }
 
 /* cc: flags+='-mdll -s -O3 -DLUA_BUILD_AS_DLL'
+ * xcc: flags+='-ID:\luajit\include' libs+='-LD:\luajit\'
  * cc: output='pb.dll' libs+='-llua53' */
