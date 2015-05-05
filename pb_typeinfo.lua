@@ -31,6 +31,10 @@ return {
           name = "options";
           type_name = { "google","protobuf","MessageOptions" };
         };
+        [8] = { type = "field"; repeated = true;
+          name = "oneof_decl";
+          type_name = { "google","protobuf","OneofDescriptorProto" };
+        };
         map = {
           enum_type = 4;
           extension = 6;
@@ -38,6 +42,7 @@ return {
           field = 2;
           name = 1;
           nested_type = 3;
+          oneof_decl = 8;
           options = 7;
         };
         ExtensionRange = { type = "message";
@@ -75,11 +80,22 @@ return {
         };
       };
       EnumOptions = { type = "message";
+        [2] = { type = "field"; scalar = true;
+          name = "allow_alias";
+          type_name = "bool";
+        };
+        [3] = { type = "field"; scalar = true;
+          name = "deprecated";
+          type_name = "bool";
+          default_value = "false";
+        };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
           type_name = { "google","protobuf","UninterpretedOption" };
         };
         map = {
+          allow_alias = 2;
+          deprecated = 3;
           uninterpreted_option = 999;
         };
       };
@@ -103,11 +119,17 @@ return {
         };
       };
       EnumValueOptions = { type = "message";
+        [1] = { type = "field"; scalar = true;
+          name = "deprecated";
+          type_name = "bool";
+          default_value = "false";
+        };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
           type_name = { "google","protobuf","UninterpretedOption" };
         };
         map = {
+          deprecated = 1;
           uninterpreted_option = 999;
         };
       };
@@ -144,12 +166,17 @@ return {
           name = "options";
           type_name = { "google","protobuf","FieldOptions" };
         };
+        [9] = { type = "field"; scalar = true;
+          name = "oneof_index";
+          type_name = "int32";
+        };
         map = {
           default_value = 7;
           extendee = 2;
           label = 4;
           name = 1;
           number = 3;
+          oneof_index = 9;
           options = 8;
           type = 5;
           type_name = 6;
@@ -220,9 +247,19 @@ return {
           type_name = "bool";
           default_value = "false";
         };
+        [5] = { type = "field"; scalar = true;
+          name = "lazy";
+          type_name = "bool";
+          default_value = "false";
+        };
         [9] = { type = "field"; scalar = true;
           name = "experimental_map_key";
           type_name = "string";
+        };
+        [10] = { type = "field"; scalar = true;
+          name = "weak";
+          type_name = "bool";
+          default_value = "false";
         };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
@@ -232,8 +269,10 @@ return {
           ctype = 1;
           deprecated = 3;
           experimental_map_key = 9;
+          lazy = 5;
           packed = 2;
           uninterpreted_option = 999;
+          weak = 10;
         };
         CType = { type = "enum";
           [0] = "STRING";
@@ -283,6 +322,18 @@ return {
           name = "source_code_info";
           type_name = { "google","protobuf","SourceCodeInfo" };
         };
+        [10] = { type = "field"; scalar = true; repeated = true;
+          name = "public_dependency";
+          type_name = "int32";
+        };
+        [11] = { type = "field"; scalar = true; repeated = true;
+          name = "weak_dependency";
+          type_name = "int32";
+        };
+        [12] = { type = "field"; scalar = true;
+          name = "syntax";
+          type_name = "string";
+        };
         map = {
           dependency = 3;
           enum_type = 5;
@@ -291,8 +342,11 @@ return {
           name = 1;
           options = 8;
           package = 2;
+          public_dependency = 10;
           service = 6;
           source_code_info = 9;
+          syntax = 12;
+          weak_dependency = 11;
         };
       };
       FileDescriptorSet = { type = "message";
@@ -323,6 +377,10 @@ return {
           type_name = "bool";
           default_value = "false";
         };
+        [11] = { type = "field"; scalar = true;
+          name = "go_package";
+          type_name = "string";
+        };
         [16] = { type = "field"; scalar = true;
           name = "cc_generic_services";
           type_name = "bool";
@@ -343,17 +401,41 @@ return {
           type_name = "bool";
           default_value = "false";
         };
+        [23] = { type = "field"; scalar = true;
+          name = "deprecated";
+          type_name = "bool";
+          default_value = "false";
+        };
+        [27] = { type = "field"; scalar = true;
+          name = "java_string_check_utf8";
+          type_name = "bool";
+          default_value = "false";
+        };
+        [31] = { type = "field"; scalar = true;
+          name = "cc_enable_arenas";
+          type_name = "bool";
+          default_value = "false";
+        };
+        [36] = { type = "field"; scalar = true;
+          name = "objc_class_prefix";
+          type_name = "string";
+        };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
           type_name = { "google","protobuf","UninterpretedOption" };
         };
         map = {
+          cc_enable_arenas = 31;
           cc_generic_services = 16;
+          deprecated = 23;
+          go_package = 11;
           java_generate_equals_and_hash = 20;
           java_generic_services = 17;
           java_multiple_files = 10;
           java_outer_classname = 8;
           java_package = 1;
+          java_string_check_utf8 = 27;
+          objc_class_prefix = 36;
           optimize_for = 9;
           py_generic_services = 18;
           uninterpreted_option = 999;
@@ -380,11 +462,22 @@ return {
           type_name = "bool";
           default_value = "false";
         };
+        [3] = { type = "field"; scalar = true;
+          name = "deprecated";
+          type_name = "bool";
+          default_value = "false";
+        };
+        [7] = { type = "field"; scalar = true;
+          name = "map_entry";
+          type_name = "bool";
+        };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
           type_name = { "google","protobuf","UninterpretedOption" };
         };
         map = {
+          deprecated = 3;
+          map_entry = 7;
           message_set_wire_format = 1;
           no_standard_descriptor_accessor = 2;
           uninterpreted_option = 999;
@@ -407,20 +500,47 @@ return {
           name = "options";
           type_name = { "google","protobuf","MethodOptions" };
         };
+        [5] = { type = "field"; scalar = true;
+          name = "client_streaming";
+          type_name = "bool";
+          default_value = "false";
+        };
+        [6] = { type = "field"; scalar = true;
+          name = "server_streaming";
+          type_name = "bool";
+          default_value = "false";
+        };
         map = {
+          client_streaming = 5;
           input_type = 2;
           name = 1;
           options = 4;
           output_type = 3;
+          server_streaming = 6;
         };
       };
       MethodOptions = { type = "message";
+        [33] = { type = "field"; scalar = true;
+          name = "deprecated";
+          type_name = "bool";
+          default_value = "false";
+        };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
           type_name = { "google","protobuf","UninterpretedOption" };
         };
         map = {
+          deprecated = 33;
           uninterpreted_option = 999;
+        };
+      };
+      OneofDescriptorProto = { type = "message";
+        [1] = { type = "field"; scalar = true;
+          name = "name";
+          type_name = "string";
+        };
+        map = {
+          name = 1;
         };
       };
       ServiceDescriptorProto = { type = "message";
@@ -443,11 +563,17 @@ return {
         };
       };
       ServiceOptions = { type = "message";
+        [33] = { type = "field"; scalar = true;
+          name = "deprecated";
+          type_name = "bool";
+          default_value = "false";
+        };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
           type_name = { "google","protobuf","UninterpretedOption" };
         };
         map = {
+          deprecated = 33;
           uninterpreted_option = 999;
         };
       };
@@ -468,9 +594,24 @@ return {
             name = "span";
             type_name = "int32";
           };
+          [3] = { type = "field"; scalar = true;
+            name = "leading_comments";
+            type_name = "string";
+          };
+          [4] = { type = "field"; scalar = true;
+            name = "trailing_comments";
+            type_name = "string";
+          };
+          [6] = { type = "field"; scalar = true; repeated = true;
+            name = "leading_detached_comments";
+            type_name = "string";
+          };
           map = {
+            leading_comments = 3;
+            leading_detached_comments = 6;
             path = 1;
             span = 2;
+            trailing_comments = 4;
           };
         };
       };
@@ -527,6 +668,7 @@ return {
           };
         };
       };
-    }
-  }
+    };
+  };
 }
+
