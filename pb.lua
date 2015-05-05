@@ -33,6 +33,24 @@ local function field_type(field)
    return realtype
 end
 
+local function subtable(t, k, type)
+   local subt = t[k]
+   if not subt then
+      subt = {}
+      t[k] = subt
+   end
+   subt.type = type or subt.type
+   return subt
+end
+
+local function make_package(package)
+   local cur = typeinfo
+   for pkg in package:gmatch "[^.]+" do
+      cur = subtable(cur, pkg, "package")
+   end
+   return cur
+end
+
 local decode, encode
 
 local function decode_unknown_field(t, dec, wiretype, tag)
@@ -265,24 +283,6 @@ local scalar_typemap = {
    TYPE_SINT64 = "sint64";
 }
 
-local function subtable(t, k, type)
-   local subt = t[k]
-   if not subt then
-      subt = {}
-      t[k] = subt
-   end
-   subt.type = type or subt.type
-   return subt
-end
-
-local function make_package(package)
-   local cur = info
-   for pkg in package:gmatch "[^.]+" do
-      cur = subtable(cur, pkg, "package")
-   end
-   return cur
-end
-
 local function split_qname(name)
    local t = {}
    for comp in name:gmatch "[^.]+" do
@@ -292,11 +292,6 @@ local function split_qname(name)
 end
 
 local function load_field(msg, field)
-   local t = msg[field.number]
-   if t then
-      error(("message '%s': field '%s' tag(%d) conflict with field '%s'")
-         :format(msg.name, field.name, field.number, t.name))
-   end
    if field.extendee then
       error(("message '%s': field '%s' should not have extendee!")
          :format(msg.name, field.name))
@@ -308,8 +303,7 @@ local function load_field(msg, field)
    end
    namemap[field.name] = field.number
 
-   t = {}
-   msg[field.number] = t
+   local t = subtable(msg, field.number, "field")
    t.type = "field"
    t.name = field.name
    t.repeated = field.label == 'LABEL_REPEATED'
@@ -351,6 +345,9 @@ end
 
 local function load_message(pkg, msg)
    local t = subtable(pkg, msg.name, "message")
+   if msg.name then
+      pkg.name = msg.name
+   end
    if msg.field then
       for i, v in ipairs(msg.field) do
          load_field(t, v)
@@ -395,15 +392,15 @@ end
 
 local function load_fileset(pb)
    for i,v in ipairs(pb.file) do
-      if not files[v.name] then
-         files[v.name] = v
+      if not loaded_files[v.name] then
+         loaded_files[v.name] = v
          load_file(v)
       end
    end
 end
 
 function pb.load(data)
-   load_fileset(pb.decode(data, "google.protobuf.Descriptor"))
+   load_fileset(pb.decode(data, "google.protobuf.FileDescriptorSet"))
 end
 
 function pb.loadfile(filename)
@@ -545,7 +542,7 @@ local function dump_info(info)
          if v.type == "package" then
             G(lvls)(key(k))' = { type = "package";\n'
             _dfs(v, lvl+1)
-            G(lvls)'}\n'
+            G(lvls)'};\n'
          elseif v.type == "enum" then
             dump_enum(k, v, lvl)
          elseif v.type == "message" then
