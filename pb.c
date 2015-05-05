@@ -1021,7 +1021,7 @@ LUALIB_API int luaopen_pb_decoder(lua_State *L) {
 #endif
 
 static int io_write(lua_State *L, FILE *f, int arg) {
-    int nargs = lua_gettop(L) - arg;
+    int nargs = lua_gettop(L) - arg + 1;
     int status = 1;
     for (; nargs--; arg++) {
         size_t l;
@@ -1056,17 +1056,18 @@ static int Lio_read(lua_State *L) {
 static int Lio_write(lua_State *L) {
     int res;
     setmode(fileno(stdout), O_BINARY);
-    res = io_write(L, stdin, 1);
+    res = io_write(L, stdout, 1);
+    fflush(stdout);
     setmode(fileno(stdout), O_TEXT);
     return res;
 }
 
 static int Lio_dump(lua_State *L) {
+    int res;
     const char *fname = luaL_checkstring(L, 1);
     FILE *fp = fopen(fname, "wb");
-    int res;
     if (fp == NULL) return luaL_fileresult(L, 0, fname);
-    res = io_write(L, stdin, 1);
+    res = io_write(L, fp, 1);
     fclose(fp);
     return res;
 }
