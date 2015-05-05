@@ -3,10 +3,28 @@ local decoder = require "pb.decoder"
 local buffer = require "pb.buffer"
 local conv = require "pb.conv"
 local pbio = require "pb.io"
+local ipairs = ipairs
+local pairs = pairs
+local type = type
+
+
+------------------------------------------------------------ 
 
 local loaded_files = {}
 
-------------------------------------------------------------
+function pb.clearfiles()
+   loaded_files = {}
+end
+
+function pb.file(filename)
+   if filename then
+      return loaded_files[filename]
+   else
+      return loaded_files
+   end
+end
+
+------------------------------------------------------------ 
 
 local typeinfo = require "pb_typeinfo"
 
@@ -116,10 +134,17 @@ local function put_buffer(buff)
    buffer_pool[buff] = true
 end
 
+function pb.clearbuffers()
+   for k, v in pairs(buffer_pool) do
+      k:reset()
+      buffer_pool[k] = nil
+   end
+end
+
 local decode, encode
-local dec = decoder.new()
 
 local function decode_unknown_field(t, dec, wiretype, tag)
+   do return end -- XXX ignore unknown fields
    local value = dec:fetch(wiretype)
    local uf = t.unknown_fields
    if not uf then
@@ -144,14 +169,14 @@ local function decode_field(t, dec, wiretype, tag, field)
       local ftype = field_type(field)
       if not ftype then
          --return decode_unknown_field(t, dec, wiretype, tag)
-         return -- ignore type-unknown fields
+         return -- XXX ignore type-unknown fields
       elseif ftype.type == "enum" then
          value = dec:fetch(wiretype)
          value = ftype[value] or value
       else
          local len = dec:fetch "varint"
          local old = dec:len(dec:pos() + len - 1)
-         value = decode(dec, ftype, table.concat(field.type_name, "."))
+         value = decode(dec, ftype)
          dec:len(old)
       end
    end
@@ -166,9 +191,8 @@ local function decode_field(t, dec, wiretype, tag, field)
    end
 end
 
-function decode(dec, ptype, tn)
+function decode(dec, ptype)
    local t = {}
-   local pos = dec:pos()
    while not dec:finished() do
       local tag, wiretype = dec:tag()
       local field = ptype[tag]
@@ -178,7 +202,6 @@ function decode(dec, ptype, tn)
          decode_unknown_field(t, dec, wiretype, tag)
       end
    end
-   local size = dec:pos() - pos
    return t
 end
 
@@ -254,11 +277,15 @@ function encode(buff, t, ptype)
    end
 end
 
-function pb.decode(s, ptype)
+function pb.decode(s, ptype, dec)
    if type(ptype) ~= "table" then
       ptype = qualitied_type(ptype)
    end
-   dec:source(s)
+   if dec then
+      dec:source(s)
+   else
+      dec = decoder.new(s)
+   end
    local res = decode(dec, ptype)
    dec:reset()
    return res
@@ -276,34 +303,27 @@ function pb.encode(t, ptype)
    return res
 end
 
-function pb.clearbuffers()
-   for k, v in pairs(buffer_pool) do
-      k:reset()
-      buffer_pool[k] = nil
-   end
-end
-
 ------------------------------------------------------------
 
 local scalar_typemap = {
-   TYPE_DOUBLE = "double";
-   TYPE_FLOAT = "float";
-   TYPE_INT64 = "int64";
-   TYPE_UINT64 = "uint64";
-   TYPE_INT32 = "int32";
-   TYPE_FIXED64 = "fixed64";
-   TYPE_FIXED32 = "fixed32";
-   TYPE_BOOL = "bool";
-   TYPE_STRING = "string";
-   TYPE_GROUP = "group";
-   TYPE_MESSAGE = "message";
-   TYPE_BYTES = "bytes";
-   TYPE_UINT32 = "uint32";
-   TYPE_ENUM = "enum";
+   TYPE_BOOL     = "bool";
+   TYPE_BYTES    = "bytes";
+   TYPE_DOUBLE   = "double";
+   TYPE_ENUM     = "enum";
+   TYPE_FIXED32  = "fixed32";
+   TYPE_FIXED64  = "fixed64";
+   TYPE_FLOAT    = "float";
+   TYPE_GROUP    = "group";
+   TYPE_INT32    = "int32";
+   TYPE_INT64    = "int64";
+   TYPE_MESSAGE  = "message";
    TYPE_SFIXED32 = "sfixed32";
    TYPE_SFIXED64 = "sfixed64";
-   TYPE_SINT32 = "sint32";
-   TYPE_SINT64 = "sint64";
+   TYPE_SINT32   = "sint32";
+   TYPE_SINT64   = "sint64";
+   TYPE_STRING   = "string";
+   TYPE_UINT32   = "uint32";
+   TYPE_UINT64   = "uint64";
 }
 
 local function split_qname(name)
