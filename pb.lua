@@ -202,6 +202,11 @@ function decode(dec, ptype)
          decode_unknown_field(t, dec, wiretype, tag)
       end
    end
+   if ptype.defaults then
+      for k,v in pairs(ptype.defaults) do
+         if t[k] == nil then t[k] = v end
+      end
+   end
    return t
 end
 
@@ -339,11 +344,7 @@ local function load_field(msg, field)
       error(("message '%s': field '%s' should not have extendee!")
          :format(msg.name, field.name))
    end
-   local namemap = msg.map
-   if not namemap then
-      namemap = {}
-      msg.map = namemap
-   end
+   local namemap = subtable(msg, 'map')
    namemap[field.name] = field.number
 
    local t = subtable(msg, field.number, "field")
@@ -356,7 +357,11 @@ local function load_field(msg, field)
       t.type_name = scalar_typemap[field.type]
       t.scalar = true
    end
-   t.default_value = field.default_value
+   if field.options then
+      t.packed = field.options.packed
+      t.lazy = field.options.lazy
+      t.deprecated = field.options.deprecated
+   end
    return t
 end
 
@@ -372,16 +377,22 @@ end
 
 local function load_enum(pkg, enum)
    local t = subtable(pkg, enum.name, "enum")
-   local namemap = t.map
-   if not namemap then
-      namemap = {}
-      t.map = namemap
-   end
+   local namemap = subtable(t, 'map')
+   local deprecated_names
    if enum.value then
       for i, v in ipairs(enum.value) do
          t[v.number] = v.name
          namemap[v.name] = v.number
+         if v.options and v.options.deprecated then
+            if not deprecated_names then
+               deprecated_names = subtable(t, 'deprecated_names')
+            end
+            deprecated_names[k] = true
+         end
       end
+   end
+   if enum.options and enum.options.deprecated then
+      t.deprecated = true
    end
    return t
 end
@@ -391,9 +402,14 @@ local function load_message(pkg, msg)
    if msg.name then
       pkg.name = msg.name
    end
+   local defaults
    if msg.field then
       for i, v in ipairs(msg.field) do
          load_field(t, v)
+         if v.default_value ~= nil then
+            defaults = subtable(t, 'defaults')
+            defaults[v.name] = v.default_value
+         end
       end
    end
    if msg.nested_type then
@@ -410,6 +426,9 @@ local function load_message(pkg, msg)
       for i, v in ipairs(msg.extension) do
          load_extension(v)
       end
+   end
+   if msg.options and msg.options.deprecated then
+      t.deprecated = true
    end
    return t
 end
@@ -453,6 +472,10 @@ function pb.loadfile(filename)
    return pb.load(assert(pbio.read(filename)))
 end
 
+function pb.loadproto(proto)
+   return load_file(proto)
+end
+
 ------------------------------------------------------------
 
 local function merge_enum(pkg, enum)
@@ -464,6 +487,18 @@ local function merge_enum(pkg, enum)
       if type(k) == "number" then
          pkg[k] = v
          namemap[v] = k
+      end
+   end
+   if enum.deprecated ~= nil then
+      pkg.deprecated = enum.deprecated
+   end
+   if enum.deprecated_names then
+      if not pkg.deprecated_names then
+         pkg.deprecated_names = enum.deprecated_names
+      else
+         for k,v in pairs(enum.deprecated_names) do
+            pkg.deprecated_names[k] = v
+         end
       end
    end
 end
@@ -482,6 +517,9 @@ local function merge_message(pkg, msg)
       elseif v.type == "message" then
          merge_message(subtable(pkg, k, "message"), v)
       end
+   end
+   if msg.deprecated ~= nil then
+      pkg.deprecated = msg.deprecated
    end
 end
 
@@ -526,6 +564,15 @@ local function key(k)
    return ("[%s]"):format(k)
 end
 
+local function value(v)
+   local n = tonumber(v)
+   if n then return v end
+   if type(v) ~= 'string' then
+      return tostring(v)
+   end
+   return ("%q"):format(v)
+end
+
 local function sorted_pairs(t)
    local keys = {}
    for k, v in pairs(t) do
@@ -562,21 +609,24 @@ local function sorted_ipairs(t)
    end
 end
 
+local function dump_table(t, k, lvls)
+   if t[k] then
+      G'  '(lvls, key(k))' = {\n'
+      for k,v in sorted_pairs(t[k]) do
+         G'    '(lvls, key(k))' = '(value(v))';\n'
+      end
+      G'  '(lvls)'};\n'
+   end
+end
+
 local function dump_enum(name, enum, lvl)
    local lvls = ('  '):rep(lvl)
    G(lvls, name)' = { type = "enum";\n'
    for k,v in sorted_ipairs(enum) do
-      if k ~= 'type' then
-         G'  '(lvls)(key(k))' = "'(v)'";\n'
-      end
+      G'  '(lvls)(key(k))' = "'(v)'";\n'
    end
-   if enum.map then
-      G'  '(lvls)'map = {\n'
-      for k,v in sorted_pairs(enum.map) do
-         G'    '(lvls, key(k))' = '(v)';\n'
-      end
-      G'  '(lvls)'};\n'
-   end
+   dump_table(enum, 'map', lvls)
+   dump_table(enum, 'deprecated_names', lvls)
    G(lvls)'};\n'
 end
 
@@ -585,11 +635,7 @@ local function dump_message(name, msg, lvl)
    G(lvls, name)' = { type = "message";\n'
    local nested = {}
    for k,v in sorted_ipairs(msg) do
-      if v.type == "enum" then
-         dump_enum(k, v, lvl+1)
-      elseif v.type == "message" then
-         dump_message(k, v, lvl+1)
-      elseif v.type == "field" then
+      if v.type == "field" then
          G'  '(lvls)(key(k))' = { type = "field";'
          if v.scalar then G' scalar = true;' end
          if v.repeated then G' repeated = true;' end
@@ -601,16 +647,27 @@ local function dump_message(name, msg, lvl)
             G'    '(lvls)'type_name = { "'
                (table.concat(v.type_name, '","'))'" };\n'
          end
-         if v.default_value then
-            G'    '(lvls)'default_value = "'(v.default_value)'";\n'
+         if v.deprecated then
+            G'    '(lvls)'deprecated = '(value(v.deprecated))';\n'
+         end
+         if v.lazy then
+            G'    '(lvls)'lazy = '(value(v.lazy))';\n'
+         end
+         if v.packed then
+            G'    '(lvls)'packed = '(value(v.packed))';\n'
          end
          G'  '(lvls)'};\n'
       end
    end
-   if msg.map then
-      G'  '(lvls)'map = {\n'
-      for k,v in sorted_pairs(msg.map) do
-         G'    '(lvls, key(k))' = '(v)';\n'
+   dump_table(msg, 'map', lvls)
+   if msg.defaults then
+      G'  '(lvls)'defaults = {\n'
+      for k,v in sorted_pairs(msg.defaults) do
+         if msg[msg.map[k]].type_name == "bool" then
+            G'    '(lvls, key(k))' = '(v)';\n'
+         else
+            G'    '(lvls, key(k))' = '(value(v))';\n'
+         end
       end
       G'  '(lvls)'};\n'
    end

@@ -87,7 +87,6 @@ return {
         [3] = { type = "field"; scalar = true;
           name = "deprecated";
           type_name = "bool";
-          default_value = "false";
         };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
@@ -97,6 +96,9 @@ return {
           allow_alias = 2;
           deprecated = 3;
           uninterpreted_option = 999;
+        };
+        defaults = {
+          deprecated = false;
         };
       };
       EnumValueDescriptorProto = { type = "message";
@@ -122,7 +124,6 @@ return {
         [1] = { type = "field"; scalar = true;
           name = "deprecated";
           type_name = "bool";
-          default_value = "false";
         };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
@@ -131,6 +132,9 @@ return {
         map = {
           deprecated = 1;
           uninterpreted_option = 999;
+        };
+        defaults = {
+          deprecated = false;
         };
       };
       FieldDescriptorProto = { type = "message";
@@ -236,7 +240,6 @@ return {
         [1] = { type = "field";
           name = "ctype";
           type_name = { "google","protobuf","FieldOptions","CType" };
-          default_value = "STRING";
         };
         [2] = { type = "field"; scalar = true;
           name = "packed";
@@ -245,12 +248,10 @@ return {
         [3] = { type = "field"; scalar = true;
           name = "deprecated";
           type_name = "bool";
-          default_value = "false";
         };
         [5] = { type = "field"; scalar = true;
           name = "lazy";
           type_name = "bool";
-          default_value = "false";
         };
         [9] = { type = "field"; scalar = true;
           name = "experimental_map_key";
@@ -259,7 +260,6 @@ return {
         [10] = { type = "field"; scalar = true;
           name = "weak";
           type_name = "bool";
-          default_value = "false";
         };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
@@ -273,6 +273,12 @@ return {
           packed = 2;
           uninterpreted_option = 999;
           weak = 10;
+        };
+        defaults = {
+          ctype = "STRING";
+          deprecated = false;
+          lazy = false;
+          weak = false;
         };
         CType = { type = "enum";
           [0] = "STRING";
@@ -370,12 +376,10 @@ return {
         [9] = { type = "field";
           name = "optimize_for";
           type_name = { "google","protobuf","FileOptions","OptimizeMode" };
-          default_value = "SPEED";
         };
         [10] = { type = "field"; scalar = true;
           name = "java_multiple_files";
           type_name = "bool";
-          default_value = "false";
         };
         [11] = { type = "field"; scalar = true;
           name = "go_package";
@@ -384,37 +388,30 @@ return {
         [16] = { type = "field"; scalar = true;
           name = "cc_generic_services";
           type_name = "bool";
-          default_value = "false";
         };
         [17] = { type = "field"; scalar = true;
           name = "java_generic_services";
           type_name = "bool";
-          default_value = "false";
         };
         [18] = { type = "field"; scalar = true;
           name = "py_generic_services";
           type_name = "bool";
-          default_value = "false";
         };
         [20] = { type = "field"; scalar = true;
           name = "java_generate_equals_and_hash";
           type_name = "bool";
-          default_value = "false";
         };
         [23] = { type = "field"; scalar = true;
           name = "deprecated";
           type_name = "bool";
-          default_value = "false";
         };
         [27] = { type = "field"; scalar = true;
           name = "java_string_check_utf8";
           type_name = "bool";
-          default_value = "false";
         };
         [31] = { type = "field"; scalar = true;
           name = "cc_enable_arenas";
           type_name = "bool";
-          default_value = "false";
         };
         [36] = { type = "field"; scalar = true;
           name = "objc_class_prefix";
@@ -440,6 +437,17 @@ return {
           py_generic_services = 18;
           uninterpreted_option = 999;
         };
+        defaults = {
+          cc_enable_arenas = false;
+          cc_generic_services = false;
+          deprecated = false;
+          java_generate_equals_and_hash = false;
+          java_generic_services = false;
+          java_multiple_files = false;
+          java_string_check_utf8 = false;
+          optimize_for = "SPEED";
+          py_generic_services = false;
+        };
         OptimizeMode = { type = "enum";
           [1] = "SPEED";
           [2] = "CODE_SIZE";
@@ -455,17 +463,14 @@ return {
         [1] = { type = "field"; scalar = true;
           name = "message_set_wire_format";
           type_name = "bool";
-          default_value = "false";
         };
         [2] = { type = "field"; scalar = true;
           name = "no_standard_descriptor_accessor";
           type_name = "bool";
-          default_value = "false";
         };
         [3] = { type = "field"; scalar = true;
           name = "deprecated";
           type_name = "bool";
-          default_value = "false";
         };
         [7] = { type = "field"; scalar = true;
           name = "map_entry";
@@ -481,6 +486,11 @@ return {
           message_set_wire_format = 1;
           no_standard_descriptor_accessor = 2;
           uninterpreted_option = 999;
+        };
+        defaults = {
+          deprecated = false;
+          message_set_wire_format = false;
+          no_standard_descriptor_accessor = false;
         };
       };
       MethodDescriptorProto = { type = "message";
@@ -503,12 +513,10 @@ return {
         [5] = { type = "field"; scalar = true;
           name = "client_streaming";
           type_name = "bool";
-          default_value = "false";
         };
         [6] = { type = "field"; scalar = true;
           name = "server_streaming";
           type_name = "bool";
-          default_value = "false";
         };
         map = {
           client_streaming = 5;
@@ -518,12 +526,15 @@ return {
           output_type = 3;
           server_streaming = 6;
         };
+        defaults = {
+          client_streaming = false;
+          server_streaming = false;
+        };
       };
       MethodOptions = { type = "message";
         [33] = { type = "field"; scalar = true;
           name = "deprecated";
           type_name = "bool";
-          default_value = "false";
         };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
@@ -532,6 +543,9 @@ return {
         map = {
           deprecated = 33;
           uninterpreted_option = 999;
+        };
+        defaults = {
+          deprecated = false;
         };
       };
       OneofDescriptorProto = { type = "message";
@@ -566,7 +580,6 @@ return {
         [33] = { type = "field"; scalar = true;
           name = "deprecated";
           type_name = "bool";
-          default_value = "false";
         };
         [999] = { type = "field"; repeated = true;
           name = "uninterpreted_option";
@@ -575,6 +588,9 @@ return {
         map = {
           deprecated = 33;
           uninterpreted_option = 999;
+        };
+        defaults = {
+          deprecated = false;
         };
       };
       SourceCodeInfo = { type = "message";
@@ -589,10 +605,12 @@ return {
           [1] = { type = "field"; scalar = true; repeated = true;
             name = "path";
             type_name = "int32";
+            packed = true;
           };
           [2] = { type = "field"; scalar = true; repeated = true;
             name = "span";
             type_name = "int32";
+            packed = true;
           };
           [3] = { type = "field"; scalar = true;
             name = "leading_comments";
@@ -665,6 +683,60 @@ return {
           map = {
             is_extension = 2;
             name_part = 1;
+          };
+        };
+      };
+      compiler = { type = "package";
+        CodeGeneratorRequest = { type = "message";
+          [1] = { type = "field"; scalar = true; repeated = true;
+            name = "file_to_generate";
+            type_name = "string";
+          };
+          [2] = { type = "field"; scalar = true;
+            name = "parameter";
+            type_name = "string";
+          };
+          [15] = { type = "field"; repeated = true;
+            name = "proto_file";
+            type_name = { "google","protobuf","FileDescriptorProto" };
+          };
+          map = {
+            file_to_generate = 1;
+            parameter = 2;
+            proto_file = 15;
+          };
+        };
+        CodeGeneratorResponse = { type = "message";
+          [1] = { type = "field"; scalar = true;
+            name = "error";
+            type_name = "string";
+          };
+          [15] = { type = "field"; repeated = true;
+            name = "file";
+            type_name = { "google","protobuf","compiler","CodeGeneratorResponse","File" };
+          };
+          map = {
+            error = 1;
+            file = 15;
+          };
+          File = { type = "message";
+            [1] = { type = "field"; scalar = true;
+              name = "name";
+              type_name = "string";
+            };
+            [2] = { type = "field"; scalar = true;
+              name = "insertion_point";
+              type_name = "string";
+            };
+            [15] = { type = "field"; scalar = true;
+              name = "content";
+              type_name = "string";
+            };
+            map = {
+              content = 15;
+              insertion_point = 2;
+              name = 1;
+            };
           };
         };
       };
