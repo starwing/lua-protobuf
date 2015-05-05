@@ -1,0 +1,20 @@
+#!/bin/env lua
+-- This is just a Demo to write protoc plugins with lua-protobuf :)
+
+local pb = require "pb"
+local pbio = require "pb.io"
+
+
+local data = pbio.read()
+local req = pb.decode(data,
+   "google.protobuf.compiler.CodeGeneratorRequest")
+
+--io.stderr:write(require "serpent".block(req))
+
+local res = {}
+res.error = 'test test'
+
+local resdata = pb.encode(res,
+   "google.protobuf.compiler.CodeGeneratorResponse")
+pbio.write(resdata)
+
