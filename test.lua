@@ -1,7 +1,7 @@
 local decoder = require "pb.decoder"
 local serpent = require "serpent"
 
-local types = require "types"
+local types = require "pb_typeinfo"
 
 local function decode(dec, ptype)
    local t = {}

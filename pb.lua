@@ -51,7 +51,60 @@ local function make_package(package)
    return cur
 end
 
+local buffer_pool = {}
+local buffer_used = setmetatable({}, { __mode="k" })
+
+--[[
+function buffer.new()
+   local t = {}
+   function t:add(tag, type, value)
+      t[#t+1] = ("[%s %d %s]\n"):format(type, tag, tostring(value))
+   end
+   function t:tag(tag, wiretype)
+      t[#t+1] = ("[%s %d "):format(wiretype, tag)
+   end
+   function t:varint(n)
+      t[#t+1] = ("%d]\n"):format(n)
+   end
+   function t:bytes(s)
+      if type(s) == "table" then
+         s = table.concat(s)
+         t[#t+1] = ("\n"..s.."]"):gsub("\n", "\n  "):gsub("  ]%s*$", "]\n")
+      else
+         t[#t+1] = ("'%s'\n]\n"):format(s)
+      end
+   end
+   function t:clear(len, result)
+      if result then
+         result = table.concat(t)
+      end
+      for k, v in ipairs(t) do
+         t[k] = nil
+      end
+      return result
+   end
+   return t
+end
+--]]
+
+local function get_buffer()
+   local buff = next(buffer_pool)
+   if buff then
+      buffer_pool[buff] = nil
+   else
+      buff = buffer.new()
+   end
+   buffer_used[buff] = true
+   return buff
+end
+
+local function put_buffer(buff)
+   buffer_used[buff] = nil
+   buffer_pool[buff] = true
+end
+
 local decode, encode
+local dec = decoder.new()
 
 local function decode_unknown_field(t, dec, wiretype, tag)
    local value = dec:fetch(wiretype)
@@ -114,59 +167,6 @@ function decode(dec, ptype, tn)
    end
    local size = dec:pos() - pos
    return t
-end
-
-local buffer_pool = {}
-local buffer_used = setmetatable({}, { __mode="k" })
-
-
---[[
-function buffer.new()
-   local t = {}
-   function t:add(tag, type, value)
-      t[#t+1] = ("[%s %d %s]\n"):format(type, tag, tostring(value))
-   end
-   function t:tag(tag, wiretype)
-      t[#t+1] = ("[%s %d "):format(wiretype, tag)
-   end
-   function t:varint(n)
-      t[#t+1] = ("%d]\n"):format(n)
-   end
-   function t:bytes(s)
-      if type(s) == "table" then
-         s = table.concat(s)
-         t[#t+1] = ("\n"..s.."]"):gsub("\n", "\n  "):gsub("  ]%s*$", "]\n")
-      else
-         t[#t+1] = ("'%s'\n]\n"):format(s)
-      end
-   end
-   function t:clear(len, result)
-      if result then
-         result = table.concat(t)
-      end
-      for k, v in ipairs(t) do
-         t[k] = nil
-      end
-      return result
-   end
-   return t
-end
---]]
-
-local function get_buffer()
-   local buff = next(buffer_pool)
-   if buff then
-      buffer_pool[buff] = nil
-   else
-      buff = buffer.new()
-   end
-   buffer_used[buff] = true
-   return buff
-end
-
-local function put_buffer(buff)
-   buffer_used[buff] = nil
-   buffer_pool[buff] = true
 end
 
 local function encode_message(buff, tag, msg, ftype)
@@ -241,7 +241,6 @@ function encode(buff, t, ptype)
    end
 end
 
-local dec = decoder.new()
 function pb.decode(s, ptype)
    local realtype = qualitied_type(ptype)
    dec:source(s)
@@ -258,6 +257,13 @@ function pb.encode(t, ptype)
    local res = buff:clear(nil, true)
    put_buffer(buff)
    return res
+end
+
+function pb.clearbuffers()
+   for k, v in pairs(buffer_pool) do
+      k:reset()
+      buffer_pool[k] = nil
+   end
 end
 
 ------------------------------------------------------------
@@ -409,7 +415,51 @@ end
 
 ------------------------------------------------------------
 
+local function merge_enum(pkg, enum)
+   local namemap = pkg.map
+   if not namemap then
+      namemap = {}; pkg.map = namemap
+   end
+   for k, v in pairs(enum) do
+      if type(k) == "number" then
+         pkg[k] = v
+         namemap[v] = k
+      end
+   end
+end
 
+local function merge_message(pkg, msg)
+   local namemap = pkg.map
+   if not namemap then
+      namemap = {}; pkg.map = namemap
+   end
+   for k, v in pairs(msg) do
+      if type(k) == "number" then
+         pkg[k] = v
+         namemap[v] = k
+      elseif v.type == "enum" then
+         merge_enum(subtable(pkg, k, "enum"), v)
+      elseif v.type == "message" then
+         merge_message(subtable(pkg, k, "message"), v)
+      end
+   end
+end
+
+local function merge_package(pkg, other)
+   for k,v in pairs(other) do
+      if v.type == "enum" then
+         merge_enum(subtable(pkg, k, "enum"), v)
+      elseif v.type == "message" then
+         merge_message(subtable(pkg, k, "message"), v)
+      elseif v.type == "package" then
+         merge_package(subtable(pkg, "package"), v)
+      end
+   end
+end
+
+function pb.merge(package)
+   merge_package(typeinfo, package)
+end
 
 ------------------------------------------------------------
 
