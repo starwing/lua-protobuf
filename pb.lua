@@ -51,6 +51,19 @@ local function make_package(package)
    return cur
 end
 
+function pb.cleartypes()
+   package.loaded.pb_typeinfo = nil
+   typeinfo = require "pb_typeinfo"
+end
+
+function pb.type(qname)
+   if qname then
+      return qualitied_type(qname)
+   else
+      return typeinfo
+   end
+end
+
 local buffer_pool = {}
 local buffer_used = setmetatable({}, { __mode="k" })
 
@@ -242,18 +255,22 @@ function encode(buff, t, ptype)
 end
 
 function pb.decode(s, ptype)
-   local realtype = qualitied_type(ptype)
+   if type(ptype) ~= "table" then
+      ptype = qualitied_type(ptype)
+   end
    dec:source(s)
-   local res = decode(dec, realtype)
+   local res = decode(dec, ptype)
    dec:reset()
    return res
 end
 
 function pb.encode(t, ptype)
-   local realtype = qualitied_type(ptype)
+   if type(ptype) ~= "table" then
+      ptype = qualitied_type(ptype)
+   end
    local buff = get_buffer()
    buff:clear()
-   encode(buff, t, realtype)
+   encode(buff, t, ptype)
    local res = buff:clear(nil, true)
    put_buffer(buff)
    return res
@@ -406,11 +423,14 @@ local function load_fileset(pb)
 end
 
 function pb.load(data)
-   load_fileset(pb.decode(data, "google.protobuf.FileDescriptorSet"))
+   local proto = pb.decode(data,
+      "google.protobuf.FileDescriptorSet")
+   load_fileset(proto)
+   return proto
 end
 
 function pb.loadfile(filename)
-   return pb.load(pbio.read(filename))
+   return pb.load(assert(pbio.read(filename)))
 end
 
 ------------------------------------------------------------
@@ -606,9 +626,12 @@ local function dump_info(info)
    G "}\n\n"
 end
 
-function pb.dump(filename, qtype)
+function pb.dump(filename, ptype)
    local realtype = typeinfo
-   if qtype then realtype = qualitied_type(type) end
+   if ptype then
+      realtype = type(ptype) == "table" and ptype
+         or qualitied_type(ptype)
+   end
    io.output(filename)
    dump_info(realtype)
    io.output():close()
