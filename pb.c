@@ -304,6 +304,12 @@ static const char *pb_tolbuffer(lua_State *L, int idx, size_t *plen) {
     return luaL_checklstring(L, idx, plen);
 }
 
+static int Lbuf_tostring(lua_State *L) {
+    pb_Buffer *buff = (pb_Buffer*)luaL_checkudata(L, 1, PB_BUFTYPE);
+    lua_pushfstring(L, "pb.Buffer: %p", buff);
+    return 1;
+}
+
 static int Lbuf_new(lua_State *L) {
     pb_Buffer *buff = (pb_Buffer*)lua_newuserdata(L, sizeof(pb_Buffer));
     pb_initbuffer(buff, L);
@@ -508,6 +514,7 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
         { "__gc", Lbuf_reset },
         { "__len", Lbuf_len },
         { "__concat", Lbuf_concat },
+        { "__tostring", Lbuf_tostring },
 #define ENTRY(name) { #name, Lbuf_##name }
         ENTRY(new),
         ENTRY(reset),
@@ -757,6 +764,12 @@ static void init_decoder(pb_Decoder *dec, lua_State *L, int idx) {
     lua_rawsetp(L, LUA_REGISTRYINDEX, dec);
 }
 
+static int Ldec_tostring(lua_State *L) {
+    pb_Decoder *dec = (pb_Decoder*)luaL_checkudata(L, 1, PB_DECODER);
+    lua_pushfstring(L, "pb.Decoder: %p", dec);
+    return 1;
+}
+
 static int Ldec_new(lua_State *L) {
     pb_Decoder *dec;
     if (lua_gettop(L) == 0) {
@@ -984,6 +997,7 @@ LUALIB_API int luaopen_pb_decoder(lua_State *L) {
     luaL_Reg libs[] = {
         { "__gc", Ldec_reset },
         { "__len", Ldec_len },
+        { "__tostring", Ldec_tostring },
 #define ENTRY(name) { #name, Ldec_##name }
         ENTRY(new),
         ENTRY(reset),

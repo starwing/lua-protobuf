@@ -161,10 +161,35 @@ local function decode_unknown_field(t, dec, wiretype, tag)
    end
 end
 
+local repeated_fixed32 = { fixed32 = true, sfixed32 = true, float = true }
+local repeated_fixed64 = { fixed64 = true, sfixed64 = true, double = true }
+local function decode_packed_repeated(t, dec, field)
+   local len = assert(dec:varint())
+   local old = dec:len(dec:pos() + len - 1)
+   local wt = "varint"
+   if repeated_fixed32[field.type_name] then
+      wt = "fixed32"
+   elseif repeated_fixed64[field.type_name] then
+      wt = "fixed64"
+   end
+   repeat
+      local value = dec:fetch(wt, ftype.type_name)
+      t[#t+1] = value
+   until not value
+   dec:len(old)
+end
+
 local function decode_field(t, dec, wiretype, tag, field)
    local value
    if field.scalar then
-      value = dec:fetch(wiretype, field.type_name)
+      if field.repeated and field.packed then
+         assert(field.type_name ~= "string")
+         local t = subtable(t, field.name)
+         decode_packed_repeated(t, dec, field)
+         return
+      else
+         value = dec:fetch(wiretype, field.type_name)
+      end
    else
       local ftype = field_type(field)
       if not ftype then
@@ -174,7 +199,7 @@ local function decode_field(t, dec, wiretype, tag, field)
          value = dec:fetch(wiretype)
          value = ftype[value] or value
       else
-         local len = dec:fetch "varint"
+         local len = assert(dec:varint())
          local old = dec:len(dec:pos() + len - 1)
          value = decode(dec, ftype)
          dec:len(old)
