@@ -718,6 +718,15 @@ static int pb_pushscalar(pb_FBDecoder *dec, int wiretype, int type) {
     case PB_T64BIT:
         return pb_pushfixed64(dec, type);
     case PB_TLENGTH:
+#if 0 /* not enabled */
+        if (type >= 0 && (type != PB_Tbytes
+                      ||  type != PB_Tstring
+                      ||  type != PB_Tmessage)) {
+            restore_decoder(dec);
+            return luaL_error(dec->L, "read string with invalid type: %s",
+                    pb_types[type]);
+        }
+#endif
         if (!pb_readvarint(dec->dec, &n)) return 0;
         if (dec->dec->end - dec->dec->p < n) return 0;
         lua_pushlstring(dec->L, dec->dec->p, (size_t)n);

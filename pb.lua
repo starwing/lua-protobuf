@@ -173,7 +173,7 @@ local function decode_packed_repeated(t, dec, field)
       wt = "fixed64"
    end
    repeat
-      local value = dec:fetch(wt, ftype.type_name)
+      local value = dec:fetch(wt, field.type_name)
       t[#t+1] = value
    until not value
    dec:len(old)
@@ -181,16 +181,7 @@ end
 
 local function decode_field(t, dec, wiretype, tag, field)
    local value
-   if field.scalar then
-      if field.repeated and field.packed then
-         assert(field.type_name ~= "string")
-         local t = subtable(t, field.name)
-         decode_packed_repeated(t, dec, field)
-         return
-      else
-         value = dec:fetch(wiretype, field.type_name)
-      end
-   else
+   if not field.scalar then
       local ftype = field_type(field)
       if not ftype then
          --return decode_unknown_field(t, dec, wiretype, tag)
@@ -204,15 +195,18 @@ local function decode_field(t, dec, wiretype, tag, field)
          value = decode(dec, ftype)
          dec:len(old)
       end
+   elseif wiretype == 2 and field.packed then
+      local t = subtable(t, field.name)
+      return decode_packed_repeated(t, dec, field)
+   else
+      value = dec:fetch(wiretype, field.type_name)
    end
 
    if not field.repeated then
       t[field.name] = value
-   elseif not t[field.name] then
-      t[field.name] = { value }
    else
-      local ft = t[field.name]
-      ft[#ft+1] = value
+      local vs = subtable(t, field.name)
+      vs[#vs+1] = value
    end
 end
 
