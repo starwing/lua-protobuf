@@ -1,3 +1,5 @@
+package.path = "../?.lua;"..package.path
+package.cpath = "../?.dll;../?.so;"..package.cpath
 local pb = require "pb"
 local pbio = require "pb.io"
 local serpent = require "serpent"

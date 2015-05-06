@@ -245,6 +245,29 @@ local function encode_enum(buff, tag, enum, ftype)
    buff:varint(value)
 end
 
+local function encode_scalar(buff, tag, v, field)
+   if not field.repeated then
+      return buff:add(tag, field.type_name, v)
+   end
+
+   if field.packed and field.type_name ~= "string" then 
+      local inner = get_buffer()
+      inner:clear()
+      for k,v in ipairs(v) do
+         inner:add(nil, field.type_name, v)
+      end
+      buff:tag(tag, "bytes")
+      buff:bytes(inner)
+      inner:clear()
+      put_buffer(inner)
+      return
+   end
+
+   for k,v in ipairs(v) do
+      buff:add(tag, field.type_name, v)
+   end
+end
+
 local function encode_field(buff, tag, v, ptype)
    --print(("encode_field(%d, %s)"):format(tag,
    --require"serpent".block(v)))
@@ -252,22 +275,11 @@ local function encode_field(buff, tag, v, ptype)
    if not field then return end
 
    if field.scalar then
-      -- TODO packed repeated
-      if field.repeated then
-         for k,v in ipairs(v) do
-            buff:add(tag, field.type_name, v)
-         end
-      else
-         buff:add(tag, field.type_name, v)
-      end
-      return
+      return encode_scalar(buff, tag, v, field)
    end
 
    local ftype = field_type(field)
    if ftype.type == "message" then
-      if not inner_buff then
-         inner_buff = buffer.new()
-      end
       if not field.repeated then
          encode_message(buff, tag, v, ftype)
       else
