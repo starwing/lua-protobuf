@@ -247,6 +247,7 @@ end
 
 local function encode_scalar(buff, tag, v, field)
    if not field.repeated then
+      if v == field.default_value then return end
       return buff:add(tag, field.type_name, v)
    end
 
@@ -292,7 +293,9 @@ local function encode_field(buff, tag, v, ptype)
 
    if ftype.type == "enum" then
       if not field.repeated then
-         encode_enum(buff, tag, v, ftype)
+         if v ~= field.default_value then
+            encode_enum(buff, tag, v, ftype)
+         end
       else
          for _, v in ipairs(v) do
             encode_enum(buff, tag, v, ftype)
@@ -393,6 +396,7 @@ local function load_field(msg, field)
       t.lazy = field.options.lazy
       t.deprecated = field.options.deprecated
    end
+   t.default_value = field.default_value
    return t
 end
 
@@ -509,6 +513,20 @@ end
 
 ------------------------------------------------------------
 
+local function merge_table(dst, t, key)
+   local st = t[key]
+   if st then
+      local dt = dst[k]
+      if not dt then
+         dst[k] = st
+      else
+         for k,v in pairs(st) do
+            dt[k] = v
+         end
+      end
+   end
+end
+
 local function merge_enum(pkg, enum)
    local namemap = pkg.map
    if not namemap then
@@ -523,15 +541,7 @@ local function merge_enum(pkg, enum)
    if enum.deprecated ~= nil then
       pkg.deprecated = enum.deprecated
    end
-   if enum.deprecated_names then
-      if not pkg.deprecated_names then
-         pkg.deprecated_names = enum.deprecated_names
-      else
-         for k,v in pairs(enum.deprecated_names) do
-            pkg.deprecated_names[k] = v
-         end
-      end
-   end
+   merge_table(pkg, enum, "deprecated_names")
 end
 
 local function merge_message(pkg, msg)
@@ -552,6 +562,7 @@ local function merge_message(pkg, msg)
    if msg.deprecated ~= nil then
       pkg.deprecated = msg.deprecated
    end
+   merge_table(pkg, msg, "defaults")
 end
 
 local function merge_package(pkg, other)
@@ -677,6 +688,11 @@ local function dump_message(name, msg, lvl)
          else
             G'    '(lvls)'type_name = { "'
                (table.concat(v.type_name, '","'))'" };\n'
+         end
+         if v.default_value then
+            G'    '(lvls)'default_value = '(
+               v.type_name == "bool" and v.default_value
+                  or value(v.default_value))';\n'
          end
          if v.deprecated then
             G'    '(lvls)'deprecated = '(value(v.deprecated))';\n'
