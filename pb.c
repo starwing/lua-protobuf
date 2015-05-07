@@ -354,10 +354,18 @@ static int Lbuf_tostring(lua_State *L) {
 }
 
 static int Lbuf_new(lua_State *L) {
+    int i, top = lua_gettop(L);
     pb_Buffer *buf = (pb_Buffer*)lua_newuserdata(L, sizeof(pb_Buffer));
     pb_initbuffer(buf, L);
     lua_rawgetp(L, LUA_REGISTRYINDEX, pb_buftype);
     lua_setmetatable(L, -2);
+    for (i = 1; i <= top; ++i) {
+        size_t len;
+        const char *s = pb_tolbuffer(L, i, &len);
+        pb_prepbuffer(buf, len);
+        memcpy(&buf->buf[buf->used], s, len);
+        buf->used += len;
+    }
     return 1;
 }
 
@@ -524,7 +532,7 @@ static int Lbuf_clear(lua_State *L) {
 static int Lbuf_concat(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
     int i, top = lua_gettop(L);
-    for (i = 2; i < top; ++i) {
+    for (i = 2; i <= top; ++i) {
         size_t len;
         const char *s = pb_tolbuffer(L, i, &len);
         pb_prepbuffer(buf, len);
@@ -597,7 +605,7 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
 typedef struct pb_Decoder {
     size_t len;
     const char *s;
-    const char *p, *start, *end;
+    const char *p, *end;
 } pb_Decoder;
 
 static int pb_readvarint(pb_Decoder *dec, uint64_t *pv) {
@@ -800,14 +808,13 @@ static int pb_pushscalar(pb_FBDecoder *dec, int wiretype, int type) {
 
 static void init_decoder(pb_Decoder *dec, lua_State *L, int idx) {
     size_t len;
-    const char *s = luaL_checklstring(L, idx, &len);
+    const char *s = pb_tolbuffer(L, idx, &len);
     lua_Integer i = luaL_optinteger(L, idx+1, 1);
     lua_Integer j = luaL_optinteger(L, idx+2, len);
     rangerelat(&i, &j, len);
     dec->s = s;
     dec->len = len;
     dec->p = s + i - 1;
-    dec->start = s;
     dec->end = dec->p + j;
     lua_pushvalue(L, idx);
     lua_rawsetp(L, LUA_REGISTRYINDEX, dec);
@@ -827,7 +834,7 @@ static int Ldec_new(lua_State *L) {
     if (lua_gettop(L) == 0) {
         dec = (pb_Decoder*)lua_newuserdata(L, sizeof(pb_Decoder));
         dec->len = 0;
-        dec->s = dec->p = dec->start = dec->end = NULL;
+        dec->s = dec->p = dec->end = NULL;
     }
     else {
         lua_settop(L, 3);
@@ -844,14 +851,14 @@ static int Ldec_reset(lua_State *L) {
     lua_pushnil(L);
     lua_rawsetp(L, LUA_REGISTRYINDEX, dec);
     dec->len = 0;
-    dec->s = dec->p = dec->start = dec->end = NULL;
+    dec->s = dec->p = dec->end = NULL;
     return 0;
 }
 
 static int Ldec_source(lua_State *L) {
     pb_Decoder *dec = check_decoder(L, 1);
-    size_t oi = dec->p - dec->start + 1;
-    size_t oj = dec->end - dec->start;
+    size_t oi = dec->p - dec->s + 1;
+    size_t oj = dec->end - dec->s;
     int top = lua_gettop(L);
     if (top != 1) lua_settop(L, 3);
     lua_rawgetp(L, LUA_REGISTRYINDEX, dec);
@@ -863,34 +870,30 @@ static int Ldec_source(lua_State *L) {
 
 static int Ldec_pos(lua_State *L) {
     pb_Decoder *dec = check_decoder(L, 1);
-    size_t pos = dec->p - dec->start + 1;
+    size_t pos = dec->p - dec->s + 1;
     lua_pushinteger(L, (lua_Integer)pos);
     if (lua_gettop(L) != 1) {
         lua_Integer npos = posrelat(luaL_optinteger(L, 2, pos),
-                dec->end - dec->start);
+                dec->end - dec->s);
         if (npos < 1) npos = 1;
-        dec->p = dec->start + npos - 1;
+        dec->p = dec->s + npos - 1;
     }
     return 1;
 }
 
 static int Ldec_len(lua_State *L) {
     pb_Decoder *dec = check_decoder(L, 1);
-    size_t len = dec->end - dec->start;
-    lua_pushinteger(L, (lua_Integer)len);
-    if (lua_gettop(L) != 1) {
-        lua_Integer len;
-        len = luaL_optinteger(L, 2, dec->len);
-        if (len > dec->len) len = dec->len;
-        dec->end = dec->start + len;
-    }
-    return 1;
-}
-
-static int Ldec_rawlen(lua_State *L) {
-    pb_Decoder *dec = check_decoder(L, 1);
+    int type = lua_type(L, 2);
+    lua_pushinteger(L, (lua_Integer)(dec->end - dec->p));
     lua_pushinteger(L, (lua_Integer)dec->len);
-    return 1;
+    if (type <= 0)
+        dec->end = dec->s + dec->len;
+    else if (type == LUA_TNUMBER) {
+        size_t len = (size_t)lua_tointeger(L, 2);
+        if (len > dec->len) len = dec->len;
+        dec->end = dec->s + len;
+    }
+    return 2;
 }
 
 static int Ldec_finished(lua_State *L) {
@@ -1037,10 +1040,27 @@ static int values_iter(lua_State *L) {
 }
 
 static int Ldec_values(lua_State *L) {
-    check_buffer(L, 1);
+    check_decoder(L, 1);
     lua_pushcfunction(L, values_iter);
     lua_pushvalue(L, 1);
     return 2;
+}
+
+static int Ldec_update(lua_State *L) {
+    pb_Decoder *dec = check_decoder(L, 1);
+    pb_Buffer *buf;
+    lua_rawgetp(L, LUA_REGISTRYINDEX, dec);
+    if ((buf = testudata(L, -1, pb_buftype)) == NULL)
+        return 0;
+    if (buf->used == dec->p - dec->s) {
+        dec->p = dec->s;
+        buf->used = 0;
+    }
+    dec->p = buf->buf + (dec->p - dec->s);
+    dec->s = buf->buf;
+    dec->len = buf->used;
+    dec->end = buf->buf + buf->used;
+    return_self(L);
 }
 
 LUALIB_API int luaopen_pb_decoder(lua_State *L) {
@@ -1054,16 +1074,16 @@ LUALIB_API int luaopen_pb_decoder(lua_State *L) {
         ENTRY(source),
         ENTRY(pos),
         ENTRY(len),
-        ENTRY(rawlen),
         ENTRY(tag),
-        ENTRY(varint),
         ENTRY(bytes),
         ENTRY(fixed32),
         ENTRY(fixed64),
+        ENTRY(varint),
         ENTRY(fetch),
         ENTRY(skip),
         ENTRY(values),
         ENTRY(finished),
+        ENTRY(update),
 #undef  ENTRY
         { NULL, NULL }
     };

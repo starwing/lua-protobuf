@@ -1,3 +1,5 @@
+package.path = "../?.lua;"..package.path
+package.cpath = "../?.dll;../?.so;"..package.cpath
 local decoder = require "pb.decoder"
 local serpent = require "serpent"
 

@@ -1,3 +1,5 @@
+package.path = "../?.lua;"..package.path
+package.cpath = "../?.dll;../?.so;"..package.cpath
 local protobuf = require "pb"
 t = protobuf.loadfile "addressbook.pb"
 
