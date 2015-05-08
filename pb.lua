@@ -130,6 +130,7 @@ local function get_buffer()
 end
 
 local function put_buffer(buff)
+   buff:clear()
    buffer_used[buff] = nil
    buffer_pool[buff] = true
 end
@@ -146,6 +147,7 @@ local decode, encode
 local function decode_unknown_field(t, dec, wiretype, tag)
    do return end -- XXX ignore unknown fields
    local value = dec:fetch(wiretype)
+   if not value then return end
    local uf = t.unknown_fields
    if not uf then
       uf = {}
@@ -210,14 +212,14 @@ local function decode_field(t, dec, wiretype, tag, field)
    end
 end
 
-function decode(dec, ptype)
-   local t = {}
+function decode(dec, ptype, t)
+   local t = t or {}
    while not dec:finished() do
       local tag, wiretype = dec:tag()
       local field = ptype[tag]
       if field then -- known fields
          decode_field(t, dec, wiretype, tag, field)
-      else -- unknown fields
+      elseif tag then -- unknown fields
          decode_unknown_field(t, dec, wiretype, tag)
       end
    end
@@ -231,11 +233,9 @@ end
 
 local function encode_message(buff, tag, msg, ftype)
    local inner = get_buffer()
-   inner:clear()
    encode(inner, msg, ftype)
    buff:tag(tag, "bytes")
    buff:bytes(inner)
-   inner:clear()
    put_buffer(inner)
 end
 
@@ -253,13 +253,11 @@ local function encode_scalar(buff, tag, v, field)
 
    if field.packed and field.type_name ~= "string" then 
       local inner = get_buffer()
-      inner:clear()
       for k,v in ipairs(v) do
          inner:add(nil, field.type_name, v)
       end
       buff:tag(tag, "bytes")
       buff:bytes(inner)
-      inner:clear()
       put_buffer(inner)
       return
    end
@@ -330,15 +328,16 @@ function pb.decode(s, ptype, dec)
    return res
 end
 
-function pb.encode(t, ptype)
+function pb.encode(t, ptype, init_buff)
    if type(ptype) ~= "table" then
       ptype = qualitied_type(ptype)
    end
-   local buff = get_buffer()
-   buff:clear()
+   local buff = init_buff or get_buffer()
    encode(buff, t, ptype)
    local res = buff:clear(nil, true)
-   put_buffer(buff)
+   if not init_buff then
+      put_buffer(buff)
+   end
    return res
 end
 
