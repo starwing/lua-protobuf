@@ -884,7 +884,7 @@ static int Ldec_pos(lua_State *L) {
 static int Ldec_len(lua_State *L) {
     pb_Decoder *dec = check_decoder(L, 1);
     int type = lua_type(L, 2);
-    lua_pushinteger(L, (lua_Integer)(dec->end - dec->p));
+    lua_pushinteger(L, (lua_Integer)(dec->end - dec->s));
     lua_pushinteger(L, (lua_Integer)dec->len);
     if (type <= 0)
         dec->end = dec->s + dec->len;
