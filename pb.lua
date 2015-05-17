@@ -512,25 +512,8 @@ end
 
 ------------------------------------------------------------
 
-local function merge_table(dst, t, key)
-   local st = t[key]
-   if st then
-      local dt = dst[k]
-      if not dt then
-         dst[k] = st
-      else
-         for k,v in pairs(st) do
-            dt[k] = v
-         end
-      end
-   end
-end
-
 local function merge_enum(pkg, enum)
-   local namemap = pkg.map
-   if not namemap then
-      namemap = {}; pkg.map = namemap
-   end
+   local namemap = subtable(pkg, "map")
    for k, v in pairs(enum) do
       if type(k) == "number" then
          pkg[k] = v
@@ -539,19 +522,23 @@ local function merge_enum(pkg, enum)
    end
    if enum.deprecated ~= nil then
       pkg.deprecated = enum.deprecated
+      pkg.deprecated_names = enum.deprecated_names
    end
-   merge_table(pkg, enum, "deprecated_names")
 end
 
 local function merge_message(pkg, msg)
-   local namemap = pkg.map
-   if not namemap then
-      namemap = {}; pkg.map = namemap
-   end
+   local namemap = subtable(pkg, "map")
+   local defaults
    for k, v in pairs(msg) do
       if type(k) == "number" then
          pkg[k] = v
          namemap[v] = k
+         if v.default_value then
+            if not defaults then
+               defaults = subtable(pkg, "defaults")
+            end
+            defaults[v.name] = v.default_value
+         end
       elseif v.type == "enum" then
          merge_enum(subtable(pkg, k, "enum"), v)
       elseif v.type == "message" then
@@ -561,7 +548,6 @@ local function merge_message(pkg, msg)
    if msg.deprecated ~= nil then
       pkg.deprecated = msg.deprecated
    end
-   merge_table(pkg, msg, "defaults")
 end
 
 local function merge_package(pkg, other)
@@ -674,7 +660,6 @@ end
 local function dump_message(name, msg, lvl)
    local lvls = ('  '):rep(lvl)
    G(lvls, name)' = { type = "message";\n'
-   local nested = {}
    for k,v in sorted_ipairs(msg) do
       if v.type == "field" then
          G'  '(lvls)(key(k))' = { type = "field";'
@@ -728,7 +713,6 @@ local function dump_message(name, msg, lvl)
 end
 
 local function dump_info(info)
-   local packages = {}
    local function _dfs(t, lvl)
       local lvls = ('  '):rep(lvl)
       for k, v in sorted_pairs(t) do
