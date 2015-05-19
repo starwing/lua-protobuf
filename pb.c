@@ -973,6 +973,7 @@ static int get_wiretype(lua_State *L, pb_Decoder *dec,
             luaL_argerror(L, idx, "invalid wire type name");
         return 0;
     default:
+        *wiretype = -1;
         return typeerror(L, idx, "nil/number/string");
     }
 }

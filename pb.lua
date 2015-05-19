@@ -695,7 +695,7 @@ local function dump_message(name, msg, lvl)
       G'  '(lvls)'defaults = {\n'
       for k,v in sorted_pairs(msg.defaults) do
          if msg[msg.map[k]].type_name == "bool" then
-            G'    '(lvls, key(k))' = '(v)';\n'
+            G'    '(lvls, key(k))' = '(tostring(v))';\n'
          else
             G'    '(lvls, key(k))' = '(value(v))';\n'
          end
