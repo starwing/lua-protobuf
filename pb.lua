@@ -414,6 +414,12 @@ local function load_enum(pkg, enum)
    local namemap = subtable(t, 'map')
    local deprecated_names
    if enum.value then
+      for k, v in pairs(t) do
+         if type(k) == 'number' then
+            t[k] = nil
+            namemap[v] = nil
+         end
+      end
       for i, v in ipairs(enum.value) do
          t[v.number] = v.name
          namemap[v.name] = v.number
@@ -438,6 +444,15 @@ local function load_message(pkg, msg)
    end
    local defaults
    if msg.field then
+      -- clear original message
+      local namemap = subtable(t, "map")
+      for k, v in pairs(t) do
+         if type(k) == "number" then
+            t[k] = nil
+            namemap[v.name] = nil
+         end
+      end
+      -- load new fields
       for i, v in ipairs(msg.field) do
          load_field(t, v)
          if v.default_value ~= nil then
@@ -514,6 +529,12 @@ end
 
 local function merge_enum(pkg, enum)
    local namemap = subtable(pkg, "map")
+   for k, v in pairs(pkg) do
+      if type(k) == "number" then
+         pkg[k] = nil
+         namemap[v] = nil
+      end
+   end
    for k, v in pairs(enum) do
       if type(k) == "number" then
          pkg[k] = v
@@ -529,6 +550,13 @@ end
 local function merge_message(pkg, msg)
    local namemap = subtable(pkg, "map")
    local defaults
+   -- clear original message
+   for k, v in pairs(pkg) do
+      if type(k) == "number" then
+         pkg[k] = nil
+         namemap[v.name] = nil
+      end
+   end
    for k, v in pairs(msg) do
       if type(k) == "number" then
          pkg[k] = v

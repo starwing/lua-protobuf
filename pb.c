@@ -634,6 +634,7 @@ static int pb_readfixed32(pb_Decoder *dec, uint32_t *pv) {
         n <<= 8;
         n |= dec->p[i] & 0xFF;
     }
+    dec->p += 4;
     *pv = n;
     return 1;
 }
@@ -647,6 +648,7 @@ static int pb_readfixed64(pb_Decoder *dec, uint64_t *pv) {
         n <<= 8;
         n |= dec->p[i] & 0xFF;
     }
+    dec->p += 8;
     *pv = n;
     return 1;
 }
