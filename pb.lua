@@ -251,7 +251,7 @@ local function encode_scalar(buff, tag, v, field)
       return buff:add(tag, field.type_name, v)
    end
 
-   if field.packed and field.type_name ~= "string" then 
+   if field.packed and field.type_name ~= "string" then
       local inner = get_buffer()
       for k,v in ipairs(v) do
          inner:add(nil, field.type_name, v)
@@ -698,8 +698,8 @@ local function dump_message(name, msg, lvl)
          if v.scalar then
             G'    '(lvls)'type_name = "'(v.type_name)'";\n'
          else
-            G'    '(lvls)'type_name = { "'
-               (table.concat(v.type_name, '","'))'" };\n'
+            G'    '(lvls)'type_name = { "'(
+               table.concat(v.type_name, '","'))'" };\n'
          end
          if v.default_value then
             G'    '(lvls)'default_value = '(
