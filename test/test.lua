@@ -1,6 +1,6 @@
 package.path = "../?.lua;"..package.path
 package.cpath = "../?.dll;../?.so;"..package.cpath
-local decoder = require "pb.decoder"
+local slice = require "pb.slice"
 local serpent = require "serpent"
 
 local types = require "pb_typeinfo"
@@ -392,7 +392,7 @@ end
 --------------------------------------------------
 
 local content = require "pb.io".read "descriptor.pb"
-local t = decode(decoder.new(content), types.google.protobuf.FileDescriptorSet)
+local t = decode(slice.new(content), types.google.protobuf.FileDescriptorSet)
 load_fileset(t)
 io.output "types.lua"
 make_namemap(info)

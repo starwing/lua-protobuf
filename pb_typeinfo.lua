@@ -258,10 +258,6 @@ return {
           type_name = "bool";
           default_value = false;
         };
-        [9] = { type = "field"; scalar = true;
-          name = "experimental_map_key";
-          type_name = "string";
-        };
         [10] = { type = "field"; scalar = true;
           name = "weak";
           type_name = "bool";
@@ -274,7 +270,6 @@ return {
         map = {
           ctype = 1;
           deprecated = 3;
-          experimental_map_key = 9;
           lazy = 5;
           packed = 2;
           uninterpreted_option = 999;

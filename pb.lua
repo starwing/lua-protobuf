@@ -1,5 +1,5 @@
 local pb = {}
-local decoder = require "pb.decoder"
+local slice = require "pb.slice"
 local buffer = require "pb.buffer"
 local conv = require "pb.conv"
 local pbio = require "pb.io"
@@ -321,7 +321,7 @@ function pb.decode(s, ptype, dec)
    if dec then
       dec:source(s)
    else
-      dec = decoder.new(s)
+      dec = slice.new(s)
    end
    local res = decode(dec, ptype)
    dec:reset()
