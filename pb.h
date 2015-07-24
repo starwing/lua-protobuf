@@ -131,6 +131,7 @@ typedef struct pb_Value {
 #define pb_slicelen(s) ((size_t)((s)->end - (s)->p))
 #define pb_gettag(v)  ((unsigned)((v) >> 3))
 #define pb_gettype(v) ((unsigned)((v) &  7))
+#define pb_(type, tag) (((unsigned)(tag) << 3) | (PB_T##type & 7))
 
 PB_API pb_Slice pb_slice  (const char *s);
 PB_API pb_Slice pb_lslice (const char *s, size_t len);
@@ -178,7 +179,7 @@ PB_API void pb_addvarint  (pb_Buffer *b, uint64_t n);
 PB_API void pb_addvar32   (pb_Buffer *b, uint32_t n);
 PB_API void pb_addfixed64 (pb_Buffer *b, uint64_t n);
 PB_API void pb_addfixed32 (pb_Buffer *b, uint32_t n);
-PB_API void pb_addtag     (pb_Buffer *b, uint32_t tag, uint32_t type);
+PB_API void pb_addpair    (pb_Buffer *b, uint32_t tag, uint32_t type);
 
 /* conversions */
 
@@ -509,7 +510,7 @@ PB_API pb_Slice pb_result(pb_Buffer *b)
 PB_API void pb_adddata(pb_Buffer *b, pb_Slice *s)
 { pb_addvar32(b, pb_slicelen(s)); pb_addslice(b, s); }
 
-PB_API void pb_addtag(pb_Buffer *b, uint32_t tag, uint32_t type)
+PB_API void pb_addpair(pb_Buffer *b, uint32_t tag, uint32_t type)
 { pb_addvar32(b, (uint32_t)((tag << 3) | (type & 7))); }
 
 PB_API void pb_initbuffer(pb_Buffer *b) {
@@ -783,7 +784,7 @@ PB_API pb_Entry *pbM_seti(pb_Map *m, uint32_t key) {
 PB_API pb_Entry *pbM_gets(pb_Map *m, pb_Slice *key) {
     uint32_t hash;
     pb_Entry *e;
-    if (m->size == 0) return NULL;
+    if (m->size == 0 || key->p == NULL) return NULL;
     hash = pbM_calchash(key);
     assert((m->size & (m->size - 1)) == 0);
     e = &m->hash[hash & (m->size - 1)];
@@ -799,6 +800,7 @@ PB_API pb_Entry *pbM_gets(pb_Map *m, pb_Slice *key) {
 
 PB_API pb_Entry *pbM_sets(pb_Map *m, pb_Slice *key) {
     pb_Entry e, *ret;
+    if (key->p == NULL) return NULL;
     if ((ret = pbM_gets(m, key)) != NULL)
         return ret;
     e.key = (uintptr_t)key->p;
@@ -1119,8 +1121,9 @@ static int pbL_rawfield(pb_State *S, pb_Type *t, pb_Field *f, pb_Slice *name) {
 
 static int pbL_rawtype(pb_State *S, pb_Type *t, pb_Slice *name) {
     pb_Entry *e = pbM_sets(&S->types, name);
-    pb_Type *nt = (pb_Type *)e->value;
-    if (nt == NULL)
+    pb_Type *nt;
+    if (e == NULL) return 0;
+    if ((nt = (pb_Type *)e->value) == NULL)
         DO_(nt = (pb_Type*)pbP_newsize(S->typepool, sizeof(pb_Type)));
     else {
         pbM_free(&nt->field_tags);
@@ -1132,23 +1135,23 @@ static int pbL_rawtype(pb_State *S, pb_Type *t, pb_Slice *name) {
 }
 
 static int pbL_EnumValueDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
-    uint32_t tag, number;
-    pb_Slice name;
+    uint32_t pair, number;
+    pb_Slice name = { NULL, NULL };
     pb_Field f;
     memset(&f, 0, sizeof(f));
     f.scalar = 1;
-    while (pb_readvar32(b, &tag)) {
-        switch (pb_gettag(tag)) {
-        case 1: /* name */
+    while (pb_readvar32(b, &pair)) {
+        switch (pair) {
+        case pb_(DATA, 1): /* name */
             DO_(pb_readslice(b, &name));
             DO_(f.name = pb_newslice(S, &name).p);
             break;
-        case 2: /* number */
+        case pb_(VARINT, 2): /* number */
             DO_(pb_readvar32(b, &number));
             f.u.enum_value = number;
             break;
         default:
-            DO_(pb_skipvalue(b, pb_gettype(tag)));
+            DO_(pb_skipvalue(b, pb_gettype(pair)));
             break;
         }
     }
@@ -1157,24 +1160,24 @@ static int pbL_EnumValueDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
 }
 
 static int pbL_EnumDescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
-    uint32_t tag;
-    pb_Slice name, slice;
+    uint32_t pair;
+    pb_Slice name = { NULL, NULL }, slice;
     pb_Type t;
     memset(&t, 0, sizeof(t));
     t.is_enum = 1;
-    while (pb_readvar32(b, &tag)) {
-        switch (pb_gettag(tag)) {
-        case 1: /* name */
+    while (pb_readvar32(b, &pair)) {
+        switch (pair) {
+        case pb_(DATA, 1): /* name */
             DO_(pb_readslice(b, &name));
             DO_(pbL_getqname(S, prefix, &name));
             t.name = name.p;
             break;
-        case 2: /* value */
+        case pb_(DATA, 2): /* value */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_EnumValueDescriptorProto(S, &slice, &t));
             break;
         default:
-            DO_(pb_skipvalue(b, pb_gettype(tag)));
+            DO_(pb_skipvalue(b, pb_gettype(pair)));
             break;
         }
     }
@@ -1183,48 +1186,48 @@ static int pbL_EnumDescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
 }
 
 static int pbL_FieldOptions(pb_State *S, pb_Slice *b, pb_Field *f) {
-    uint32_t tag;
-    while (pb_readvar32(b, &tag)) {
-        if (pb_gettag(tag) == 2) {
+    uint32_t pair;
+    while (pb_readvar32(b, &pair)) {
+        if (pair == pb_(VARINT, 2)) {
             uint32_t v;
             DO_(pb_readvar32(b, &v));
             f->packed = v;
             continue;
         }
-        DO_(pb_skipvalue(b, pb_gettype(tag)));
+        DO_(pb_skipvalue(b, pb_gettype(pair)));
     }
     return b->p == b->end;
 }
 
 static int pbL_FieldDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
-    uint32_t tag, number;
-    pb_Slice name, slice;
+    uint32_t pair, number;
+    pb_Slice name = { NULL, NULL }, slice;
     pb_Field f;
     memset(&f, 0, sizeof(f));
-    while (pb_readvar32(b, &tag)) {
-        switch (pb_gettag(tag)) {
-        case 1: /* name */
+    while (pb_readvar32(b, &pair)) {
+        switch (pair) {
+        case pb_(DATA, 1): /* name */
             DO_(pb_readslice(b, &name));
             DO_((name = pb_newslice(S, &name)).p);
             f.name = name.p;
             break;
-        case 3: /* number */
+        case pb_(VARINT, 3): /* number */
             DO_(pb_readvar32(b, &number));
             f.tag = number;
             break;
-        case 4: /* label */
+        case pb_(VARINT, 4): /* label */
             DO_(pb_readvar32(b, &number));
             if (number == 3) /* LABEL_OPTIONAL */
                 f.repeated = 1;
             break;
-        case 5: /* type */
+        case pb_(VARINT, 5): /* type */
             DO_(pb_readvar32(b, &number));
             DO_(number != PB_Tgroup);
             f.type_id = number;
             if (f.type_id != PB_Tmessage && f.type_id != PB_Tenum)
                 f.scalar = 1;
             break;
-        case 6: /* type_name */
+        case pb_(DATA, 6): /* type_name */
             DO_(pb_readslice(b, &slice));
             if (*slice.p == '.') ++slice.p;
             if ((f.type = pb_type(S, &slice)) == NULL) {
@@ -1232,7 +1235,7 @@ static int pbL_FieldDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
                 f.type = pb_newtype(S, &slice);
             }
             break;
-        case 2: /* extendee */
+        case pb_(DATA, 2): /* extendee */
             DO_(t == NULL);
             DO_(pb_readslice(b, &slice));
             if ((t = pb_type(S, &slice)) == NULL) {
@@ -1240,16 +1243,16 @@ static int pbL_FieldDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
                 t = pb_newtype(S, &slice);   
             }
             break;
-        case 7: /* default_value */
+        case pb_(DATA, 7): /* default_value */
             DO_(pb_readslice(b, &slice));
             DO_(f.u.default_value = pb_newslice(S, &slice).p);
             break;
-        case 8: /* options */
+        case pb_(DATA, 8): /* options */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_FieldOptions(S, b, &f));
             break;
         default:
-            DO_(pb_skipvalue(b, pb_gettype(tag)));
+            DO_(pb_skipvalue(b, pb_gettype(pair)));
             break;
         }
     }
@@ -1259,35 +1262,35 @@ static int pbL_FieldDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
 }
 
 static int pbL_DescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
-    uint32_t tag;
+    uint32_t pair;
     pb_Type t;
-    pb_Slice name, slice;
+    pb_Slice name = { NULL, NULL }, slice;
     memset(&t, 0, sizeof(t));
-    while (pb_readvar32(b, &tag)) {
-        switch (pb_gettag(tag)) {
-        case 1: /* name */
+    while (pb_readvar32(b, &pair)) {
+        switch (pair) {
+        case pb_(DATA, 1): /* name */
             DO_(pb_readslice(b, &name));
             DO_(pbL_getqname(S, prefix, &name));
             t.name = name.p;
             break;
-        case 2: /* field */
+        case pb_(DATA, 2): /* field */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_FieldDescriptorProto(S, &slice, &t));
             break;
-        case 6: /* extension */
+        case pb_(DATA, 6): /* extension */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_FieldDescriptorProto(S, &slice, NULL));
             break;
-        case 3: /* nested_type */
+        case pb_(DATA, 3): /* nested_type */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_DescriptorProto(S, &slice, &name));
             break;
-        case 4: /* enum_type */
+        case pb_(DATA, 4): /* enum_type */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_EnumDescriptorProto(S, &slice, &name));
             break;
         default:
-            DO_(pb_skipvalue(b, pb_gettype(tag)));
+            DO_(pb_skipvalue(b, pb_gettype(pair)));
             break;
         }
     }
@@ -1296,27 +1299,27 @@ static int pbL_DescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
 }
 
 static int pbL_FileDescriptorProto(pb_State *S, pb_Slice *b) {
-    uint32_t tag;
+    uint32_t pair;
     pb_Slice package, slice;
-    while (pb_readvar32(b, &tag)) {
-        switch (pb_gettag(tag)) {
-        case 2: /* package */
+    while (pb_readvar32(b, &pair)) {
+        switch (pair) {
+        case pb_(DATA, 2): /* package */
             DO_(pb_readslice(b, &package));
             break;
-        case 4: /* message_type */
+        case pb_(DATA, 4): /* message_type */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_DescriptorProto(S, &slice, &package));
             break;
-        case 5: /* enum_type */
+        case pb_(DATA, 5): /* enum_type */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_EnumDescriptorProto(S, &slice, &package));
             break;
-        case 7: /* extension */
+        case pb_(DATA, 7): /* extension */
             DO_(pb_readslice(b, &slice));
             DO_(pbL_FieldDescriptorProto(S, &slice, NULL));
             break;
         default:
-            DO_(pb_skipvalue(b, pb_gettype(tag)));
+            DO_(pb_skipvalue(b, pb_gettype(pair)));
             break;
         }
     }
@@ -1324,15 +1327,15 @@ static int pbL_FileDescriptorProto(pb_State *S, pb_Slice *b) {
 }
 
 PB_API int pb_load(pb_State *S, pb_Slice *b) {
-    uint32_t tag;
-    while (pb_readvar32(b, &tag)) {
-        if (pb_gettag(tag) == 1) {
+    uint32_t pair;
+    while (pb_readvar32(b, &pair)) {
+        if (pair == pb_(DATA, 1)) {
             pb_Slice slice;
             DO_(pb_readslice(b, &slice));
             DO_(pbL_FileDescriptorProto(S, &slice));
             continue;
         }
-        DO_(pb_skipvalue(b, pb_gettype(tag)));
+        DO_(pb_skipvalue(b, pb_gettype(pair)));
     }
     return b->p == b->end;
 }
