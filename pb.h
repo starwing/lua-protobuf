@@ -332,52 +332,7 @@ PB_API pb_Slice pb_slice(const char *s)
 PB_API pb_Slice pb_lslice(const char *s, size_t len)
 { pb_Slice slice = { s, s + len }; return slice; }
 
-PB_API int pb_readvalue(pb_Slice *s, pb_Value *value) {
-    const char *p = s->p;
-    int res;
-    uint32_t tag;
-    if (!pb_readvar32(s, &tag)) return 0;
-    value->tag = pb_gettag(tag);
-    value->wiretype = pb_gettype(tag);
-    switch (value->wiretype) {
-    case PB_TVARINT:
-        res = pb_readvarint(s, &value->u.fixed64); break;
-    case PB_T64BIT:
-        res = pb_readfixed64(s, &value->u.fixed64); break;
-    case PB_TDATA:
-        res = pb_readslice(s, &value->u.data); break;
-        break;
-    case PB_T32BIT:
-        res = pb_readfixed32(s, &value->u.fixed32); break;
-        break;
-    default:
-    case PB_TGSTART: /* start group */
-    case PB_TGEND: /* end group */
-        /* TODO need implemenbt */
-        return 0;
-    }
-    if (!res) s->p = p;
-    return res;
-}
-
-PB_API int pb_readvar32(pb_Slice *s, uint32_t *pv) {
-    uint32_t n = 0;
-    const char *p = s->p, *end;
-    while (p < s->end && (*p & 0x80) != 0)
-        ++p;
-    if (p >= s->end)
-        return 0;
-    end = p + 1;
-    while (p >= s->p) {
-        n <<= 7;
-        n |= *p-- & 0x7F;
-    }
-    s->p = end;
-    *pv = n;
-    return end-p-1;
-}
-
-PB_API int pb_readvarint(pb_Slice *s, uint64_t *pv) {
+static int pb_readvarint_slow(pb_Slice *s, uint64_t *pv) {
     uint64_t n = 0;
     const char *p = s->p, *end;
     while (p < s->end && (*p & 0x80) != 0)
@@ -392,6 +347,98 @@ PB_API int pb_readvarint(pb_Slice *s, uint64_t *pv) {
     s->p = end;
     *pv = n;
     return end-p-1;
+}
+
+static int pb_readvar32_fallback(const uint8_t *p, uint32_t n, uint32_t *pv) {
+    const uint8_t *o = p;
+    int b, i;
+    n -= 0x80;
+    b = *p++; n += b <<  7; if (!(b & 0x80)) goto done;
+    n -= 0x80 << 7;
+    b = *p++; n += b << 14; if (!(b & 0x80)) goto done;
+    n -= 0x80 << 14;
+    b = *p++; n += b << 21; if (!(b & 0x80)) goto done;
+    n -= 0x80 << 21;
+    b = *p++; n += b << 28; if (!(b & 0x80)) goto done;
+    /* n -= 0x80 << 28; */
+    for (i = 0; i < 5; ++i) {
+        b = *p++; if (!(b & 0x80)) goto done;
+    }
+    return 0;
+done:
+    *pv = n;
+    return p - o + 1;
+}
+
+static int pb_readvarint_fallback(const uint8_t *p, uint32_t n0, uint64_t *pv) {
+    const uint8_t *o = p;
+    uint32_t b, n1 = 0, n2 = 0;
+    n0 -= 0x80;
+    b = *p++; n0 += b <<  7; if (!(b & 0x80)) goto done;
+    n0 -= 0x80 << 7;
+    b = *p++; n0 += b << 14; if (!(b & 0x80)) goto done;
+    n0 -= 0x80 << 14;
+    b = *p++; n0 += b << 21; if (!(b & 0x80)) goto done;
+    n0 -= 0x80 << 21;
+    b = *p++; n1  = b      ; if (!(b & 0x80)) goto done;
+    n1 -= 0x80;
+    b = *p++; n1 += b <<  7; if (!(b & 0x80)) goto done;
+    n1 -= 0x80 << 7;
+    b = *p++; n1 += b << 14; if (!(b & 0x80)) goto done;
+    n1 -= 0x80 << 14;
+    b = *p++; n1 += b << 21; if (!(b & 0x80)) goto done;
+    n1 -= 0x80 << 21;
+    b = *p++; n2  = b      ; if (!(b & 0x80)) goto done;
+    n2 -= 0x80;
+    b = *p++; n2 += b <<  7; if (!(b & 0x80)) goto done;
+    /* n2 -= 0x80 << 7; */
+    return 0;
+done:
+    *pv =  (uint64_t)n0
+        | ((uint64_t)n1 << 28)
+        | ((uint64_t)n2 << 56);
+    return p - o + 1;
+}
+
+PB_API int pb_readvar32(pb_Slice *s, uint32_t *pv) {
+    const uint8_t *p = (const uint8_t*)s->p;
+    const uint8_t *end = (const uint8_t*)s->end;
+    int ret;
+    if (p < end && *p < 0x80) {
+        *pv = *p;
+        ++s->p;
+        return 1;
+    }
+    if (p + 10 < end || (p < end && !(end[-1] & 0x80))) {
+        uint32_t n = *p++;
+        ret = pb_readvar32_fallback(p, n, pv);
+        s->p += ret;
+        return ret;
+    }
+    else {
+        uint64_t u64;
+        if ((ret = pb_readvarint_slow(s, &u64)) != 0)
+            *pv = (uint32_t)u64;
+        return ret;
+    }
+}
+
+PB_API int pb_readvarint(pb_Slice *s, uint64_t *pv) {
+    const uint8_t *p = (const uint8_t*)s->p;
+    const uint8_t *end = (const uint8_t*)s->end;
+    int ret;
+    if (p < end && *p < 0x80) {
+        *pv = *p;
+        ++s->p;
+        return 1;
+    }
+    if (p + 10 < end || (p < end && !(end[-1] & 0x80))) {
+        uint32_t n = *p++;
+        ret = pb_readvarint_fallback(p, n, pv);
+        s->p += ret;
+        return ret;
+    }
+    return pb_readvarint_slow(s, pv);
 }
 
 PB_API int pb_readfixed32(pb_Slice *s, uint32_t *pv) {
@@ -433,6 +480,34 @@ PB_API int pb_readslice(pb_Slice *s, pb_Slice *pv) {
     pv->p = s->p;
     pv->end = s->p = pv->p + var;
     return s->p - p;
+}
+
+PB_API int pb_readvalue(pb_Slice *s, pb_Value *value) {
+    const char *p = s->p;
+    int res;
+    uint32_t tag;
+    if (!pb_readvar32(s, &tag)) return 0;
+    value->tag = pb_gettag(tag);
+    value->wiretype = pb_gettype(tag);
+    switch (value->wiretype) {
+    case PB_TVARINT:
+        res = pb_readvarint(s, &value->u.fixed64); break;
+    case PB_T64BIT:
+        res = pb_readfixed64(s, &value->u.fixed64); break;
+    case PB_TDATA:
+        res = pb_readslice(s, &value->u.data); break;
+        break;
+    case PB_T32BIT:
+        res = pb_readfixed32(s, &value->u.fixed32); break;
+        break;
+    default:
+    case PB_TGSTART: /* start group */
+    case PB_TGEND: /* end group */
+        /* TODO need implemenbt */
+        return 0;
+    }
+    if (!res) s->p = p;
+    return res;
 }
 
 PB_API int pb_skipvalue(pb_Slice *s, int wiretype) {
