@@ -91,7 +91,7 @@ function buffer.new()
    function t:add(tag, type, value)
       t[#t+1] = ("[%s %d %s]\n"):format(type, tag, tostring(value))
    end
-   function t:tag(tag, wiretype)
+   function t:pair(tag, wiretype)
       t[#t+1] = ("[%s %d "):format(wiretype, tag)
    end
    function t:varint(n)
@@ -215,7 +215,7 @@ end
 function decode(dec, ptype, t)
    local t = t or {}
    while not dec:finished() do
-      local tag, wiretype = dec:tag()
+      local tag, wiretype = dec:pair()
       local field = ptype[tag]
       if field then -- known fields
          decode_field(t, dec, wiretype, tag, field)
@@ -234,14 +234,14 @@ end
 local function encode_message(buff, tag, msg, ftype)
    local inner = get_buffer()
    encode(inner, msg, ftype)
-   buff:tag(tag, "bytes")
+   buff:pair(tag, "bytes")
    buff:bytes(inner)
    put_buffer(inner)
 end
 
 local function encode_enum(buff, tag, enum, ftype)
    local value = assert(ftype.map[enum])
-   buff:tag(tag, "varint")
+   buff:pair(tag, "varint")
    buff:varint(value)
 end
 
@@ -256,7 +256,7 @@ local function encode_scalar(buff, tag, v, field)
       for k,v in ipairs(v) do
          inner:add(nil, field.type_name, v)
       end
-      buff:tag(tag, "bytes")
+      buff:pair(tag, "bytes")
       buff:bytes(inner)
       put_buffer(inner)
       return

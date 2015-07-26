@@ -91,6 +91,7 @@ PB_NS_BEGIN
     X(sint32,   17) \
     X(sint64,   18) \
 
+/* enums */
 typedef enum pb_WireType {
 #define X(name,str,num) PB_T##name = num,
     PB_WIRETYPES(X)

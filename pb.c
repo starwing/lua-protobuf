@@ -295,14 +295,14 @@ static int Lbuf_len(lua_State *L) {
     return 1;
 }
 
-static int Lbuf_tag(lua_State *L) {
+static int Lbuf_pair(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
     lua_Integer tag = luaL_checkinteger(L, 2);
     int isint, wiretype = (int)lua_tointegerx(L, 3, &isint);
     if (!isint && (wiretype = find_wiretype(luaL_checkstring(L, 3)) < 0))
         return luaL_argerror(L, 3, "invalid wire type name");
     if (tag < 0 || tag > (1<<29))
-        luaL_argerror(L, 2, "tag too big");
+        luaL_argerror(L, 2, "tag out of range");
     pb_addpair(buf, (uint32_t)tag, wiretype);
     return_self(L);
 }
@@ -349,19 +349,18 @@ static int Lbuf_fixed64(lua_State *L) {
 
 static int Lbuf_add(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
-    uint32_t tag = 0, hastag = 0;
+    uint32_t tag = 0, haspair = 0;
     const char *s, *type = luaL_checkstring(L, 3);
     union { float f; uint32_t u32;
             double d; uint64_t u64; } u;
     if (!lua_isnoneornil(L, 2)) {
         tag = (uint32_t)luaL_checkinteger(L, 2);
-        hastag = 1;
+        haspair = 1;
     }
-    printf("%d, %s\n", find_type(type), type);
     switch (find_type(type)) {
     case PB_Tbool:
         u.u32 = lua_toboolean(L, 4);
-        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
+        if (haspair) pb_addpair(buf, tag, PB_TVARINT);
         pb_prepbuffsize(buf, 1);
         pb_addchar(buf, u.u32 ? 1 : 0);
         break;
@@ -369,7 +368,7 @@ static int Lbuf_add(lua_State *L) {
     case PB_Tstring:
     case PB_Tmessage:
         s = luaL_checklstring(L, 4, &u.u32);
-        if (hastag) pb_addpair(buf, tag, PB_TDATA);
+        if (haspair) pb_addpair(buf, tag, PB_TDATA);
         pb_addvarint(buf, u.u32);
         pb_prepbuffsize(buf, u.u32);
         memcpy(&buf->buff[buf->used], s, u.u32);
@@ -377,47 +376,47 @@ static int Lbuf_add(lua_State *L) {
         break;
     case PB_Tdouble:
         u.d = (double)luaL_checknumber(L, 4);
-        if (hastag) pb_addpair(buf, tag, PB_T64BIT);
+        if (haspair) pb_addpair(buf, tag, PB_T64BIT);
         pb_addfixed64(buf, u.u64);
         break;
     case PB_Tfloat:
         u.f = (float)luaL_checknumber(L, 4);
-        if (hastag) pb_addpair(buf, tag, PB_T32BIT);
+        if (haspair) pb_addpair(buf, tag, PB_T32BIT);
         pb_addfixed32(buf, u.u32);
         break;
     case PB_Tfixed32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
-        if (hastag) pb_addpair(buf, tag, PB_T32BIT);
+        if (haspair) pb_addpair(buf, tag, PB_T32BIT);
         pb_addfixed32(buf, u.u32);
         break;
     case PB_Tfixed64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
-        if (hastag) pb_addpair(buf, tag, PB_T64BIT);
+        if (haspair) pb_addpair(buf, tag, PB_T64BIT);
         pb_addfixed64(buf, u.u64);
         break;
     case PB_Tint32:
     case PB_Tuint32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
-        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
+        if (haspair) pb_addpair(buf, tag, PB_TVARINT);
         pb_addvarint(buf, (uint64_t)u.u32);
         break;
     case PB_Tenum:
     case PB_Tint64:
     case PB_Tuint64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
-        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
+        if (haspair) pb_addpair(buf, tag, PB_TVARINT);
         pb_addvarint(buf, u.u64);
         break;
     case PB_Tsint32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
         u.u32 = (u.u32 << 1) ^ (u.u32 >> 31);
-        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
+        if (haspair) pb_addpair(buf, tag, PB_TVARINT);
         pb_addvarint(buf, (uint64_t)u.u32);
         break;
     case PB_Tsint64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
         u.u64 = (u.u64 << 1) ^ (u.u64 >> 63);
-        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
+        if (haspair) pb_addpair(buf, tag, PB_TVARINT);
         pb_addvarint(buf, u.u64);
         break;
     case PB_Tgroup:
@@ -484,7 +483,7 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
 #define ENTRY(name) { #name, Lbuf_##name }
         ENTRY(new),
         ENTRY(reset),
-        ENTRY(tag),
+        ENTRY(pair),
         ENTRY(varint),
         ENTRY(bytes),
         ENTRY(fixed32),
@@ -721,7 +720,7 @@ static int Lslice_finished(lua_State *L) {
     return 1;
 }
 
-static int Lslice_tag(lua_State *L) {
+static int Lslice_pair(lua_State *L) {
     pb_Slice *dec = check_slice(L, 1);
     uint64_t n = 0;
     int wiretype;
@@ -869,7 +868,7 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
         ENTRY(source),
         ENTRY(pos),
         ENTRY(len),
-        ENTRY(tag),
+        ENTRY(pair),
         ENTRY(bytes),
         ENTRY(fixed32),
         ENTRY(fixed64),
