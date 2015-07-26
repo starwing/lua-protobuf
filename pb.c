@@ -303,7 +303,7 @@ static int Lbuf_tag(lua_State *L) {
         return luaL_argerror(L, 3, "invalid wire type name");
     if (tag < 0 || tag > (1<<29))
         luaL_argerror(L, 2, "tag too big");
-    pb_addtag(buf, (uint32_t)tag, wiretype);
+    pb_addpair(buf, (uint32_t)tag, wiretype);
     return_self(L);
 }
 
@@ -361,7 +361,7 @@ static int Lbuf_add(lua_State *L) {
     switch (find_type(type)) {
     case PB_Tbool:
         u.u32 = lua_toboolean(L, 4);
-        if (hastag) pb_addtag(buf, tag, PB_TVARINT);
+        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
         pb_prepbuffsize(buf, 1);
         pb_addchar(buf, u.u32 ? 1 : 0);
         break;
@@ -369,7 +369,7 @@ static int Lbuf_add(lua_State *L) {
     case PB_Tstring:
     case PB_Tmessage:
         s = luaL_checklstring(L, 4, &u.u32);
-        if (hastag) pb_addtag(buf, tag, PB_TDATA);
+        if (hastag) pb_addpair(buf, tag, PB_TDATA);
         pb_addvarint(buf, u.u32);
         pb_prepbuffsize(buf, u.u32);
         memcpy(&buf->buff[buf->used], s, u.u32);
@@ -377,47 +377,47 @@ static int Lbuf_add(lua_State *L) {
         break;
     case PB_Tdouble:
         u.d = (double)luaL_checknumber(L, 4);
-        if (hastag) pb_addtag(buf, tag, PB_T64BIT);
+        if (hastag) pb_addpair(buf, tag, PB_T64BIT);
         pb_addfixed64(buf, u.u64);
         break;
     case PB_Tfloat:
         u.f = (float)luaL_checknumber(L, 4);
-        if (hastag) pb_addtag(buf, tag, PB_T32BIT);
+        if (hastag) pb_addpair(buf, tag, PB_T32BIT);
         pb_addfixed32(buf, u.u32);
         break;
     case PB_Tfixed32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
-        if (hastag) pb_addtag(buf, tag, PB_T32BIT);
+        if (hastag) pb_addpair(buf, tag, PB_T32BIT);
         pb_addfixed32(buf, u.u32);
         break;
     case PB_Tfixed64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
-        if (hastag) pb_addtag(buf, tag, PB_T64BIT);
+        if (hastag) pb_addpair(buf, tag, PB_T64BIT);
         pb_addfixed64(buf, u.u64);
         break;
     case PB_Tint32:
     case PB_Tuint32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
-        if (hastag) pb_addtag(buf, tag, PB_TVARINT);
+        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
         pb_addvarint(buf, (uint64_t)u.u32);
         break;
     case PB_Tenum:
     case PB_Tint64:
     case PB_Tuint64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
-        if (hastag) pb_addtag(buf, tag, PB_TVARINT);
+        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
         pb_addvarint(buf, u.u64);
         break;
     case PB_Tsint32:
         u.u32 = (uint32_t)luaL_checkinteger(L, 4);
         u.u32 = (u.u32 << 1) ^ (u.u32 >> 31);
-        if (hastag) pb_addtag(buf, tag, PB_TVARINT);
+        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
         pb_addvarint(buf, (uint64_t)u.u32);
         break;
     case PB_Tsint64:
         u.u64 = (uint64_t)luaL_checkinteger(L, 4);
         u.u64 = (u.u64 << 1) ^ (u.u64 >> 63);
-        if (hastag) pb_addtag(buf, tag, PB_TVARINT);
+        if (hastag) pb_addpair(buf, tag, PB_TVARINT);
         pb_addvarint(buf, u.u64);
         break;
     case PB_Tgroup:

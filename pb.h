@@ -56,10 +56,9 @@ typedef signed   long long  int64_t;
 PB_NS_BEGIN
 
 /* limits */
-#define PB_BUFFERSIZE   4096
-#define PB_POOLSIZE     512
+#define PB_BUFFERSIZE   (512-sizeof(unsigned)*2-sizeof(char*))
+#define PB_POOLSIZE     (512-sizeof(pb_MemPool))
 #define PB_HASHLIMIT    5
-#define PB_MIN_TYPES    64
 #define PB_MIN_HASHSIZE 8
 
 /* wired types */
@@ -198,7 +197,7 @@ PB_API double   pb_decode_double (uint64_t value);
 typedef struct pb_State  pb_State;
 typedef struct pb_Type   pb_Type;
 typedef struct pb_Field  pb_Field;
-typedef struct pb_Decoder pb_Decoder;
+typedef struct pb_Parser pb_Parser;
 
 PB_API void pb_init (pb_State *S);
 PB_API void pb_free (pb_State *S);
@@ -211,15 +210,14 @@ PB_API pb_Field   *pb_newfield  (pb_State *S, pb_Type *t, pb_Slice *s, int tag);
 PB_API int pb_load     (pb_State *S, pb_Slice *b);
 PB_API int pb_loadfile (pb_State *S, const char *filename);
 
+PB_API int pb_parse (pb_Parser *p, pb_Slice *s);
+
 PB_API pb_Type  *pb_type       (pb_State *S, pb_Slice *qname);
 PB_API pb_Field *pb_field      (pb_Type *t, pb_Slice *field);
 PB_API pb_Field *pb_fieldbytag (pb_Type *t, int field_tag);
 
 PB_API const char *pb_wirename (pb_WireType t);
 PB_API const char *pb_typename (pb_ProtoType t);
-
-PB_API int pb_encode (pb_Buffer *b, pb_Value *v, pb_Field *f);
-PB_API int pb_decode (pb_Decoder *dec, pb_Slice *s);
 
 
 /* hash table */
@@ -294,12 +292,12 @@ struct pb_State {
     pb_MemPool *fieldpool;
 };
 
-struct pb_Decoder {
+struct pb_Parser {
     pb_State *S;
     pb_Type *type;
-    void (*on_field)   (pb_Decoder *dec, pb_Value *v, pb_Field *f);
-    void (*on_mistype) (pb_Decoder *dec, pb_Value *v, pb_Field *f);
-    void (*on_unknown) (pb_Decoder *dec, pb_Value *v);
+    void (*on_field)   (pb_Parser *p, pb_Value *v, pb_Field *f);
+    void (*on_mistype) (pb_Parser *p, pb_Value *v, pb_Field *f);
+    void (*on_unknown) (pb_Parser *p, pb_Value *v);
 };
 
 
@@ -484,11 +482,11 @@ PB_API int pb_readslice(pb_Slice *s, pb_Slice *pv) {
 
 PB_API int pb_readvalue(pb_Slice *s, pb_Value *value) {
     const char *p = s->p;
+    uint32_t pair;
     int res;
-    uint32_t tag;
-    if (!pb_readvar32(s, &tag)) return 0;
-    value->tag = pb_gettag(tag);
-    value->wiretype = pb_gettype(tag);
+    if (!pb_readvar32(s, &pair)) return 0;
+    value->tag = pb_gettag(pair);
+    value->wiretype = pb_gettype(pair);
     switch (value->wiretype) {
     case PB_TVARINT:
         res = pb_readvarint(s, &value->u.fixed64); break;
@@ -980,25 +978,27 @@ PB_API void pb_free(pb_State *S) {
 }
 
 PB_API pb_Type *pb_newtype(pb_State *S, pb_Slice *qname) {
-    pb_Entry *entry = pbM_sets(&S->types, qname);
+    pb_Slice name = pb_newslice(S, qname);
+    pb_Entry *entry = pbM_sets(&S->types, &name);
     pb_Type *t = (pb_Type*)pbP_newsize(S->typepool, sizeof(pb_Type));
     entry->value = (uintptr_t)t;
     memset(t, 0, sizeof(*t));
-    t->name = qname->p;
-    t->basename = pbT_getbasename(qname);
+    t->name = name.p;
+    t->basename = pbT_getbasename(&name);
     pbM_init(&t->field_tags);
     pbM_init(&t->field_names);
     return t;
 }
 
 PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Slice *name, int tag) {
+    pb_Slice fname = pb_newslice(S, name);
     pb_Entry *et = pbM_seti(&t->field_tags, tag);
-    pb_Entry *en = pbM_sets(&t->field_names, name);
+    pb_Entry *en = pbM_sets(&t->field_names, &fname);
     pb_Field *f = (pb_Field*)pbP_newsize(S->fieldpool, sizeof(pb_Field));
     et->value = (uintptr_t)f;
     en->value = (uintptr_t)f;
     memset(f, 0, sizeof(*f));
-    f->name = (const char*)en->key;
+    f->name = fname.p;
     f->tag = tag;
     return f;
 }
@@ -1040,16 +1040,14 @@ PB_API const char *pb_typename(pb_ProtoType t) {
     return s;
 }
 
-/* high level decoder */
+/* high level parser */
 
-static void pbD_varint(pb_Decoder *dec, pb_Value *v, pb_Field *f) {
+static void pbD_varint(pb_Parser *p, pb_Value *v, pb_Field *f) {
     switch (f->type_id) {
-    case PB_Tint64:
-    case PB_Tuint64:
-    case PB_Tenum:
+    case PB_Tint64: case PB_Tuint64: case PB_Tenum:
         break;
-    case PB_Tint32:
-    case PB_Tuint32:
+    case PB_Tint32: case PB_Tuint32:
+    case PB_Tfixed32: case PB_Tsfixed32:
         v->u.fixed32 = (uint32_t)v->u.fixed64;
         break;
     case PB_Tbool:
@@ -1062,106 +1060,104 @@ static void pbD_varint(pb_Decoder *dec, pb_Value *v, pb_Field *f) {
         v->u.fixed64 = pb_decode_sint64(v->u.fixed64);
         break;
     default:
-        if (dec->on_mistype)
-            dec->on_mistype(dec, v, f);
+        if (p->on_mistype)
+            p->on_mistype(p, v, f);
         return;
     }
-    dec->on_field(dec, v, f);
+    p->on_field(p, v, f);
 }
 
-static void pbD_64bit(pb_Decoder *dec, pb_Value *v, pb_Field *f) {
+static void pbD_64bit(pb_Parser *p, pb_Value *v, pb_Field *f) {
     switch (f->type_id) {
     case PB_Tdouble:
     case PB_Tfixed64:
     case PB_Tsfixed64:
-        dec->on_field(dec, v, f);
+        p->on_field(p, v, f);
         break;
     default:
-        if (dec->on_mistype)
-            dec->on_mistype(dec, v, f);
+        if (p->on_mistype)
+            p->on_mistype(p, v, f);
         break;
     }
 }
 
-static void pbD_32bit(pb_Decoder *dec, pb_Value *v, pb_Field *f) {
+static void pbD_32bit(pb_Parser *p, pb_Value *v, pb_Field *f) {
     switch (f->type_id) {
     case PB_Tfloat:
     case PB_Tfixed32:
     case PB_Tsfixed32:
-        dec->on_field(dec, v, f);
+        p->on_field(p, v, f);
         break;
     default:
-        if (dec->on_mistype)
-            dec->on_mistype(dec, v, f);
+        if (p->on_mistype)
+            p->on_mistype(p, v, f);
         break;
     }
 }
 
-static void pbD_data(pb_Decoder *dec, pb_Value *v, pb_Field *f) {
+static void pbD_data(pb_Parser *p, pb_Value *v, pb_Field *f) {
     pb_Value packed;
+    packed.tag = v->tag;
     switch (f->type_id) {
     case PB_Tint64: case PB_Tuint64: case PB_Tint32:
     case PB_Tuint32: case PB_Tenum: case PB_Tsint32:
     case PB_Tsint64: case PB_Tbool:
         if (!f->packed) goto mistype;
+        packed.wiretype = PB_TVARINT;
         while (pb_readvarint(&v->u.data, &packed.u.fixed64))
-            pbD_varint(dec, &packed, f);
+            pbD_varint(p, &packed, f);
         break;
 
-    case PB_Tdouble:
-    case PB_Tfixed64:
-    case PB_Tsfixed64:
+    case PB_Tdouble: case PB_Tfixed64: case PB_Tsfixed64:
         if (!f->packed) goto mistype;
+        packed.wiretype = PB_T64BIT;
         while (pb_readfixed64(&v->u.data, &packed.u.fixed64))
-            pbD_64bit(dec, &packed, f);
+            pbD_64bit(p, &packed, f);
         break;
 
-    case PB_Tstring:
-    case PB_Tmessage:
-    case PB_Tbytes:
-        dec->on_field(dec, v, f);
+    case PB_Tstring: case PB_Tmessage: case PB_Tbytes:
+        p->on_field(p, v, f);
         break;
 
-    case PB_Tfloat:
-    case PB_Tfixed32:
-    case PB_Tsfixed32:
+    case PB_Tfloat: case PB_Tfixed32: case PB_Tsfixed32:
         if (!f->packed) goto mistype;
+        packed.wiretype = PB_T32BIT;
         while (pb_readfixed32(&v->u.data, &packed.u.fixed32))
-            pbD_32bit(dec, &packed, f);
+            pbD_32bit(p, &packed, f);
         break;
 
     default:
 mistype:
-        if (dec->on_mistype)
-            dec->on_mistype(dec, v, f);
+        if (p->on_mistype)
+            p->on_mistype(p, v, f);
         break;
     }
 }
 
-PB_API int pb_decode(pb_Decoder *dec, pb_Slice *s) {
-    const char *p = s->p;
+PB_API int pb_parse(pb_Parser *p, pb_Slice *s) {
+    const char *op = s->p;
     pb_Field *f = NULL;
     pb_Value value;
-    if (dec->on_field == NULL)
+    if (p->on_field == NULL)
         return 0;
     while (pb_readvalue(s, &value)) {
-        f = pb_fieldbytag(dec->type, value.tag);
+        f = pb_fieldbytag(p->type, value.tag);
         if (f == NULL) {
-            if (dec->on_unknown)
-                dec->on_unknown(dec, &value);
+            if (p->on_unknown)
+                p->on_unknown(p, &value);
             continue;
         }
         switch (value.wiretype) {
-        case PB_TVARINT: pbD_varint(dec, &value, f); break;
-        case PB_T64BIT: pbD_64bit(dec, &value, f); break;
-        case PB_TDATA: pbD_data(dec, &value, f); break;
-        case PB_T32BIT: pbD_32bit(dec, &value, f); break;
+        case PB_TVARINT: pbD_varint(p, &value, f); break;
+        case PB_T64BIT: pbD_64bit(p, &value, f); break;
+        case PB_TDATA: pbD_data(p, &value, f); break;
+        case PB_T32BIT: pbD_32bit(p, &value, f); break;
         default:
-            s->p = p;
+            s->p = op;
             return 0;
         }
     }
-    return s->p - p;
+    return s->p - op;
 }
 
 /* type info loader */
