@@ -215,7 +215,7 @@ PB_API int pb_parse (pb_Parser *p, pb_Slice *s);
 
 PB_API pb_Type  *pb_type       (pb_State *S, pb_Slice *qname);
 PB_API pb_Field *pb_field      (pb_Type *t, pb_Slice *field);
-PB_API pb_Field *pb_fieldbytag (pb_Type *t, int field_tag);
+PB_API pb_Field *pb_fieldbytag (pb_Type *t, unsigned field_tag);
 
 PB_API const char *pb_wirename (pb_WireType t);
 PB_API const char *pb_typename (pb_ProtoType t);
@@ -601,7 +601,7 @@ PB_API void pb_resetbuffer(pb_Buffer *b) {
 
 PB_API size_t pb_resizebuffer(pb_Buffer *b, size_t len) {
     char *newbuff;
-    size_t newsize = b->size ? b->size : PB_BUFFERSIZE;
+    size_t newsize = 512;
     if (len < b->used) len = b->used;
     while (newsize < PB_MAX_SIZET/2 && newsize < len)
         newsize <<= 1;
@@ -1014,7 +1014,7 @@ PB_API pb_Field *pb_field(pb_Type *t, pb_Slice *field) {
     return e ? (pb_Field*)e->value : NULL;
 }
 
-PB_API pb_Field *pb_fieldbytag(pb_Type *t, int field_tag) {
+PB_API pb_Field *pb_fieldbytag(pb_Type *t, unsigned field_tag) {
     pb_Entry *e = pbM_geti(&t->field_tags, field_tag);
     return e ? (pb_Field*)e->value : NULL;
 }
@@ -1165,17 +1165,19 @@ PB_API int pb_parse(pb_Parser *p, pb_Slice *s) {
 
 #define DO_(cond) do { if (!(cond)) return 0; } while (0)
 
-static int pbL_getqname(pb_State *S, pb_Slice *prefix, pb_Slice *name) {
+static int pbL_getqname(pb_State *S, pb_Type *t, pb_Slice *prefix, pb_Slice *name) {
     size_t plen = pb_slicelen(prefix);
     size_t nlen = pb_slicelen(name);
     char *p = (char*)pbP_newsize(S->strpool, plen + nlen + 2);
     DO_(p);
+    t->name = p;
     memcpy(p, prefix->p, plen);
     p[plen] = '.';
+    t->basename = p + plen + 1;
     memcpy(p+plen+1, name->p, nlen);
     p[plen+nlen+1] = '\0';
     name->p = p;
-    name->end = p+plen+nlen+1;
+    name->end = p + plen + nlen + 1;
     return 1;
 }
 
@@ -1216,7 +1218,8 @@ static int pbL_EnumValueDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
         switch (pair) {
         case pb_(DATA, 1): /* name */
             DO_(pb_readslice(b, &name));
-            DO_(f.name = pb_newslice(S, &name).p);
+            DO_((name = pb_newslice(S, &name)).p);
+            f.name = name.p;
             break;
         case pb_(VARINT, 2): /* number */
             DO_(pb_readvar32(b, &number));
@@ -1241,8 +1244,7 @@ static int pbL_EnumDescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
         switch (pair) {
         case pb_(DATA, 1): /* name */
             DO_(pb_readslice(b, &name));
-            DO_(pbL_getqname(S, prefix, &name));
-            t.name = name.p;
+            DO_(pbL_getqname(S, &t, prefix, &name));
             break;
         case pb_(DATA, 2): /* value */
             DO_(pb_readslice(b, &slice));
@@ -1342,8 +1344,7 @@ static int pbL_DescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
         switch (pair) {
         case pb_(DATA, 1): /* name */
             DO_(pb_readslice(b, &name));
-            DO_(pbL_getqname(S, prefix, &name));
-            t.name = name.p;
+            DO_(pbL_getqname(S, &t, prefix, &name));
             break;
         case pb_(DATA, 2): /* field */
             DO_(pb_readslice(b, &slice));
