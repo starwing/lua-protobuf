@@ -16,6 +16,17 @@
 # endif
 #endif /* PB_NS_BEGIN */
 
+#ifdef PB_STATIC_API
+# ifndef PB_IMPLEMENTATION
+#  define PB_IMPLEMENTATION
+# endif
+# if __GNUC__
+#   define PB_API static __attribute((unused))
+# else
+#   define PB_API static
+# endif
+#endif
+
 #if !defined(PB_API) && defined(_WIN32)
 # ifdef PB_IMPLEMENTATION
 #  define PB_API __declspec(dllexport)
@@ -203,7 +214,6 @@ typedef struct pb_Parser pb_Parser;
 PB_API void pb_init (pb_State *S);
 PB_API void pb_free (pb_State *S);
 
-PB_API const char *pb_newstring (pb_State *S, const char *s);
 PB_API pb_Slice    pb_newslice  (pb_State *S, pb_Slice *s);
 PB_API pb_Type    *pb_newtype   (pb_State *S, pb_Slice *qname);
 PB_API pb_Field   *pb_newfield  (pb_State *S, pb_Type *t, pb_Slice *s, int tag);
