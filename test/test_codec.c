@@ -1,5 +1,5 @@
 #define PB_STATIC_API
-#include "pb.h"
+#include "../pb.h"
 
 #define LUA_LIB
 #include <lua.h>

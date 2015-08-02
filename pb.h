@@ -185,6 +185,8 @@ PB_API pb_Slice pb_result (pb_Buffer *b);
 PB_API void pb_addfile  (pb_Buffer *b, const char *filename);
 PB_API void pb_addslice (pb_Buffer *b, pb_Slice *s);
 
+PB_API int pb_addvalue (pb_Buffer *b, pb_Value *v, int type);
+
 PB_API void pb_adddata    (pb_Buffer *b, pb_Slice *s);
 PB_API void pb_addvarint  (pb_Buffer *b, uint64_t n);
 PB_API void pb_addvar32   (pb_Buffer *b, uint32_t n);
@@ -210,6 +212,7 @@ typedef struct pb_State  pb_State;
 typedef struct pb_Type   pb_Type;
 typedef struct pb_Field  pb_Field;
 typedef struct pb_Parser pb_Parser;
+typedef struct pb_Encoder pb_Encoder;
 
 PB_API void pb_init (pb_State *S);
 PB_API void pb_free (pb_State *S);
@@ -221,12 +224,13 @@ PB_API pb_Field   *pb_newfield  (pb_State *S, pb_Type *t, pb_Slice *s, int tag);
 PB_API int pb_load     (pb_State *S, pb_Slice *b);
 PB_API int pb_loadfile (pb_State *S, const char *filename);
 
-PB_API int pb_parse (pb_Parser *p, pb_Slice *s);
+PB_API int pb_parse  (pb_Parser *p, pb_Slice *s);
 
 PB_API pb_Type  *pb_type       (pb_State *S, pb_Slice *qname);
 PB_API pb_Field *pb_field      (pb_Type *t, pb_Slice *field);
 PB_API pb_Field *pb_fieldbytag (pb_Type *t, unsigned field_tag);
 
+PB_API int         pb_wiretype (int type);
 PB_API const char *pb_wirename (pb_WireType t);
 PB_API const char *pb_typename (pb_ProtoType t);
 
@@ -343,19 +347,18 @@ PB_API pb_Slice pb_lslice(const char *s, size_t len)
 
 static int pb_readvarint_slow(pb_Slice *s, uint64_t *pv) {
     uint64_t n = 0;
-    const char *p = s->p, *end;
-    while (p < s->end && (*p & 0x80) != 0)
-        ++p;
-    if (p >= s->end)
-        return 0;
-    end = p + 1;
-    while (p >= s->p) {
-        n <<= 7;
-        n |= *p-- & 0x7F;
+    size_t i = 0, count = s->end - s->p;
+    while (i != count) {
+        int b = s->p[i] & 0x7F;
+        n |= (uint64_t)b << (7*i);
+        ++i;
+        if ((b & 0x80) == 0) {
+            *pv = n;
+            s->p += i;
+            return i;
+        }
     }
-    s->p = end;
-    *pv = n;
-    return end-p-1;
+    return 0;
 }
 
 static int pb_readvar32_fallback(const uint8_t *p, uint32_t n, uint32_t *pv) {
@@ -694,6 +697,62 @@ PB_API void pb_addfixed32(pb_Buffer *b, uint32_t n) {
         pb_addchar(b, n & 0xFF);
         n >>= 8;
     }
+}
+
+PB_API int pb_addvalue(pb_Buffer *b, pb_Value *v, int type) {
+    assert(v->wiretype == pb_wiretype(type));
+    switch (type) {
+    case PB_Tbool:
+        pb_addpair(b, v->tag, PB_TVARINT);
+        pb_addchar(b, v->u.fixed32 ? 1 : 0);
+        break;
+    case PB_Tbytes:
+    case PB_Tstring:
+        pb_addpair(b, v->tag, PB_TDATA);
+        pb_adddata(b, &v->u.data);
+        break;
+    case PB_Tdouble:
+        pb_addpair(b, v->tag, PB_T64BIT);
+        pb_addfixed64(b, v->u.fixed64);
+        break;
+    case PB_Tfloat:
+        pb_addpair(b, v->tag, PB_T32BIT);
+        pb_addfixed32(b, v->u.fixed32);
+        break;
+    case PB_Tfixed32:
+        pb_addpair(b, v->tag, PB_T32BIT);
+        pb_addfixed32(b, v->u.fixed32);
+        break;
+    case PB_Tfixed64:
+        pb_addpair(b, v->tag, PB_T64BIT);
+        pb_addfixed64(b, v->u.fixed64);
+        break;
+    case PB_Tint32:
+    case PB_Tuint32:
+        pb_addpair(b, v->tag, PB_TVARINT);
+        pb_addvarint(b, (uint64_t)v->u.fixed32);
+        break;
+    case PB_Tenum:
+    case PB_Tint64:
+    case PB_Tuint64:
+        pb_addpair(b, v->tag, PB_TVARINT);
+        pb_addvarint(b, v->u.fixed64);
+        break;
+    case PB_Tsint32:
+        v->u.fixed32 = pb_encode_sint32(v->u.fixed32);
+        pb_addpair(b, v->tag, PB_TVARINT);
+        pb_addvarint(b, (uint64_t)v->u.fixed32);
+        break;
+    case PB_Tsint64:
+        v->u.fixed64 = pb_encode_sint64(v->u.fixed64);
+        pb_addpair(b, v->tag, PB_TVARINT);
+        pb_addvarint(b, v->u.fixed64);
+        break;
+    case PB_Tgroup:
+    default:
+        return 0;
+    }
+    return 1;
 }
 
 /* conversions */
@@ -1049,6 +1108,33 @@ PB_API const char *pb_typename(pb_ProtoType t) {
     default: break;
     }
     return s;
+}
+
+PB_API int pb_wiretype(int type) {
+    switch (type) {
+    case PB_Tbool:
+    case PB_Tint32:
+    case PB_Tuint32:
+    case PB_Tenum:
+    case PB_Tint64:
+    case PB_Tuint64:
+    case PB_Tsint32:
+    case PB_Tsint64:
+        return PB_TVARINT;
+    case PB_Tbytes:
+    case PB_Tstring:
+    case PB_Tmessage:
+    case PB_Tgroup:
+        return PB_TDATA;
+    case PB_Tfloat:
+    case PB_Tfixed32:
+        return PB_T32BIT;
+    case PB_Tdouble:
+    case PB_Tfixed64:
+        return PB_T64BIT;
+    default:
+        return -1;
+    }
 }
 
 /* high level parser */
