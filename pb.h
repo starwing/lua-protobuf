@@ -897,6 +897,7 @@ PB_API size_t pbM_resize(pb_Map *m, size_t len) {
         if (m->hash[i].key != 0)
             pbM_newkey(&new_map, &m->hash[i]);
     }
+    free(m->hash);
     *m = new_map;
     return m->size;
 }
