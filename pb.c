@@ -694,7 +694,7 @@ static int Lbuf_pair(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
     lua_Integer tag = luaL_checkinteger(L, 2);
     int isint, wiretype = (int)lua_tointegerx(L, 3, &isint);
-    if (!isint && (wiretype = find_wiretype(luaL_checkstring(L, 3)) < 0))
+    if (!isint && (wiretype = find_wiretype(luaL_checkstring(L, 3))) < 0)
         return luaL_argerror(L, 3, "invalid wire type name");
     if (tag < 0 || tag > (1<<29))
         luaL_argerror(L, 2, "tag out of range");
@@ -1281,6 +1281,9 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
     return 1;
 }
 
-/* cc: flags+='-s -O3 -mdll -DLUA_BUILD_AS_DLL'
- * xcc: flags+='-ID:\luajit\include' libs+='-LD:\luajit\'
- * cc: output='pb.dll' libs+='-llua53' */
+/* win32cc: flags+='-ggdb -O3 -mdll -DLUA_BUILD_AS_DLL'
+ * win32cc: output='pb.dll' libs+='-llua53'
+ * maccc: flags+='-ggdb -O0 -bundle -undefined dynamic_lookup'
+ * maccc: output='pb.so'
+ * xcc: flags+='-ID:\luajit\include' libs+='-LD:\luajit\' */
+
