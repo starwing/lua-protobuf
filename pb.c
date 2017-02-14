@@ -192,7 +192,7 @@ static void encode_scalar(lua_State *L, pb_Buffer *b, pb_Field *f) {
         check_type(L, LUA_TSTRING, f);
         v.u.data = lpb_toslice(L, -1);
         pb_addpair(b, f->tag, PB_TDATA);
-        pb_adddata(b, &v.u.data);
+        pb_adddata(b, v.u.data);
         break;
     case PB_Tdouble:
         v.u.float64 = (double)check_number(L, f);
@@ -259,7 +259,7 @@ static void encode_enum(lua_State *L, pb_Buffer *b, pb_Field *f) {
         pb_Field *ev;
         s = lpb_toslice(L, -1);
         if (!f->type || !s.p) return;
-        ev = pb_field(f->type, &s);
+        ev = pb_field(f->type, s);
         if (!ev) return;
         pb_addpair(b, f->tag, PB_TVARINT);
         pb_addvar32(b, (unsigned)ev->u.enum_value);
@@ -279,7 +279,7 @@ static void encode(lua_State *L, pb_Buffer *b, pb_Type *t) {
             size_t len;
             const char *s = lua_tolstring(L, -2, &len);
             pb_Slice name = pb_lslice(s, len);
-            pb_Field *f = pb_field(t, &name);
+            pb_Field *f = pb_field(t, name);
             if (!f) continue;
             encode_field(L, b, f);
         }
@@ -297,7 +297,7 @@ static void encode_message(lua_State *L, pb_Buffer *b, pb_Field *f) {
         pb_Slice s;
         s = pb_result(&nb);
         pb_addpair(b, f->tag, PB_TDATA);
-        pb_adddata(b, &s);
+        pb_adddata(b, s);
     }
 }
 
@@ -346,7 +346,7 @@ static int encode_safe(lua_State *L) {
 static int Lpb_encode(lua_State *L) {
     pb_State *S = default_state(L);
     pb_Slice tname = lpb_checkslice(L, 1);
-    pb_Type *t = pb_type(S, &tname);
+    pb_Type *t = pb_type(S, tname);
     pb_Buffer b;
     int ret = 1;
     luaL_checktype(L, 2, LUA_TTABLE);
@@ -451,7 +451,7 @@ static int Lpb_decode(lua_State *L) {
     pb_State *S = default_state(L);
     pb_Slice tname = lpb_checkslice(L, 1);
     pb_Slice data = lpb_checkslice(L, 2);
-    pb_Type *t = pb_type(S, &tname);
+    pb_Type *t = pb_type(S, tname);
     if (!t) return 0;
     return parse_slice(L, &data, t);
 }
@@ -671,10 +671,8 @@ static int Lbuf_new(lua_State *L) {
     pb_Buffer *buf = (pb_Buffer*)lua_newuserdata(L, sizeof(pb_Buffer));
     pb_initbuffer(buf);
     luaL_setmetatable(L, PB_BUFFER);
-    for (i = 1; i <= top; ++i) {
-        pb_Slice s = lpb_checkslice(L, i);
-        pb_addslice(buf, &s);
-    }
+    for (i = 1; i <= top; ++i)
+        pb_addslice(buf, lpb_checkslice(L, i));
     return 1;
 }
 
@@ -715,10 +713,8 @@ static int Lbuf_varint(lua_State *L) {
 static int Lbuf_bytes(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
     int i, top = lua_gettop(L);
-    for (i = 2; i <= top; ++i) {
-        pb_Slice s = lpb_checkslice(L, i);
-        pb_adddata(buf, &s);
-    }
+    for (i = 2; i <= top; ++i)
+        pb_adddata(buf, lpb_checkslice(L, i));
     return_self(L);
 }
 
@@ -763,7 +759,7 @@ static int Lbuf_add(lua_State *L) {
     case PB_Tmessage:
         v.u.data = lpb_checkslice(L, 4);
         if (haspair) pb_addpair(buf, tag, PB_TDATA);
-        pb_adddata(buf, &v.u.data);
+        pb_adddata(buf, v.u.data);
         break;
     case PB_Tdouble:
         v.u.float64 = (double)luaL_checknumber(L, 4);
@@ -833,10 +829,8 @@ static int Lbuf_clear(lua_State *L) {
 static int Lbuf_concat(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
     int i, top = lua_gettop(L);
-    for (i = 2; i <= top; ++i) {
-        pb_Slice s = lpb_checkslice(L, i);
-        pb_addslice(buf, &s);
-    }
+    for (i = 2; i <= top; ++i)
+        pb_addslice(buf, lpb_checkslice(L, i));
     return_self(L);
 }
 
