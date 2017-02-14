@@ -1268,13 +1268,15 @@ static int pbL_getqname(pb_State *S, pb_Type *t, pb_Slice *prefix, pb_Slice *nam
     char *p = (char*)pbP_newsize(S->strpool, plen + nlen + 2);
     DO_(p);
     t->name = p;
-    memcpy(p, prefix->p, plen);
-    p[plen] = '.';
-    t->basename = p + plen + 1;
-    memcpy(p+plen+1, name->p, nlen);
-    p[plen+nlen+1] = '\0';
+    if (plen != 0) {
+        memcpy(p, prefix->p, plen);
+        p[plen++] = '.';
+    }
+    t->basename = p + plen;
+    memcpy(p+plen, name->p, nlen);
+    p[plen+nlen] = '\0';
     name->p = p;
-    name->end = p + plen + nlen + 1;
+    name->end = p + plen + nlen;
     return 1;
 }
 
@@ -1470,7 +1472,7 @@ static int pbL_DescriptorProto(pb_State *S, pb_Slice *b, pb_Slice *prefix) {
 
 static int pbL_FileDescriptorProto(pb_State *S, pb_Slice *b) {
     uint32_t pair;
-    pb_Slice package, slice;
+    pb_Slice package = { NULL, NULL }, slice;
     while (pb_readvar32(b, &pair)) {
         switch (pair) {
         case pb_(DATA, 2): /* package */
