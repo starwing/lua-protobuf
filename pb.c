@@ -575,7 +575,7 @@ static int Lio_read(lua_State *L) {
     FILE *fp = stdin;
     size_t nr;
     if (fname == NULL)
-        setmode(fileno(stdin), O_BINARY);
+        (void)setmode(fileno(stdin), O_BINARY);
     else if ((fp = fopen(fname, "rb")) == NULL)
         return luaL_fileresult(L, 0, fname);
     luaL_buffinit(L, &b);
@@ -585,17 +585,17 @@ static int Lio_read(lua_State *L) {
         luaL_addsize(&b, nr);
     } while (nr == LUAL_BUFFERSIZE);
     if (fp != stdin) fclose(fp);
-    else setmode(fileno(stdin), O_TEXT);
+    else (void)setmode(fileno(stdin), O_TEXT);
     luaL_pushresult(&b);  /* close buffer */
     return 1;
 }
 
 static int Lio_write(lua_State *L) {
     int res;
-    setmode(fileno(stdout), O_BINARY);
+    (void)setmode(fileno(stdout), O_BINARY);
     res = io_write(L, stdout, 1);
     fflush(stdout);
-    setmode(fileno(stdout), O_TEXT);
+    (void)setmode(fileno(stdout), O_TEXT);
     return res;
 }
 
@@ -941,15 +941,14 @@ static int pb_pushfixed32(lua_State *L, pb_Slice *dec, int type) {
     case -1:
     case PB_Tfixed32:
         out = (lua_Integer)u.u32;
-        return 1;
+        break;
     case PB_Tfloat:
         lua_pushnumber(L, (lua_Number)u.f);
         return 1;
     case PB_Tsfixed32:
         out = (lua_Integer)u.u32;
-        if (sizeof(out) > 4)
-            out &= ((uint64_t)1 << 32) - 1;
-        out = (lua_Integer)((out ^ (1 << 31)) - (1 << 31));
+        if (sizeof(out) > 4) out &= (1ull << 32) - 1;
+        out = (lua_Integer)((out ^ (1u << 31)) - (1u << 31));
         break;
     default:
         dec->p = p;
@@ -961,7 +960,6 @@ static int pb_pushfixed32(lua_State *L, pb_Slice *dec, int type) {
 
 static int pb_pushfixed64(lua_State *L, pb_Slice *dec, int type) {
     union { uint64_t u64; double d; } u;
-    lua_Integer out;
     const char *p = dec->p;
     if (!pb_readfixed64(dec, &u.u64)) return 0;
     switch (type) {
@@ -971,14 +969,12 @@ static int pb_pushfixed64(lua_State *L, pb_Slice *dec, int type) {
     case -1:
     case PB_Tfixed64:
     case PB_Tsfixed64:
-        out = (lua_Integer)u.u64;
+        lua_pushinteger(L, (lua_Integer)u.u64);
         return 1;
     default:
         dec->p = p;
         return type_mismatch(L, type, "fixed64");
     }
-    lua_pushinteger(L, out);
-    return 1;
 }
 
 static int pb_pushscalar(lua_State *L, pb_Slice *dec, int wiretype, int type) {

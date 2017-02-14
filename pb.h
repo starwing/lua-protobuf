@@ -508,14 +508,12 @@ PB_API int pb_readvalue(pb_Slice *s, pb_Value *value) {
         res = pb_readfixed64(s, &value->u.fixed64); break;
     case PB_TDATA:
         res = pb_readslice(s, &value->u.data); break;
-        break;
     case PB_T32BIT:
         res = pb_readfixed32(s, &value->u.fixed32); break;
-        break;
     default:
     case PB_TGSTART: /* start group */
     case PB_TGEND: /* end group */
-        /* TODO need implemenbt */
+        /* TODO: need implemenbt */
         return 0;
     }
     if (!res) s->p = p;
@@ -771,7 +769,7 @@ PB_API uint64_t pb_decode_sint64(uint64_t value)
 
 PB_API uint64_t pb_expandsig(uint32_t value) {
     uint64_t ret = value & (((uint64_t)1 << 32) - 1);
-    return (ret ^ (1 << 31)) - (1 << 31);
+    return (ret ^ (1u << 31)) - (1u << 31);
 }
 
 PB_API uint32_t pb_encode_float(float value) {
@@ -939,7 +937,6 @@ PB_API pb_Entry *pbM_gets(pb_Map *m, pb_Slice key) {
         if (next == 0) return NULL;
         e += next;
     }
-    return NULL;
 }
 
 PB_API pb_Entry *pbM_sets(pb_Map *m, pb_Slice key) {
@@ -1234,7 +1231,7 @@ mistype:
 
 PB_API int pb_parse(pb_Parser *p, pb_Slice *s) {
     const char *op = s->p;
-    pb_Field *f = NULL;
+    pb_Field *f;
     pb_Value value;
     if (p->on_field == NULL)
         return 0;
@@ -1297,7 +1294,7 @@ static int pbL_rawtype(pb_State *S, pb_Type *t, pb_Slice name) {
     pb_Type *nt;
     if (e == NULL) return 0;
     if ((nt = (pb_Type *)e->value) == NULL)
-        DO_(nt = (pb_Type*)pbP_newsize(S->typepool, sizeof(pb_Type)));
+        DO_((nt = (pb_Type*)pbP_newsize(S->typepool, sizeof(pb_Type))));
     else {
         pbM_free(&nt->field_tags);
         pbM_free(&nt->field_names);
@@ -1418,7 +1415,7 @@ static int pbL_FieldDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
             break;
         case pb_(DATA, 7): /* default_value */
             DO_(pb_readslice(b, &slice));
-            DO_(f.u.default_value = pb_newslice(S, slice).p);
+            DO_((f.u.default_value = pb_newslice(S, slice).p));
             break;
         case pb_(DATA, 8): /* options */
             DO_(pb_readslice(b, &slice));
