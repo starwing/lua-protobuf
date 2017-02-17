@@ -159,7 +159,7 @@ PB_API void pb_addkey     (pb_Buffer *b, uint32_t tag, uint32_t type);
 
 /* conversions */
 
-PB_API uint64_t pb_expandsig     (uint32_t value);
+PB_API uint64_t pb_expandsig     ( int32_t value);
 PB_API uint32_t pb_encode_sint32 ( int32_t value);
 PB_API  int32_t pb_decode_sint32 (uint32_t value);
 PB_API uint64_t pb_encode_sint64 ( int64_t value);
@@ -233,6 +233,8 @@ PB_API size_t pbM_resize (pb_Map *m, size_t len);
 
 PB_API unsigned pbM_calchash (pb_Slice s);
 
+PB_API pb_Entry *pbM_getentry (pb_Map *m, pb_Entry *entry);
+
 PB_API pb_Entry *pbM_seti (pb_Map *m, uint32_t key);
 PB_API pb_Entry *pbM_geti (pb_Map *m, uint32_t key);
 
@@ -269,11 +271,12 @@ struct pb_Field {
 };
 
 struct pb_Type {
-    int         is_enum;
-    pb_Map      field_tags;
-    pb_Map      field_names;
     const char *name;
     const char *basename;
+    pb_Map      field_tags;
+    pb_Map      field_names;
+    unsigned    is_enum  : 1;
+    unsigned    is_ext   : 1;
 };
 
 struct pb_State {
@@ -612,7 +615,7 @@ PB_API void pb_addfixed64(pb_Buffer *b, uint64_t n) {
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
-    *ch++ = n & 0xFF;
+    *ch   = n & 0xFF;
     pb_addsize(b, 4);
 }
 
@@ -625,7 +628,7 @@ PB_API void pb_addfixed32(pb_Buffer *b, uint32_t n) {
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
-    *ch++ = n & 0xFF;
+    *ch   = n & 0xFF;
     pb_addsize(b, 8);
 }
 
@@ -658,7 +661,7 @@ PB_API int pb_addvalue(pb_Buffer *b, const pb_Value *v, int type) {
         return 1;
     case PB_Tint32:
         pb_addkey(b, v->tag, PB_TVARINT);
-        pb_addvarint(b, pb_expandsig(v->u.fixed32));
+        pb_addvarint(b, pb_expandsig(v->u.sfixed32));
         return 1;
     case PB_Tuint32:
         pb_addkey(b, v->tag, PB_TVARINT);
@@ -694,34 +697,20 @@ PB_API uint64_t pb_encode_sint64(int64_t value)
 PB_API int64_t pb_decode_sint64(uint64_t value)
 { return (value >> 1) ^ -(int64_t)(value & 1); }
 
-PB_API uint64_t pb_expandsig(uint32_t value) {
-    uint64_t ret = value & (((uint64_t)1 << 32) - 1);
-    return (ret ^ (1u << 31)) - (1u << 31);
-}
+PB_API uint64_t pb_expandsig(int32_t value)
+{ return (int64_t)value; }
 
-PB_API uint32_t pb_encode_float(float value) {
-    union { uint32_t u32; float f; } u;
-    u.f = value;
-    return u.u32;
-}
+PB_API uint32_t pb_encode_float(float value)
+{ union { uint32_t u32; float f; } u; u.f = value; return u.u32; }
 
-PB_API float pb_decode_float(uint32_t value) {
-    union { uint32_t u32; float f; } u;
-    u.u32 = value;
-    return u.f;
-}
+PB_API float pb_decode_float(uint32_t value)
+{ union { uint32_t u32; float f; } u; u.u32 = value; return u.f; }
 
-PB_API uint64_t pb_encode_double(double value) {
-    union { uint64_t u64; double d; } u;
-    u.d = value;
-    return u.u64;
-}
+PB_API uint64_t pb_encode_double(double value)
+{ union { uint64_t u64; double d; } u; u.d = value; return u.u64; }
 
-PB_API double pb_decode_double(uint64_t value) {
-    union { uint64_t u64; double d; } u;
-    u.u64 = value;
-    return u.d;
-}
+PB_API double pb_decode_double(uint64_t value)
+{ union { uint64_t u64; double d; } u; u.u64 = value; return u.d; }
 
 /* hash table */
 
@@ -806,6 +795,22 @@ PB_API size_t pbM_resize(pb_Map *m, size_t len) {
     free(m->hash);
     *m = new_map;
     return m->size;
+}
+
+PB_API pb_Entry *pbM_getentry (pb_Map *m, pb_Entry *entry) {
+    pb_Entry *e;
+    if (m->size == 0) return NULL;
+    assert((m->size & (m->size - 1)) == 0);
+    e = pbM_mainposition(m, entry);
+    if (entry->hash == 0) {
+        for (; e->key != entry->key; e += e->next)
+            if (e->next == 0) return NULL;
+        return e;
+    }
+    for (; e->hash != entry->hash
+            || strcmp((char*)e->key, (char*)entry->key); e += e->next)
+        if (e->next == 0) return NULL;
+    return e;
 }
 
 PB_API pb_Entry *pbM_geti(pb_Map *m, uint32_t key) {
@@ -948,7 +953,9 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Slice name, int tag) {
 }
 
 PB_API pb_Type *pb_type(pb_State *S, pb_Slice qname) {
-    pb_Entry *e = pbM_gets(&S->types, qname);
+    pb_Entry *e;
+    if (pb_slicelen(&qname) > 0 && *qname.p == '.') ++qname.p;
+    e = pbM_gets(&S->types, qname);
     return e ? (pb_Type*)e->value : NULL;
 }
 
@@ -1138,11 +1145,36 @@ static int pbL_rawfield(pb_State *S, pb_Type *t, pb_Field *f, pb_Slice name) {
     pb_Entry *en = pbM_sets(&t->field_names, name);
     pb_Entry *et = pbM_seti(&t->field_tags,
             t->is_enum ? f->u.enum_value : f->tag);
-    pb_Field *nf = (pb_Field*)pbP_newsize(S->fieldpool, sizeof(pb_Field));
-    DO_(nf);
+    pb_Field *nf;
+    DO_(en && et);
+    if ((nf = (pb_Field*)en->value) == NULL)
+        DO_((nf = (pb_Field*)pbP_newsize(S->fieldpool, sizeof(pb_Field))));
     *nf = *f;
-    en->value = (uintptr_t)nf;
-    et->value = (uintptr_t)nf;
+    en->value = et->value = (uintptr_t)nf;
+    return 1;
+}
+
+static int pbL_mergetype(pb_Type *dst, const pb_Type *src) {
+    size_t i;
+    for (i = 0; i < src->field_names.size; ++i) {
+        pb_Entry *en, *et, *fe = &src->field_names.hash[i];
+        if (fe->key != 0 && fe->value != 0) {
+            DO_((et = pbM_seti(&dst->field_tags, ((pb_Field*)fe->value)->tag)));
+            if (et->value != 0) {
+                pb_Field *tf = (pb_Field*)et->value;
+                pb_Entry *oen = pbM_gets(&dst->field_names, pb_slice(tf->name));
+                if (oen) oen->key = oen->value = 0;
+            }
+            if ((en = pbM_getentry(&dst->field_names, fe)) == NULL)
+                DO_((en = pbM_newkey(&dst->field_names, fe)));
+            else {
+                pb_Field *nf = (pb_Field*)en->value;
+                pb_Entry *oet = pbM_geti(&dst->field_tags, nf->tag);
+                if (oet) oet->key = oet->value = 0;
+            }
+            en->value = et->value = fe->value;
+        }
+    }
     return 1;
 }
 
@@ -1153,6 +1185,8 @@ static int pbL_rawtype(pb_State *S, pb_Type *t, pb_Slice name) {
     if ((nt = (pb_Type *)e->value) == NULL)
         DO_((nt = (pb_Type*)pbP_newsize(S->typepool, sizeof(pb_Type))));
     else {
+        if (nt->is_ext)
+            pbL_mergetype(t, nt), t->is_ext = 0;
         pbM_free(&nt->field_tags);
         pbM_free(&nt->field_names);
     }
@@ -1257,18 +1291,15 @@ static int pbL_FieldDescriptorProto(pb_State *S, pb_Slice *b, pb_Type *t) {
         case pb_(BYTES, 6): /* type_name */
             DO_(pb_readslice(b, &slice));
             if (*slice.p == '.') ++slice.p;
-            if ((f.type = pb_type(S, slice)) == NULL) {
-                slice = pb_newslice(S, slice);
+            if ((f.type = pb_type(S, slice)) == NULL)
                 f.type = pb_newtype(S, slice);
-            }
             break;
         case pb_(BYTES, 2): /* extendee */
             DO_(t == NULL);
             DO_(pb_readslice(b, &slice));
-            if ((t = pb_type(S, slice)) == NULL) {
-                slice = pb_newslice(S, slice);
-                t = pb_newtype(S, slice);   
-            }
+            if (*slice.p == '.') ++slice.p;
+            if ((t = pb_type(S, slice)) == NULL)
+                t = pb_newtype(S, slice), t->is_ext = 1;
             break;
         case pb_(BYTES, 7): /* default_value */
             DO_(pb_readslice(b, &slice));

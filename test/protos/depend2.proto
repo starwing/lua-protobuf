@@ -1,0 +1,9 @@
+syntax = "proto2";
+
+import "depend1.proto";
+
+message Depend2Msg {
+    optional Depend1Msg dep1  = 1;
+    optional int32      other = 2;
+}
+

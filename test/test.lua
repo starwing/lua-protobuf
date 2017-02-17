@@ -67,23 +67,23 @@ function testSlice()
 end
 
 function testLoad()
-   assert(pb.loadfile "descriptor.pb")
-   assert(pb.loadfile "addressbook.pb")
-   assert(pb.loadfile "addressbook.pb")
+   assert(pb.loadfile "protos/descriptor.pb")
+   assert(pb.loadfile "protos/addressbook.pb")
+   assert(pb.loadfile "protos/addressbook.pb")
 
    local data = assert(pb.decode("google.protobuf.FileDescriptorSet",
-                                 pbio.read "descriptor.pb"))
+                                 pbio.read "protos/descriptor.pb"))
    local str = assert(pb.encode("google.protobuf.FileDescriptorSet", data))
    table_eq(data, pb.decode("google.protobuf.FileDescriptorSet", str))
 
    local data = assert(pb.decode("google.protobuf.FileDescriptorSet",
-                                 pbio.read "addressbook.pb"))
+                                 pbio.read "protos/addressbook.pb"))
    local str = assert(pb.encode("google.protobuf.FileDescriptorSet", data))
    table_eq(data, pb.decode("google.protobuf.FileDescriptorSet", str))
 end
 
 function testPb()
-   assert(pb.loadfile "addressbook.pb")
+   assert(pb.loadfile "protos/addressbook.pb")
    local addressbook = {
       name = "Alice",
       id = 12345,
@@ -94,6 +94,36 @@ function testPb()
    }
    local code = assert(pb.encode("tutorial.Person", addressbook))
    table_eq(addressbook, assert(pb.decode("tutorial.Person", code)))
+end
+
+function testDepend()
+   assert(pb.loadfile "protos/depend2.pb")
+   local t = { dep1 = { id = 1, name = "foo" }, other = 2 }
+   local code = assert(pb.encode("Depend2Msg", t))
+   table_eq(assert(pb.decode("Depend2Msg", code)), { other = 2 })
+
+   assert(pb.loadfile "protos/depend1.pb")
+   local code = assert(pb.encode("Depend2Msg", t))
+   table_eq(assert(pb.decode("Depend2Msg", code)), t)
+end
+
+function testZExtend()
+   pb.clear "google.protobuf.EnumValueOptions"
+   assert(pb.loadfile "protos/extend2.pb")
+   local t = { ext_name = "foo", id = 10 }
+   local code = assert(pb.encode("Extendable", t))
+   table_eq(assert(pb.decode("Extendable", code)), { ext_name = "foo" })
+
+   assert(pb.loadfile "protos/extend1.pb")
+   local code = assert(pb.encode("Extendable", t))
+   table_eq(assert(pb.decode("Extendable", code)), t)
+
+   assert(pb.loadfile "protos/descriptor.pb")
+   local data = assert(pb.decode("google.protobuf.FileDescriptorSet",
+                                 pbio.read "protos/extend2.pb"))
+   eq(data.file[1].enum_type[1].value[1].options.name, "first")
+   eq(data.file[1].enum_type[1].value[2].options.name, "second")
+   eq(data.file[1].enum_type[1].value[3].options.name, "third")
 end
 
 os.exit(lu.LuaUnit.run(), true)

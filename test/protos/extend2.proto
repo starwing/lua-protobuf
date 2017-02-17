@@ -1,0 +1,13 @@
+syntax = "proto2";
+import "extend1.proto";
+
+enum MyEnum {
+   First  = 1 [(name) = "first"];
+   Second = 2 [(name) = "second"];
+   Third  = 3 [(name) = "third"];
+}
+
+extend Extendable {
+   optional string ext_name = 100;
+}
+

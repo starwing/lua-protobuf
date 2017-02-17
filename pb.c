@@ -168,8 +168,17 @@ static pb_State *default_state(lua_State *L) {
 
 static int Lpb_clear(lua_State *L) {
     pb_State *S = default_state(L);
-    pb_free(S);
-    pb_init(S);
+    if (lua_isnoneornil(L, 2)) {
+        pb_free(S);
+        pb_init(S);
+    }
+    else {
+        pb_Type *t = pb_type(S, lpb_checkslice(L, 2));
+        if (t == NULL) return 0;
+        pbM_free(&t->field_names);
+        pbM_free(&t->field_tags);
+        t->is_ext = 1;
+    }
     return 0;
 }
 
@@ -265,10 +274,8 @@ static void encode(lua_State *L, pb_Buffer *b, pb_Type *t) {
         if (lua_type(L, -2) == LUA_TSTRING) {
             size_t len;
             const char *s = lua_tolstring(L, -2, &len);
-            pb_Slice name = pb_lslice(s, len);
-            pb_Field *f = pb_field(t, name);
-            if (!f) continue;
-            encode_field(L, b, f);
+            pb_Field *f = pb_field(t, pb_lslice(s, len));
+            if (f) encode_field(L, b, f);
         }
         lua_pop(L, 1);
     }
@@ -443,7 +450,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
 /* from: Lua -> protobuf (encode), to: protobuf -> Lua (deocde) */
 
 static int Lconv_encode_int32(lua_State *L) {
-    lua_pushinteger(L, pb_expandsig((uint32_t)luaL_checkinteger(L, 1)));
+    lua_pushinteger(L, pb_expandsig((int32_t)luaL_checkinteger(L, 1)));
     return 1;
 }
 
@@ -1189,5 +1196,5 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
  * win32cc: output='pb.dll' libs+='-llua53'
  * maccc: flags+='-ggdb -O0 -bundle -undefined dynamic_lookup'
  * maccc: output='pb.so'
- * cc: flags+='-ID:\luajit\include' libs+='-LD:\luajit\' */
+ * xcc: flags+='-ID:\luajit\include' libs+='-LD:\luajit\' */
 
