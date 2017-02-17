@@ -1,6 +1,6 @@
 package.path = "../?.lua;"..package.path
 package.cpath = "../?.dll;../?.so;"..package.cpath
-local decoder = require "pb.decoder"
+local decoder = require "pb.slice"
 local buffer = require "pb.buffer"
 
 local buf = buffer.new()

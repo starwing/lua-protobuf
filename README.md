@@ -1,6 +1,6 @@
 Google protobuf support for Lua
 -------------------------------
-
+[![Build Status](https://travis-ci.org/starwing/lua-protobuf.svg?branch=c_impl)](https://travis-ci.org/starwing/lua-protobuf)
 
 This project offers a simple C library for basic protobuf wire format
 encode/decode, it splits to several modules:
