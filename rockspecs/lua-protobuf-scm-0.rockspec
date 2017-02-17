@@ -2,7 +2,7 @@ package = "lua-protobuf"
 version = "scm-0"
 
 source = {
-  url = "git://github.com/starwing/lua-protobuf.git"
+  url = "git://github.com/starwing/lua-protobuf.git",
 }
 
 description = {
@@ -10,7 +10,7 @@ description = {
   detailed = [[
 This project offers a simple C library for basic protobuf wire format encode/decode.
   ]],
-  homepage = "http://github.com/starwing/lua-protobuf",
+  homepage = "https://github.com/starwing/lua-protobuf",
   license = "MIT",
 }
 
@@ -21,8 +21,6 @@ dependencies = {
 build = {
   type = "builtin",
   modules = {
-    ["pb"]= "pb.c",
-    [".pb"]= "pb.lua", -- hack to make a same name lua module.
-    [".pb_typeinfo"]= "pb_typeinfo.lua", -- hack to make a same name lua module.
+    pb = "pb.c",
   }
 }
