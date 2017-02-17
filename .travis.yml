@@ -31,7 +31,6 @@ install:
   - luarocks make $ROCKSPEC CFLAGS="-O2 -fPIC" LIBFLAG="-shared"
 
 script: 
-  - lua test.lua
   - cd test; lua test.lua
   # - lunit.sh test.lua
 
