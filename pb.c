@@ -50,6 +50,22 @@ static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isint) {
     if (isint) *isint = (i != 0 || lua_type(L, idx) == LUA_TNUMBER);
     return i;
 }
+
+#ifdef LUAI_BITSINT /* not LuaJIT */
+#include <errno.h>
+static int luaL_fileresult(lua_State *L, int stat, const char *fname) {
+    int en = errno;
+    if (stat) { lua_pushboolean(L, 1); return 1; }
+    lua_pushnil(L);
+    if (fname)
+        lua_pushfstring(L, "%s: %s", fname, strerror(en));
+    else
+        lua_pushstring(L, strerror(en));
+    lua_pushinteger(L, en);
+    return 3;
+}
+#endif /* not LuaJIT */
+
 #endif
 
 #if LUA_VERSION_NUM >= 503
@@ -1173,5 +1189,5 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
  * win32cc: output='pb.dll' libs+='-llua53'
  * maccc: flags+='-ggdb -O0 -bundle -undefined dynamic_lookup'
  * maccc: output='pb.so'
- * xcc: flags+='-ID:\luajit\include' libs+='-LD:\luajit\' */
+ * cc: flags+='-ID:\luajit\include' libs+='-LD:\luajit\' */
 
