@@ -174,7 +174,12 @@ static int Lpb_clear(lua_State *L) {
     }
     else {
         pb_Type *t = pb_type(S, lpb_checkslice(L, 2));
+        size_t i;
         if (t == NULL) return 0;
+        for (i = 0; i < t->field_tags.size; ++i) {
+            pb_Entry *e = &t->field_tags.hash[i];
+            pbP_delsize(S->fieldpool, (void*)e->value);
+        }
         pbM_free(&t->field_names);
         pbM_free(&t->field_tags);
         t->is_ext = 1;

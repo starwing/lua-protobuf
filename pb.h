@@ -245,6 +245,7 @@ PB_API pb_Entry *pbM_gets (pb_Map *m, pb_Slice key);
 
 typedef struct pb_Pool {
     pb_Slice        data;
+    void           *freed;
     struct pb_Pool *next;
 } pb_Pool;
 
@@ -252,6 +253,7 @@ PB_API pb_Pool *pbP_new    (size_t size);
 PB_API void     pbP_delete (pb_Pool *pool);
 
 PB_API void    *pbP_newsize  (pb_Pool *pool, size_t len);
+PB_API void     pbP_delsize  (pb_Pool *pool, void *ptr);
 PB_API pb_Slice pbP_newslice (pb_Pool *pool, pb_Slice s);
 
 /* structures */
@@ -856,17 +858,25 @@ PB_API pb_Entry *pbM_sets(pb_Map *m, pb_Slice key) {
 PB_API void pbP_delete(pb_Pool *pool)
 { while (pool) { pb_Pool *next = pool->next; free(pool); pool = next; } }
 
+PB_API void pbP_delsize(pb_Pool *pool, void *ptr)
+{ if (ptr) *(void**)ptr = pool->freed, pool->freed = ptr; }
+
 PB_API pb_Pool *pbP_new(size_t size) {
     pb_Pool *pool = (pb_Pool*)malloc(sizeof(pb_Pool) + size);
     if (pool == NULL) return NULL;
+    memset(pool, 0, sizeof(pb_Pool));
     pool->data.p   = (char*)(pool + 1);
     pool->data.end = pool->data.p + size;
-    pool->next     = NULL;
     return pool;
 }
 
 PB_API void* pbP_newsize(pb_Pool *pool, size_t len) {
     char *ret;
+    if (pool->freed) {
+        ret = (char*)pool->freed;
+        pool->freed = *(void**)pool->freed;
+        return ret;
+    }
     if (len > pb_slicelen(&pool->data)) {
         pb_Pool *next = pbP_new(len <= PB_POOLSIZE ? PB_POOLSIZE : len);
         if (next == NULL) return NULL;
@@ -1126,9 +1136,8 @@ PB_API size_t pb_parse(pb_Parser *p, pb_Slice *s) {
 static int pbL_getqname(pb_State *S, pb_Type *t, pb_Slice *prefix, pb_Slice *name) {
     size_t plen = pb_slicelen(prefix);
     size_t nlen = pb_slicelen(name);
-    char *p = (char*)pbP_newsize(S->strpool, plen + nlen + 2);
-    DO_(p);
-    t->name = p;
+    char *p;
+    DO_((t->name = p = (char*)pbP_newsize(S->strpool, plen + nlen + 2)));
     if (plen != 0) {
         memcpy(p, prefix->p, plen);
         p[plen++] = '.';
@@ -1142,51 +1151,42 @@ static int pbL_getqname(pb_State *S, pb_Type *t, pb_Slice *prefix, pb_Slice *nam
 }
 
 static int pbL_rawfield(pb_State *S, pb_Type *t, pb_Field *f, pb_Slice name) {
-    pb_Entry *en = pbM_sets(&t->field_names, name);
-    pb_Entry *et = pbM_seti(&t->field_tags,
-            t->is_enum ? f->u.enum_value : f->tag);
-    pb_Field *nf;
-    DO_(en && et);
-    if ((nf = (pb_Field*)en->value) == NULL)
-        DO_((nf = (pb_Field*)pbP_newsize(S->fieldpool, sizeof(pb_Field))));
-    *nf = *f;
-    en->value = et->value = (uintptr_t)nf;
-    return 1;
-}
-
-static int pbL_mergetype(pb_Type *dst, const pb_Type *src) {
-    size_t i;
-    for (i = 0; i < src->field_names.size; ++i) {
-        pb_Entry *en, *et, *fe = &src->field_names.hash[i];
-        if (fe->key != 0 && fe->value != 0) {
-            DO_((et = pbM_seti(&dst->field_tags, ((pb_Field*)fe->value)->tag)));
-            if (et->value != 0) {
-                pb_Field *tf = (pb_Field*)et->value;
-                pb_Entry *oen = pbM_gets(&dst->field_names, pb_slice(tf->name));
-                if (oen) oen->key = oen->value = 0;
-            }
-            if ((en = pbM_getentry(&dst->field_names, fe)) == NULL)
-                DO_((en = pbM_newkey(&dst->field_names, fe)));
-            else {
-                pb_Field *nf = (pb_Field*)en->value;
-                pb_Entry *oet = pbM_geti(&dst->field_tags, nf->tag);
-                if (oet) oet->key = oet->value = 0;
-            }
-            en->value = et->value = fe->value;
-        }
+    pb_Entry *en, *et;
+    pb_Field *fn, *ft, *newf;
+    DO_((et = pbM_seti(&t->field_tags, t->is_enum ? f->u.enum_value:f->tag)));
+    DO_((en = pbM_sets(&t->field_names, name)));
+    if ((ft = (pb_Field*)et->value) != NULL) {
+        pb_Entry *oen = pbM_gets(&t->field_names, pb_slice(ft->name));
+        pbP_delsize(S->fieldpool, (void*)oen->value);
+        if (oen) oen->key = oen->value = 0;
     }
+    if ((fn = (pb_Field*)en->value) != NULL) {
+        pb_Entry *oet = pbM_geti(&t->field_tags, t->is_enum ?
+                fn->u.enum_value : fn->tag);
+        pbP_delsize(S->fieldpool, (void*)oet->value);
+        if (oet) oet->key = oet->value = 0;
+    }
+    DO_((newf = (pb_Field*)pbP_newsize(S->fieldpool, sizeof(pb_Field))));
+    *newf = *f;
+    en->value = et->value = (uintptr_t)newf;
     return 1;
 }
 
 static int pbL_rawtype(pb_State *S, pb_Type *t, pb_Slice name) {
-    pb_Entry *e = pbM_sets(&S->types, name);
+    pb_Entry *e;
     pb_Type *nt;
-    if (e == NULL) return 0;
+    DO_((e = pbM_sets(&S->types, name)));
     if ((nt = (pb_Type *)e->value) == NULL)
         DO_((nt = (pb_Type*)pbP_newsize(S->typepool, sizeof(pb_Type))));
     else {
-        if (nt->is_ext)
-            pbL_mergetype(t, nt), t->is_ext = 0;
+        size_t i;
+        for (i = 0; i < nt->field_names.size; ++i) {
+            pb_Entry *fe = &nt->field_names.hash[i];
+            pb_Field *f = (pb_Field*)fe->value;
+            if (fe->key && nt->is_ext)
+                pbL_rawfield(S, t, f, pb_slice(f->name));
+            pbP_delsize(S->fieldpool, f);
+        }
         pbM_free(&nt->field_tags);
         pbM_free(&nt->field_names);
     }
@@ -1416,5 +1416,5 @@ PB_NS_END
 
 #endif /* PB_IMPLEMENTATION */
 
-/* cc: flags+='-DPB_IMPLEMENTATION -s -O3 -mdll -xc' cc: output='pb.dll' */
+/* cc: flags+='-DPB_IMPLEMENTATION -O3 -shared -xc' cc: output='pb.dll' */
 
