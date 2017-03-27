@@ -2,6 +2,8 @@ Google protobuf support for Lua
 -------------------------------
 [![Build Status](https://travis-ci.org/starwing/lua-protobuf.svg?branch=master)](https://travis-ci.org/starwing/lua-protobuf)
 
+中文使用说明：https://zhuanlan.zhihu.com/p/26014103
+
 This project offers a simple C library for basic protobuf wire format
 encode/decode, it splits to several modules:
   - pb.decoder: a wire format decode module.
