@@ -919,9 +919,10 @@ static int Lpb_clear(lua_State *L) {
 
 static int Lpb_load(lua_State *L) {
     pb_State *S = default_state(L);
-    pb_Slice s = lpb_checkslice(L, 1);
-    lua_pushboolean(L, pb_load(S, &s));
-    return 1;
+    pb_Slice s = lpb_checkslice(L, 1), input = s;
+    lua_pushboolean(L, pb_load(S, &s) == PB_OK);
+    lua_pushinteger(L, s.p - input.p + 1);
+    return 2;
 }
 
 static int Lpb_loadfile(lua_State *L) {
@@ -1131,7 +1132,7 @@ static int Lpb_encode(lua_State *L) {
     luaL_checktype(L, 2, LUA_TTABLE);
     if (!t) {
         lua_pushnil(L);
-        lua_pushfstring(L, "can not find type '%s'", (char*)tname);
+        lua_pushfstring(L, "can not find type '%s'", lua_tostring(L, 1));
         return 2;
     }
     pb_initbuffer(&b);
@@ -1151,14 +1152,14 @@ static int Lpb_encode(lua_State *L) {
 
 /* decode protobuf */
 
-static void lpb_decode(lua_State *L, pb_Slice *s, pb_Type *t);
+static int lpb_decode(lua_State *L, pb_Slice *s, pb_Type *t);
 
 static void lpb_readbytes(lua_State *L, pb_Slice *s, pb_Slice *pv) {
     uint64_t len;
     if (pb_readvarint64(s, &len) == 0 || len > PB_MAX_SIZET)
         luaL_error(L, "invalid bytes length: %d (at %d)",
                 (int)len, (int)(s->p - s[1].p));
-    if (pb_readslice(s, (size_t)len, pv) == 0)
+    if (pb_readslice(s, (size_t)len, pv) == 0 && len != 0)
         luaL_error(L, "un-finished bytes (%d len at %d)",
                 (int)len, (int)(s->p - s[1].p));
 }
@@ -1260,7 +1261,7 @@ static void lpb_decrepeated(lua_State *L, pb_Slice *s, pb_Field *f, int tag) {
     lua_pop(L, 1);
 }
 
-static void lpb_decode(lua_State *L, pb_Slice *s, pb_Type *t) {
+static int lpb_decode(lua_State *L, pb_Slice *s, pb_Type *t) {
     uint32_t tag;
     lua_newtable(L);
     while (pb_readvarint32(s, &tag)) {
@@ -1275,6 +1276,13 @@ static void lpb_decode(lua_State *L, pb_Slice *s, pb_Type *t) {
             lua_rawset(L, -3);
         }
     }
+    return 1;
+}
+
+static int lpb_decode_helper(lua_State *L) {
+    return lpb_decode(L,
+            (pb_Slice*)lua_touserdata(L, 1),
+            (pb_Type*)lua_touserdata(L, 2));
 }
 
 static int Lpb_decode(lua_State *L) {
@@ -1282,9 +1290,20 @@ static int Lpb_decode(lua_State *L) {
     pb_Name *tname = lpb_checkname(L, 1);
     pb_Slice s[2];
     pb_Type *t = pb_type(S, tname);
-    if (!t) return 0;
+    if (!t) {
+        lua_pushnil(L);
+        lua_pushfstring(L, "can not find type '%s'", lua_tostring(L, 1));
+        return 2;
+    }
     s[0] = s[1] = lpb_checkslice(L, 2);
-    lpb_decode(L, s, t);
+    lua_pushcfunction(L, lpb_decode_helper);
+    lua_pushlightuserdata(L, s);
+    lua_pushlightuserdata(L, t);
+    if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
+        lua_pushnil(L);
+        lua_insert(L, -2);
+        return 2;
+    }
     return 1;
 }
 
