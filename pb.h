@@ -11,15 +11,19 @@
 # endif
 #endif /* PB_NS_BEGIN */
 
+#ifndef PB_STATIC
+# if __GNUC__
+#   define PB_STATIC static __attribute((unused))
+# else
+#   define PB_STATIC static
+# endif
+#endif
+
 #ifdef PB_STATIC_API
 # ifndef PB_IMPLEMENTATION
 #  define PB_IMPLEMENTATION
 # endif
-# if __GNUC__
-#   define PB_API static __attribute((unused))
-# else
-#   define PB_API static
-# endif
+# define PB_API PB_STATIC
 #endif
 
 #if !defined(PB_API) && defined(_WIN32)
@@ -360,7 +364,7 @@ PB_API pb_Slice pb_slice(const char *s)
 { return pb_lslice(s, strlen(s)); }
 
 PB_API pb_Slice pb_lslice(const char *s, size_t len)
-{ pb_Slice slice = { s, s + len }; return slice; }
+{ pb_Slice slice; slice.p = s; slice.end = s + len; return slice; }
 
 PB_API size_t pb_len(pb_Slice s)
 { return s.end - s.p; }
@@ -459,7 +463,7 @@ PB_API size_t pb_readfixed32(pb_Slice *s, uint32_t *pv) {
 PB_API size_t pb_readfixed64(pb_Slice *s, uint64_t *pv) {
     int i;
     uint64_t n = 0;
-    if (s->p + 8 < s->end)
+    if (s->p + 8 > s->end)
         return 0;
     for (i = 7; i >= 0; --i) {
         n <<= 8;
@@ -581,7 +585,7 @@ PB_API const char *pb_wtypename(int wiretype, const char *def) {
 #define X(id, name, v) case v: return name;
         PB_WIRETYPES(X)
 #undef  X
-    default: return def;
+    default: return def ? def : "<unknown>";
     }
 }
 
@@ -590,7 +594,7 @@ PB_API const char *pb_typename(int type, const char *def) {
 #define X(name, t, v) case v: return #name;
         PB_TYPES(X)
 #undef  X
-    default: return def;
+    default: return def ? def : "<unknown>";
     }
 }
 
@@ -626,7 +630,7 @@ PB_API int pb_wtypebyname(const char *name, int def) {
 /* encode */
 
 PB_API pb_Slice pb_result(pb_Buffer *b)
-{ pb_Slice slice = { b->buff, b->buff+b->size }; return slice; }
+{ pb_Slice slice = pb_lslice(b->buff, b->size); return slice; }
 
 PB_API void pb_initbuffer(pb_Buffer *b)
 { b->buff = b->init_buff, b->capacity = PB_BUFFERSIZE, b->size = 0; }
@@ -700,19 +704,19 @@ PB_API size_t pb_addlength(pb_Buffer *b, size_t len) {
     size_t bl, ml;
     if ((bl = pb_bufflen(b)) < len)
         return 0;
-    ml = pb_write64(buff, len);
+    ml = pb_write64(buff, bl - len);
     if (pb_prepbuffsize(b, ml) == 0) return 0;
-    s = b->buff + bl - len;
-    memmove(s, s+ml, ml);
+    s = b->buff + len;
+    memmove(s+ml, s, bl - len);
     memcpy(s, buff, ml);
     pb_addsize(b, ml);
     return ml;
 }
 
 PB_API size_t pb_addbytes(pb_Buffer *b, pb_Slice s) {
-    size_t len = pb_len(s);
+    size_t ret, len = pb_len(s);
     if (pb_prepbuffsize(b, len+5) == NULL) return 0;
-    size_t ret = pb_addvarint32(b, (uint32_t)len);
+    ret = pb_addvarint32(b, (uint32_t)len);
     return ret + pb_addslice(b, s);
 }
 
@@ -832,6 +836,8 @@ static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
         }
     }
     mp->key = key;
+    if (t->entry_size != sizeof(pb_Entry))
+        memset(mp+1, 0, t->entry_size - sizeof(pb_Entry));
     return mp;
 }
 
@@ -1035,7 +1041,7 @@ typedef struct pb_OneofEntry {
     pb_Entry entry;
     pb_Name *name;
     unsigned index;
-} pb_OneofEntry;;
+} pb_OneofEntry;
 
 PB_API void pb_init(pb_State *S) {
     memset(S, 0, sizeof(pb_State));
@@ -1259,17 +1265,17 @@ struct pbL_FileInfo {
 };
 
 static void pbL_grow(pb_Loader *L, void **pp, size_t obj_size) {
-    enum { SIZE, COUNT };
+    enum { SIZE, COUNT, FIELDS };
     size_t *h = *pp ? pbL_rawh(*pp) : NULL;
     if (h == NULL || h[SIZE] <= h[COUNT]) {
         size_t newsize = (h ? h[SIZE] : 1) * 2;
         size_t used = (h ? h[COUNT] : 0);
         size_t *nh = (size_t*)realloc(h, sizeof(size_t)*2 + newsize*obj_size);
         if (nh == NULL) longjmp(L->jbuf, PB_ENOMEM);
-        memset((char*)(nh + 2) + used*obj_size, 0, (newsize - used)*obj_size);
+        memset((char*)(nh + FIELDS) + used*obj_size, 0, (newsize - used)*obj_size);
         nh[SIZE] = newsize;
         nh[COUNT] = used;
-        *pp = nh + 2;
+        *pp = nh + FIELDS;
     }
 }
 
@@ -1288,8 +1294,7 @@ static void pbL_readint32(pb_Loader *L, int32_t *pv) {
 static void pbL_beginmsg(pb_Loader *L, pb_Slice *pv) {
     pb_Slice v;
     pbL_readbytes(L, &v);
-    *pv = L->s;
-    L->s = v;
+    *pv = L->s, L->s = v;
 }
 
 static void pbL_endmsg(pb_Loader *L, pb_Slice *pv) {
