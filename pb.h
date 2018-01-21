@@ -186,8 +186,8 @@ PB_API size_t pb_addlength (pb_Buffer *b, size_t len);
 typedef struct pb_State pb_State;
 typedef struct pb_Name  pb_Name;
 
-PB_API void pb_init  (pb_State *S);
-PB_API void pb_free  (pb_State *S);
+PB_API void pb_init (pb_State *S);
+PB_API void pb_free (pb_State *S);
 
 PB_API pb_Name *pb_newname (pb_State *S, pb_Slice    s);
 PB_API void     pb_delname (pb_State *S, pb_Name    *name);
@@ -493,7 +493,7 @@ PB_API size_t pb_readbytes(pb_Slice *s, pb_Slice *pv) {
     pv->p   = s->p;
     pv->end = s->p + len;
     s->p = pv->end;
-    return len;
+    return (size_t)len;
 }
 
 PB_API size_t pb_readgroup(pb_Slice *s, uint32_t tag, pb_Slice *pv) {
@@ -533,7 +533,7 @@ PB_API size_t pb_skipvalue(pb_Slice *s, uint32_t tag) {
 
 PB_API size_t pb_skipvarint(pb_Slice *s) {
     const char *p = s->p, *op = p;
-    while (p < s->end && !(*p & 0x80)) ++p;
+    while (p < s->end && (*p & 0x80) != 0) ++p;
     if (p >= s->end) return 0;
     s->p = ++p;
     return p - op;
@@ -957,6 +957,7 @@ static pb_NameEntry *pbN_newname(pb_State *S, const char *name, size_t len, unsi
         return NULL;
     list = &nt->hash[hash & (nt->size - 1)];
     newobj = (pb_NameEntry*)malloc(sizeof(pb_NameEntry) + len + 1);
+	if (newobj == NULL) return NULL;
     newobj->next = *list;
     newobj->length = (unsigned)len;
     newobj->refcount = 1;
@@ -1160,8 +1161,9 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
         pb_delname(S, ne->name);
     pb_freetable(&t->field_tags);
     pb_freetable(&t->field_names);
-    pb_delname(S, t->name);
-    pb_poolfree(&S->typepool, t);
+    pb_freetable(&t->oneof_index);
+    /*pb_delname(S, t->name); */
+    /*pb_poolfree(&S->typepool, t); */
 }
 
 PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t number) {
@@ -1191,11 +1193,11 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
             (pb_Key)f->number);
     if (nf && nf->value != f) pb_delfield(S, t, nf->value);
     if (tf && tf->value != f) pb_delfield(S, t, tf->value);
-    if (nf->value == NULL && tf->value == NULL)
+    if ((nf == NULL || nf->value == NULL) && (tf == NULL || tf->value == NULL))
         return;
     pbT_freefield(S, f, t->is_enum);
-    nf->entry.key = tf->entry.key = 0;
-    nf->value = tf->value = NULL;
+	if (nf) nf->entry.key = 0, nf->value = NULL;
+	if (tf) tf->entry.key = 0, tf->value = NULL;
 }
 
 
@@ -1272,10 +1274,10 @@ static void pbL_grow(pb_Loader *L, void **pp, size_t obj_size) {
         size_t used = (h ? h[COUNT] : 0);
         size_t *nh = (size_t*)realloc(h, sizeof(size_t)*2 + newsize*obj_size);
         if (nh == NULL) longjmp(L->jbuf, PB_ENOMEM);
-        memset((char*)(nh + FIELDS) + used*obj_size, 0, (newsize - used)*obj_size);
-        nh[SIZE] = newsize;
+        nh[SIZE]  = newsize;
         nh[COUNT] = used;
         *pp = nh + FIELDS;
+        memset((char*)*pp + used*obj_size, 0, (newsize - used)*obj_size);
     }
 }
 
@@ -1480,13 +1482,13 @@ static void pbL_delTypeInfo(pbL_TypeInfo *info) {
 static void pbL_delFileInfo(pbL_FileInfo *files) {
     size_t i, count, j, jcount;
     for (i = 0, count = pbL_count(files); i < count; ++i) {
-        for (j = 0, jcount = pbL_count(files->message_type); j < jcount; ++j)
-            pbL_delTypeInfo(&files->message_type[j]);
-        for (j = 0, jcount = pbL_count(files->enum_type); j < jcount; ++j)
-            pbL_delete(files->enum_type[j].value);
-        pbL_delete(files->message_type);
-        pbL_delete(files->enum_type);
-        pbL_delete(files->extension);
+        for (j = 0, jcount = pbL_count(files[i].message_type); j < jcount; ++j)
+            pbL_delTypeInfo(&files[i].message_type[j]);
+        for (j = 0, jcount = pbL_count(files[i].enum_type); j < jcount; ++j)
+            pbL_delete(files[i].enum_type[j].value);
+        pbL_delete(files[i].message_type);
+        pbL_delete(files[i].enum_type);
+        pbL_delete(files[i].extension);
     }
     pbL_delete(files);
 }
@@ -1514,12 +1516,11 @@ static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Type *t) {
     if (t != NULL || pb_len(info->extendee) != 0) {
         pb_Type *ft = pb_newtype(S, pb_newname(S, info->type_name));
         pb_Field *f;
-        if ((ft == NULL && (info->type == PB_Tmessage
-                        || info->type == PB_Tenum))
-                || (t == NULL && (t = pb_newtype(S,
-                            pb_newname(S, info->extendee))) == NULL)
-                || (f = pb_newfield(S, t,
-                        pb_newname(S, info->name), info->number)) == NULL)
+        if (!ft && (info->type == PB_Tmessage || info->type == PB_Tenum))
+            return;
+        if (t == NULL && !(t = pb_newtype(S, pb_newname(S, info->extendee))))
+            return;
+        if (!(f = pb_newfield(S, t, pb_newname(S, info->name), info->number)))
             return;
         f->default_value = pb_newname(S, info->default_value);
         f->type     = ft;
@@ -1563,13 +1564,13 @@ static void pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Buffer *b) {
 static void pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Buffer *b) {
     size_t i, count, j, jcount, curr = 0;
     for (i = 0, count = pbL_count(info); i < count; ++i) {
-        if (info->package.p) pbL_prefixname(b, info->package, &curr);
-        for (j = 0, jcount = pbL_count(info->enum_type); j < jcount; ++j)
-            pbL_loadEnum(S, &info->enum_type[j], b);
-        for (j = 0, jcount = pbL_count(info->message_type); j < jcount; ++j)
-            pbL_loadType(S, &info->message_type[j], b);
-        for (j = 0, jcount = pbL_count(info->extension); j < jcount; ++j)
-            pbL_loadField(S, &info->extension[j], NULL);
+        if (info[i].package.p) pbL_prefixname(b, info[i].package, &curr);
+        for (j = 0, jcount = pbL_count(info[i].enum_type); j < jcount; ++j)
+            pbL_loadEnum(S, &info[i].enum_type[j], b);
+        for (j = 0, jcount = pbL_count(info[i].message_type); j < jcount; ++j)
+            pbL_loadType(S, &info[i].message_type[j], b);
+        for (j = 0, jcount = pbL_count(info[i].extension); j < jcount; ++j)
+            pbL_loadField(S, &info[i].extension[j], NULL);
         b->size = curr;
     }
 }

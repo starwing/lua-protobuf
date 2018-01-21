@@ -121,14 +121,6 @@ static int argerror(lua_State *L, int idx, const char *fmt, ...) {
     return luaL_argerror(L, idx, lua_tostring(L, -1));
 }
 
-typedef union lpb_Value {
-    pb_Slice s;
-    uint32_t u32;
-    uint64_t u64;
-    lua_Integer lint;
-    lua_Number lnum;
-} lpb_Value;
-
 static pb_Slice lpb_toslice(lua_State *L, int idx) {
     int type = lua_type(L, idx);
     pb_Slice ret = { NULL, NULL };
@@ -154,6 +146,11 @@ static pb_Slice lpb_checkslice(lua_State *L, int idx) {
     return ret;
 }
 
+static void lpb_addlength(lua_State *L, pb_Buffer *b, size_t len) {
+    if (pb_addlength(b, len) == 0)
+        luaL_error(L, "out of memory when encode packed fields");
+}
+
 static void lpb_readvarint64(lua_State *L, pb_Slice *s, uint64_t *pv) {
     if (pb_readvarint64(s, pv) == 0)
         luaL_error(L, "invalid varint64 value at pos %s", lpb_pos(s));
@@ -168,6 +165,14 @@ static void lpb_readbytes(lua_State *L, pb_Slice *s, pb_Slice *pv) {
         luaL_error(L, "un-finished bytes (%d len at %d)",
                 (int)len, lpb_pos(s));
 }
+
+typedef union lpb_Value {
+    pb_Slice s[1];
+    uint32_t u32;
+    uint64_t u64;
+    lua_Integer lint;
+    lua_Number lnum;
+} lpb_Value;
 
 static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type) {
     int ret = 0, expected = LUA_TNUMBER;
@@ -218,8 +223,8 @@ static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type) {
         if (ret) pb_addvarint64(b, pb_encode_sint64((int64_t)v.lint));
         break;
     case PB_Tbytes: case PB_Tstring:
-        v.s = lpb_toslice(L, idx);
-        if ((ret = v.s.p != NULL)) pb_addbytes(b, v.s);
+        *v.s = lpb_toslice(L, idx);
+        if ((ret = v.s->p != NULL)) pb_addbytes(b, *v.s);
         expected = LUA_TSTRING;
         break;
     default:
@@ -241,7 +246,7 @@ static void lpb_readtype(lua_State *L, int type, pb_Slice *s, const char *wt) {
         case PB_Tenum:   lua_pushinteger(L, v.u64); return;
         case PB_Tint32:  lua_pushinteger(L, (int32_t)v.u64); return;
         case PB_Tuint32: lua_pushinteger(L, (uint32_t)v.u64); return;
-        case PB_Tsint32: lua_pushinteger(L, pb_decode_sint32(v.u64)); return;
+        case PB_Tsint32: lua_pushinteger(L, pb_decode_sint32((uint32_t)v.u64)); return;
         case PB_Tint64:  lua_pushinteger(L, (int64_t)v.u64); return;
         case PB_Tuint64: lua_pushinteger(L, (uint64_t)v.u64); return;
         case PB_Tsint64: lua_pushinteger(L, pb_decode_sint64(v.u64)); return;
@@ -272,8 +277,8 @@ static void lpb_readtype(lua_State *L, int type, pb_Slice *s, const char *wt) {
     case PB_Tbytes:
     case PB_Tstring:
     case PB_Tmessage:
-        lpb_readbytes(L, s, &v.s);
-        lua_pushlstring(L, v.s.p, pb_len(v.s));
+        lpb_readbytes(L, s, v.s);
+        lua_pushlstring(L, v.s->p, pb_len(*v.s));
         return;
     }
     lua_pushfstring(L, "type mismatch, %s expected for type %s",
@@ -460,6 +465,41 @@ static const char *lpb_typefmt(const char *fmt, int *ptype) {
     return fmt;
 }
 
+static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char *fmt, int level) {
+    int type, ltype;
+    size_t len;
+    luaL_argcheck(L, 1, level <= 100, "format level overflow");
+    for (;;) {
+        switch (*fmt) {
+        case 'v': pb_addvarint64(b, (uint64_t)luaL_checkinteger(L, idx++)); break;
+        case 'd': pb_addfixed32(b, (uint32_t)luaL_checkinteger(L, idx++)); break;
+        case 'q': pb_addfixed64(b, (uint64_t)luaL_checkinteger(L, idx++)); break;
+        case 'c': pb_addslice(b, lpb_checkslice(L, idx++)); break;
+        case 's': pb_addbytes(b, lpb_checkslice(L, idx++)); break;
+        case '(':
+            len = pb_bufflen(b);
+            idx = lpb_packfmt(L, idx, b, fmt, ++level);
+            lpb_addlength(L, b, len);
+            break;
+        case ')':
+            if (level == 0)
+                luaL_argerror(L, 1, "unexpected ')' in format");
+            return idx;
+        case '\0':
+            if (level != 0)
+                luaL_argerror(L, 1, "unmatch '(' in format");
+            return idx;
+        default:
+            if (fmt = lpb_typefmt(fmt, &type), type < 0)
+                argerror(L, 1, "invalid formater: '%c'", *fmt);
+            if ((ltype = lpb_addtype(L, b, idx, type)) != 0)
+                argerror(L, idx, "%s expected for type '%s', got %s",
+                        lua_typename(L, ltype), pb_typename(type, "<unknown>"),
+                        luaL_typename(L, idx));
+        }
+    }
+}
+
 static int Lbuf_new(lua_State *L) {
     int i, top = lua_gettop(L);
     pb_Buffer *buf = (pb_Buffer*)lua_newuserdata(L, sizeof(pb_Buffer));
@@ -499,41 +539,6 @@ static int Lbuf_len(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
     lua_pushinteger(L, (lua_Integer)buf->size);
     return 1;
-}
-
-static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char *fmt, int level) {
-    int type, ltype;
-    size_t len;
-    luaL_argcheck(L, 1, level <= 100, "format level overflow");
-    for (;;) {
-        switch (*fmt) {
-        case 'v': pb_addvarint64(b, (uint64_t)luaL_checkinteger(L, idx++)); break;
-        case 'd': pb_addfixed32(b, (uint32_t)luaL_checkinteger(L, idx++)); break;
-        case 'q': pb_addfixed64(b, (uint64_t)luaL_checkinteger(L, idx++)); break;
-        case 'c': pb_addslice(b, lpb_checkslice(L, idx++)); break;
-        case 's': pb_addbytes(b, lpb_checkslice(L, idx++)); break;
-        case '(':
-            len = pb_bufflen(b);
-            idx = lpb_packfmt(L, idx, b, fmt, ++level);
-            pb_addlength(b, len);
-            break;
-        case ')':
-            if (level == 0)
-                luaL_argerror(L, 1, "unexpected ')' in format");
-            return idx;
-        case '\0':
-            if (level != 0)
-                luaL_argerror(L, 1, "unmatch '(' in format");
-            return idx;
-        default:
-            if (fmt = lpb_typefmt(fmt, &type), type < 0)
-                argerror(L, 1, "invalid formater: '%c'", *fmt);
-            if ((ltype = lpb_addtype(L, b, idx, type)) != 0)
-                argerror(L, idx, "%s expected for type '%s', got %s",
-                        lua_typename(L, ltype), pb_typename(type, "<unknown>"),
-                        luaL_typename(L, idx));
-        }
-    }
 }
 
 static int Lbuf_pack(lua_State *L) {
@@ -645,10 +650,10 @@ static void lpb_resetslice(lua_State *L, lpb_Slice *s) {
 
 static void lpb_pushslice(lua_State *L, lpb_Slice *s, pb_Slice view) {
     if (s->stack_used == s->stack_size) {
-        size_t newsize = s->stack_size*2;
+        size_t newsize = s->stack_size * 2;
         pb_Slice *oldstack = s->stack == s->init_stack ? NULL : s->stack;
         pb_Slice *stack = (pb_Slice*)realloc(oldstack, newsize);
-        if (stack == NULL) luaL_error(L, "out of memory");
+        if (stack == NULL) { luaL_error(L, "out of memory"); return; }
         if (oldstack == NULL)
             memcpy(stack, s->stack, s->stack_size*sizeof(lpb_Slice));
         s->stack = stack;
@@ -682,6 +687,75 @@ static void lpb_initslice(lua_State *L, int idx, lpb_Slice *s) {
         lua_pushvalue(L, idx);
         lua_rawsetp(L, LUA_REGISTRYINDEX, s);
     }
+}
+
+static int lpb_fmterror(lua_State *L, int wt, pb_Slice *s) {
+    return argerror(L, 1, "invalid wireformat '%s' at pos %d",
+            pb_wtypename(wt, NULL), lpb_pos(s));
+}
+
+static int lpb_unpackfmt(lua_State *L, int idx, int top, const char *fmt, pb_Slice *s) {
+    lpb_Value v;
+    pb_Slice os = *s;
+    int type, rets = 0;
+    size_t oslen;
+    for (; *fmt != '\0'; ++fmt) {
+        switch (*fmt) {
+        case 'v':
+            if (pb_readvarint64(s, &v.u64) == 0) lpb_fmterror(L, PB_TVARINT, s);
+            luaL_checkstack(L, 1, "too many values");
+            lua_pushinteger(L, v.u64), ++rets;
+            break;
+        case 'd':
+            if (pb_readfixed32(s, &v.u32) == 0) lpb_fmterror(L, PB_T32BIT, s);
+            luaL_checkstack(L, 1, "too many values");
+            lua_pushinteger(L, v.u32), ++rets;
+            break;
+        case 'q':
+            if (pb_readfixed64(s, &v.u64) == 0) lpb_fmterror(L, PB_T64BIT, s);
+            luaL_checkstack(L, 1, "too many values");
+            lua_pushinteger(L, v.u64), ++rets;
+            break;
+        case 'c':
+            luaL_argcheck(L, 1, idx >= top, "format argument exceed");
+            v.lint = luaL_checkinteger(L, idx++);
+            if (pb_readslice(s, (size_t)v.lint, v.s) == 0) lpb_fmterror(L, PB_TBYTES, s);
+            luaL_checkstack(L, 1, "too many values");
+            lua_pushlstring(L, v.s->p, pb_len(*v.s)), ++rets;
+            break;
+        case 's':
+            if (pb_readbytes(s, v.s) == 0) lpb_fmterror(L, PB_TBYTES, s);
+            luaL_checkstack(L, 1, "too many values");
+            lua_pushlstring(L, v.s->p, pb_len(*v.s)), ++rets;
+            break;
+        case '*':
+            luaL_checkstack(L, 1, "too many values");
+            lua_pushinteger(L, s->p - os.p), ++rets;
+            break;
+
+        case '@':
+        case '+':
+        case '-':
+            luaL_argcheck(L, 1, idx >= top, "format argument exceed");
+            v.lint = posrelat(luaL_checkinteger(L, idx++), oslen = pb_len(os));
+            switch (*fmt) {
+            case '+': v.lint = (s->p - os.p) + v.lint; break;
+            case '-': v.lint = (s->p - os.p) - v.lint; break;
+            }
+            if (v.lint == 0) v.lint = 1;
+            if (v.lint > (lua_Integer)oslen) v.lint = oslen + 1;
+            s->p = os.p + v.lint - 1;
+            break;
+
+        default:
+            if (fmt = lpb_typefmt(fmt, &type), type < 0)
+                argerror(L, 1, "invalid formater: '%c'", *fmt);
+            luaL_checkstack(L, 1, "too many values");
+            lpb_readtype(L, type, s, NULL);
+            ++rets;
+        }
+    }
+    return rets;
 }
 
 static int Lslice_new(lua_State *L) {
@@ -744,7 +818,7 @@ static int Lslice_slice(lua_State *L) {
     lua_Integer j = posrelat(luaL_optinteger(L, 3, len), len);
     if (i < 1) i = 1;
     if (j > (lua_Integer)len) j = len;
-    lua_pushlstring(L, s.p + i - 1, j-i+1);
+    lua_pushlstring(L, s.p + i - 1, (size_t)(j-i+1));
     return 1;
 }
 
@@ -764,80 +838,11 @@ static int Lslice_leave(lua_State *L) {
     if ((lua_Integer)s->stack_used <= level)
         argerror(L, 2, "invalid level (%d), should less %d",
                 level, s->stack_used);
-    s->stack_used -= level;
+    s->stack_used -= (size_t)level;
     s->view = s->stack[s->stack_used-1];
     lua_settop(L, 1);
     lua_pushinteger(L, s->stack_used);
     return 2;
-}
-
-static int lpb_fmterror(lua_State *L, int wt, pb_Slice *s) {
-    return argerror(L, 1, "invalid wireformat '%s' at pos %d",
-            pb_wtypename(wt, NULL), lpb_pos(s));
-}
-
-static int lpb_unpackfmt(lua_State *L, int idx, int top, const char *fmt, pb_Slice *s) {
-    int type, rets = 0;
-    pb_Slice os = *s;
-    size_t oslen;
-    lpb_Value v;
-    for (; *fmt != '\0'; ++fmt) {
-        switch (*fmt) {
-        case 'v':
-            if (pb_readvarint64(s, &v.u64) == 0) lpb_fmterror(L, PB_TVARINT, s);
-            luaL_checkstack(L, 1, "too many values");
-            lua_pushinteger(L, v.u64), ++rets;
-            break;
-        case 'd':
-            if (pb_readfixed32(s, &v.u32) == 0) lpb_fmterror(L, PB_T32BIT, s);
-            luaL_checkstack(L, 1, "too many values");
-            lua_pushinteger(L, v.u32), ++rets;
-            break;
-        case 'q':
-            if (pb_readfixed64(s, &v.u64) == 0) lpb_fmterror(L, PB_T64BIT, s);
-            luaL_checkstack(L, 1, "too many values");
-            lua_pushinteger(L, v.u64), ++rets;
-            break;
-        case 'c':
-            luaL_argcheck(L, 1, idx >= top, "format argument exceed");
-            v.lint = luaL_checkinteger(L, idx++);
-            if (pb_readslice(s, v.lint, &v.s) == 0) lpb_fmterror(L, PB_TBYTES, s);
-            luaL_checkstack(L, 1, "too many values");
-            lua_pushlstring(L, v.s.p, pb_len(v.s)), ++rets;
-            break;
-        case 's':
-            if (pb_readbytes(s, &v.s) == 0) lpb_fmterror(L, PB_TBYTES, s);
-            luaL_checkstack(L, 1, "too many values");
-            lua_pushlstring(L, v.s.p, pb_len(v.s)), ++rets;
-            break;
-        case '*':
-            luaL_checkstack(L, 1, "too many values");
-            lua_pushinteger(L, s->p - os.p), ++rets;
-            break;
-
-        case '@':
-        case '+':
-        case '-':
-            luaL_argcheck(L, 1, idx >= top, "format argument exceed");
-            v.lint = posrelat(luaL_checkinteger(L, idx++), oslen = pb_len(os));
-            switch (*fmt) {
-            case '+': v.lint = (s->p - os.p) + v.lint; break;
-            case '-': v.lint = (s->p - os.p) - v.lint; break;
-            }
-            if (v.lint == 0) v.lint = 1;
-            if (v.lint > (lua_Integer)oslen) v.lint = oslen + 1;
-            s->p = os.p + v.lint - 1;
-            break;
-
-        default:
-            if (fmt = lpb_typefmt(fmt, &type), type < 0)
-                argerror(L, 1, "invalid formater: '%c'", *fmt);
-            luaL_checkstack(L, 1, "too many values");
-            lpb_readtype(L, type, s, NULL);
-            ++rets;
-        }
-    }
-    return rets;
 }
 
 static int Lslice_unpack(lua_State *L) {
@@ -939,10 +944,10 @@ static pb_Type *lpb_checktype(lua_State *L, int idx)
 
 static int Lpb_clear(lua_State *L) {
     pb_State *S = default_state(L);
-    if (lua_isnoneornil(L, 2))
+    if (lua_isnoneornil(L, 1))
         pb_free(S), pb_init(S);
     else
-        pb_deltype(S, lpb_checktype(L, 2));
+        pb_deltype(S, lpb_checktype(L, 1));
     return 0;
 }
 
@@ -1030,8 +1035,9 @@ static int Lpb_fields(lua_State *L) {
     return 3;
 }
 
-static int Lpb_type(lua_State *L)
-{ return lpb_pushtype(L, lpb_checktype(L, 1)); }
+static int Lpb_type(lua_State *L) {
+    return lpb_pushtype(L, lpb_checktype(L, 1));
+}
 
 static int Lpb_field(lua_State *L) {
     pb_Type *t = lpb_checktype(L, 1);
@@ -1055,9 +1061,15 @@ static int Lpb_enum(lua_State *L) {
 
 /* encode protobuf */
 
-static void lpb_encode (lua_State *L, pb_Buffer *b, pb_Field *f);
+static void lpb_encode (lua_State *L, pb_Buffer *b, pb_Type *t);
 
-static void lpb_encenum(lua_State *L, pb_Buffer *b, pb_Field *f) {
+static void lpb_checktable(lua_State *L, pb_Field *f) {
+    if (!lua_istable(L, -1))
+        argerror(L, 2, "table expected at field '%s', got %s",
+                (char*)f->name, luaL_typename(L, -1));
+}
+
+static void lpbE_enum(lua_State *L, pb_Buffer *b, pb_Field *f) {
     int type = lua_type(L, -1);
     if (type == LUA_TNUMBER) {
         lua_Integer v = lua_tointeger(L, -1);
@@ -1067,107 +1079,128 @@ static void lpb_encenum(lua_State *L, pb_Buffer *b, pb_Field *f) {
         argerror(L, 2, "number/string expected at field '%s', %s got",
                 (char*)f->name, luaL_typename(L, -1));
     else {
-        pb_Name *name;
-        pb_Field *ev;
-        name = lpb_toname(L, -1);
-        if (!f->type || !name) return;
-        ev = pb_fname(f->type, name);
-        if (!ev) return;
-        pb_addvarint32(b, ev->number);
+        pb_Name *name = lpb_toname(L, -1);
+        pb_Field *ev = pb_fname(f->type, name);;
+        if (ev) pb_addvarint32(b, ev->number);
     }
 }
 
-static void lpb_encmsg(lua_State *L, pb_Buffer *b, pb_Type *t) {
+static void lpbE_field(lua_State *L, pb_Buffer *b, pb_Field *f, int hastag) {
+    size_t len;
+    int ltype;
+    if (hastag) pb_addvarint32(b, pb_pair(f->number, pb_wtypebytype(f->type_id)));
+    switch (f->type_id) {
+    case PB_Tenum:
+        lpbE_enum(L, b, f);
+        break;
+
+    case PB_Tmessage:
+        lpb_checktable(L, f);
+        len = pb_bufflen(b);
+        lpb_encode(L, b, f->type);
+        if (pb_bufflen(b) > len) lpb_addlength(L, b, len);
+        break;
+
+    default:
+        if ((ltype = lpb_addtype(L, b, -1, f->type_id)) != 0)
+            argerror(L, 2, "%s expected at field '%s', got %s",
+                    lua_typename(L, ltype),
+                    (char*)f->name, luaL_typename(L, -1));
+    }
+}
+
+static void lpbE_map(lua_State *L, pb_Buffer *b, pb_Field *f) {
+    size_t len;
+    if (f->type == NULL) return;
+    lpb_checktable(L, f);
+    if (f->packed) {
+        pb_addvarint32(b, pb_pair(f->number, PB_TBYTES));
+        len = pb_bufflen(b);
+        lua_pushnil(L);
+        while (lua_next(L, -2)) {
+            size_t ilen = pb_bufflen(b);
+            lpbE_field(L, b, pb_field(f->type, 2), 1);
+            lua_pop(L, 1);
+            lpbE_field(L, b, pb_field(f->type, 1), 1);
+            lpb_addlength(L, b, ilen);
+        }
+        lpb_addlength(L, b, len);
+    }
+    else {
+        lua_pushnil(L);
+        while (lua_next(L, -2)) {
+            pb_addvarint32(b, pb_pair(f->number, PB_TBYTES));
+            len = pb_bufflen(b);
+            lpbE_field(L, b, pb_field(f->type, 2), 1);
+            lua_pop(L, 1);
+            lpbE_field(L, b, pb_field(f->type, 1), 1);
+            lpb_addlength(L, b, len);
+        }
+    }
+    lua_pop(L, 1);
+}
+
+static void lpbE_repeated(lua_State *L, pb_Buffer *b, pb_Field *f) {
+    int i;
+    lpb_checktable(L, f);
+    if (f->packed) {
+        size_t len;
+        pb_addvarint32(b, pb_pair(f->number, PB_TBYTES));
+        len = pb_bufflen(b);
+        for (i = 1; lua53_rawgeti(L, -1, i) != LUA_TNIL; ++i) {
+            lpbE_field(L, b, f, 0);
+            lua_pop(L, 1);
+        }
+        lpb_addlength(L, b, len);
+    }
+    else {
+        for (i = 1; lua53_rawgeti(L, -1, i) != LUA_TNIL; ++i) {
+            lpbE_field(L, b, f, 1);
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 1);
+}
+
+static void lpb_encode(lua_State *L, pb_Buffer *b, pb_Type *t) {
     luaL_checkstack(L, 3, "message too many levels");
     lua_pushnil(L);
     while (lua_next(L, -2)) {
         if (lua_type(L, -2) == LUA_TSTRING) {
             pb_Field *f = pb_fname(t, lpb_toname(L, -2));
-            if (f) lpb_encode(L, b, f);
+            if (f == NULL)
+                /* skip */;
+            else if (f->type && f->type->is_map)
+                lpbE_map(L, b, f);
+            else if (f->repeated)
+                lpbE_repeated(L, b, f);
+            else
+                lpbE_field(L, b, f, 1);
         }
         lua_pop(L, 1);
     }
 }
 
-static void lpb_enctable(lua_State *L, pb_Buffer *b, pb_Field *f) {
-    pb_Buffer nb;
-    pb_Slice s;
-    if (!lua_istable(L, -1))
-        argerror(L, 2, "table expected at field '%s', got %s",
-                (char*)f->name, luaL_typename(L, -1));
-    if (!f->type) return;
-    pb_initbuffer(&nb);
-    lpb_encmsg(L, &nb, f->type);
-    s = pb_result(&nb);
-    pb_addbytes(b, s);
-}
-
-static void lpb_encfield(lua_State *L, pb_Buffer *b, pb_Field *f, int tag) {
-    int ltype;
-    if (tag) pb_addvarint32(b, pb_pair(f->number, pb_wtypebytype(f->type_id)));
-    switch (f->type_id) {
-    case PB_Tenum:    lpb_encenum(L, b, f); break;
-    case PB_Tmessage: lpb_enctable(L, b, f); break;
-    default:
-        ltype = lpb_addtype(L, b, -1, f->type_id);
-        if (ltype) argerror(L, 2, "%s expected at field '%s', got %s",
-                lua_typename(L, ltype),
-                (char*)f->name, luaL_typename(L, -1));
-    }
-}
-
-static void lpb_encode(lua_State *L, pb_Buffer *b, pb_Field *f) {
-    int type;
-    if (!f->repeated)
-        lpb_encfield(L, b, f, 1);
-    else if ((type = lua_type(L, -1)) != LUA_TNIL) {
-        int i;
-        if (type != LUA_TTABLE)
-            argerror(L, 2, "table expected at field '%s', got %s",
-                    (char*)f->name, luaL_typename(L, -1));
-        if (f->packed) {
-            size_t len;
-            pb_addvarint32(b, pb_pair(f->number, PB_TBYTES));
-            len = pb_bufflen(b);
-            for (i = 1; lua53_rawgeti(L, -1, i) != LUA_TNIL; ++i) {
-                lpb_encfield(L, b, f, 0);
-                lua_pop(L, 1);
-            }
-            if (pb_addlength(b, len) == 0)
-                luaL_error(L, "out of memory when encode packed fields");
-        }
-        else {
-            for (i = 1; lua53_rawgeti(L, -1, i) != LUA_TNIL; ++i) {
-                lpb_encfield(L, b, f, 1);
-                lua_pop(L, 1);
-            }
-        }
-        lua_pop(L, 1);
-    }
-}
-
-static int lpb_enchandler(lua_State *L) {
+static int lpb_encode_helper(lua_State *L) {
     pb_Buffer *b = (pb_Buffer*)lua_touserdata(L, 1);
     pb_Type *t = (pb_Type*)lua_touserdata(L, 2);
-    lpb_encmsg(L, b, t);
+    lpb_encode(L, b, t);
     lua_pushlstring(L, b->buff, b->size);
     return 1;
 }
 
 static int Lpb_encode(lua_State *L) {
-    pb_State *S = default_state(L);
-    pb_Name *tname = lpb_checkname(L, 1);
-    pb_Type *t = pb_type(S, tname);
+    pb_Type *t = lpb_checktype(L, 1);
     pb_Buffer b;
     int ret = 1;
     luaL_checktype(L, 2, LUA_TTABLE);
-    if (!t) {
+    if (t == NULL) {
         lua_pushnil(L);
         lua_pushfstring(L, "can not find type '%s'", lua_tostring(L, 1));
         return 2;
     }
     pb_initbuffer(&b);
-    lua_pushcfunction(L, lpb_enchandler);
+    lua_pushcfunction(L, lpb_encode_helper);
     lua_pushlightuserdata(L, &b);
     lua_pushlightuserdata(L, t);
     lua_pushvalue(L, 2);
@@ -1185,7 +1218,16 @@ static int Lpb_encode(lua_State *L) {
 
 static int lpb_decode(lua_State *L, pb_Slice *s, pb_Type *t);
 
-static void lpb_decfield(lua_State *L, pb_Slice *s, pb_Field *f, int tag) {
+static void lpb_fetchtable(lua_State *L, pb_Field *f) {
+    if (lua53_getfield(L, -1, (char*)f->name) == LUA_TNIL) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, (char*)f->name);
+    }
+}
+
+static void lpbD_field(lua_State *L, pb_Slice *s, pb_Field *f, uint32_t tag) {
     pb_Slice sv[2];
     pb_Field *ev;
     uint64_t u64;
@@ -1194,14 +1236,13 @@ static void lpb_decfield(lua_State *L, pb_Slice *s, pb_Field *f, int tag) {
     case PB_Tenum:
         lpb_readvarint64(L, s, &u64);
         ev = pb_field(f->type, (int32_t)u64);
-        if (ev == NULL) lua_pushinteger(L, (lua_Integer)u64);
-        else            lua_pushstring(L, (char*)ev->name);
+        if (ev) lua_pushstring(L, (char*)ev->name);
+        else    lua_pushinteger(L, (lua_Integer)u64);
         break;
 
     case PB_Tmessage:
-        sv[1] = s[1];
-        lpb_readbytes(L, s, sv);
-        lpb_decode(L, sv, f->type);
+        lpb_readbytes(L, s, sv), sv[1] = s[1];
+        if (f->type) lpb_decode(L, sv, f->type);
         break;
 
     default:
@@ -1209,28 +1250,55 @@ static void lpb_decfield(lua_State *L, pb_Slice *s, pb_Field *f, int tag) {
     }
 }
 
-static void lpb_decrepeated(lua_State *L, pb_Slice *s, pb_Field *f, int tag) {
-    if (lua53_getfield(L, -1, (char*)f->name) == LUA_TNIL) {
-        lua_pop(L, 1);
-        lua_newtable(L);
-        lua_pushvalue(L, -1);
-        lua_setfield(L, -3, (char*)f->name);
+static void lpbD_mapentry(lua_State *L, pb_Slice *s, pb_Type *t, int top) {
+    pb_Slice p[2];
+    int mask = 0;
+    uint32_t tag;
+    lpb_readbytes(L, s, p), p[1] = s[1];
+    if (t == NULL) return;
+    lua_pushnil(L);
+    lua_pushnil(L);
+    while (pb_readvarint32(p, &tag)) {
+        int n = pb_gettag(tag);
+        if (n == 1 || n == 2) {
+            mask |= n;
+            lpbD_field(L, p, pb_field(t, n), tag);
+            lua_replace(L, top+n);
+        }
     }
+    if (mask == 3) lua_rawset(L, -3);
+    else           lua_pop(L, 2);
+}
 
-    if (!f->packed || pb_gettype(tag) != PB_TBYTES) {
-        lpb_decfield(L, s, f, tag);
-        lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
-    }
+static void lpbD_map(lua_State *L, pb_Slice *s, pb_Field *f) {
+    int top = lua_gettop(L);
+    lpb_fetchtable(L, f);
+    if (!f->packed)
+        lpbD_mapentry(L, s, f->type, top);
     else {
         pb_Slice p[2];
-        int len = lua_rawlen(L, -1);
         lpb_readbytes(L, s, p), p[1] = s[1];
-        while (pb_len(*p) != 0) {
-            lpb_decfield(L, p, f, tag);
+        while (p->p < p->end)
+            lpbD_mapentry(L, p, f->type, top);
+    }
+    lua_pop(L, 1);
+}
+
+static void lpbD_repeated(lua_State *L, pb_Slice *s, pb_Field *f, uint32_t tag) {
+    lpb_fetchtable(L, f);
+    if (f->packed) {
+        int len = lua_rawlen(L, -1);
+        pb_Slice p[2];
+        lpb_readbytes(L, s, p), p[1] = s[1];
+        while (p->p < p->end) {
+            lpbD_field(L, p, f, tag);
             lua_rawseti(L, -2, ++len);
         }
     }
-
+    else {
+        lpbD_field(L, s, f, tag);
+        lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
+    }
     lua_pop(L, 1);
 }
 
@@ -1241,11 +1309,13 @@ static int lpb_decode(lua_State *L, pb_Slice *s, pb_Type *t) {
         pb_Field *f = pb_field(t, pb_gettag(tag));
         if (f == NULL)
             pb_skipvalue(s, tag);
+        else if (f->type && f->type->is_map)
+            lpbD_map(L, s, f);
         else if (f->repeated)
-            lpb_decrepeated(L, s, f, tag);
-        else {
+            lpbD_repeated(L, s, f, tag);
+        else if (!f->type || f->type->field_count != 0) {
             lua_pushstring(L, (char*)f->name);
-            lpb_decfield(L, s, f, tag);
+            lpbD_field(L, s, f, tag);
             lua_rawset(L, -3);
         }
     }
@@ -1259,11 +1329,9 @@ static int lpb_decode_helper(lua_State *L) {
 }
 
 static int Lpb_decode(lua_State *L) {
-    pb_State *S = default_state(L);
-    pb_Name *tname = lpb_checkname(L, 1);
+    pb_Type *t = lpb_checktype(L, 1);
     pb_Slice s[2];
-    pb_Type *t = pb_type(S, tname);
-    if (!t) {
+    if (t == NULL) {
         lua_pushnil(L);
         lua_pushfstring(L, "can not find type '%s'", lua_tostring(L, 1));
         return 2;
