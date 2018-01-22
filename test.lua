@@ -304,6 +304,23 @@ function _G.test_map()
    end)
 end
 
+function _G.test_oneof()
+   check_load [[
+   syntax = "proto3";
+   message TestOneof {
+       oneof test_oneof {
+         string name = 4;
+         int32  value = 5;
+       }
+   } ]]
+
+   local data = { name = "foo" }
+   check_msg("TestOneof", data)
+
+   data = { name = "foo", value = 5 }
+   check_msg("TestOneof", data)
+end
+
 function _G.test_conv()
    eq(conv.encode_uint32(-1), 0xFFFFFFFF)
    eq(conv.decode_uint32(0xFFFFFFFF), 0xFFFFFFFF)
