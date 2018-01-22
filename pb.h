@@ -303,6 +303,7 @@ struct pb_Type {
     pb_Table    field_tags;
     pb_Table    field_names;
     pb_Table    oneof_index;
+    unsigned    field_count : 30;
     unsigned    is_enum  : 1;
     unsigned    is_map   : 1;
 };
@@ -1162,6 +1163,7 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     pb_freetable(&t->field_tags);
     pb_freetable(&t->field_names);
     pb_freetable(&t->oneof_index);
+    t->field_count = 0;
     /*pb_delname(S, t->name); */
     /*pb_poolfree(&S->typepool, t); */
 }
@@ -1181,6 +1183,7 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t nu
         f->name   = fname;
         f->type   = t;
         f->number = number;
+        ++t->field_count;
         return nf->value = tf->value = f;
     }
     return NULL;
@@ -1191,13 +1194,15 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
             (pb_Key)f->name);
     pb_FieldEntry *tf = (pb_FieldEntry*)pb_gettable(&t->field_tags,
             (pb_Key)f->number);
-    if (nf && nf->value != f) pb_delfield(S, t, nf->value);
-    if (tf && tf->value != f) pb_delfield(S, t, tf->value);
-    if ((nf == NULL || nf->value == NULL) && (tf == NULL || tf->value == NULL))
-        return;
-    pbT_freefield(S, f, t->is_enum);
-	if (nf) nf->entry.key = 0, nf->value = NULL;
-	if (tf) tf->entry.key = 0, tf->value = NULL;
+    int mask = 3;
+    if (nf && nf->value != f) pb_delfield(S, t, nf->value), mask -= 1;
+    if (tf && tf->value != f) pb_delfield(S, t, tf->value), mask -= 2;
+    if (mask) {
+        pbT_freefield(S, f, t->is_enum);
+        --t->field_count;
+        if (mask & 1) nf->entry.key = 0, nf->value = NULL;
+        if (mask & 2) tf->entry.key = 0, tf->value = NULL;
+    }
 }
 
 

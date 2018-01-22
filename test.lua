@@ -2,16 +2,15 @@ local lu = require "luaunit"
 
 local pb     = require "pb"
 local pbio   = require "pb.io"
+local buffer = require "pb.buffer"
+local slice  = require "pb.slice"
 local conv   = require "pb.conv"
 local protoc = require "protoc"
-
-for name, a, b in pb.types() do
-   print(name, a, b)
-end
 
 -- local assert_not = lu.assertEvalToFalse
 local eq       = lu.assertEquals
 local table_eq = lu.assertItemsEquals
+local fail     = lu.assertErrorMsgContains
 
 local function check_msg(name, data)
    local chunk2 = assert(pb.encode(name, data))
@@ -47,6 +46,12 @@ function _G.test_io.test()
                                              "address.proto"))
    assert(pbio.dump("address.pb", chunk))
    assert(pb.loadfile "address.pb")
+   assert(pb.type "Person")
+   local ft = {}
+   for name in pb.fields "Person" do
+      ft[name] = true
+   end
+   table_eq(ft, { name=true, age=true,address=true,contacts=true })
 
    local data = {
       name = "ilse",
@@ -90,14 +95,14 @@ function _G.test_depend.test()
 
    local t = { dep1 = { id = 1, name = "foo" }, other = 2 }
    local code = assert(pb.encode("Depend2Msg", t))
-   table_eq(assert(pb.decode("Depend2Msg", code)), { dep1 = {}, other = 2 })
+   table_eq(assert(pb.decode("Depend2Msg", code)), { other = 2 })
 
    assert(protoc.new():loadfile "depend1.proto")
    check_msg("Depend2Msg", t)
 
    pb.clear "Depend1Msg"
    code = assert(pb.encode("Depend2Msg", t))
-   table_eq(assert(pb.decode("Depend2Msg", code)), { dep1 = {}, other = 2 })
+   table_eq(assert(pb.decode("Depend2Msg", code)), { other = 2 })
 
    assert(protoc.new():loadfile "depend1.proto")
    check_msg("Depend2Msg", t)
@@ -190,6 +195,24 @@ function _G.test_type()
    check_msg(".TestTypes", data)
 end
 
+function _G.test_enum()
+   assert(protoc.new():load [[
+      enum Color {
+         Red = 1;
+         Green = 2;
+         Blue = 3;
+      }
+      message TestEnum {
+         optional Color color  = 1;
+      } ]])
+
+   local data = { color = "Red" }
+   check_msg("TestEnum", data)
+
+   local data2 = { color = 123 }
+   check_msg("TestEnum", data2)
+end
+
 function _G.test_packed()
    assert(protoc.new():load [[
    message TestPacked {
@@ -240,6 +263,59 @@ function _G.test_conv()
 
    eq(conv.decode_float(conv.encode_float(123.125)), 123.125)
    eq(conv.decode_double(conv.encode_double(123.125)), 123.125)
+end
+
+function _G.test_buffer()
+   eq(buffer.pack("vvv", 1,2,3), "\1\2\3")
+   eq(buffer.tohex(buffer.pack("d", 4294967295)), "FF FF FF FF")
+   eq(buffer.tohex(buffer.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
+   eq(buffer.pack("s", "foo"), "\3foo")
+   eq(buffer.pack("cc", "foo", "bar"), "foobar")
+   eq(buffer():pack("vvv", 1,2,3):result(), "\1\2\3")
+
+   local b = buffer.new()
+   b:pack("b", true);       eq(b:tohex(-1), "01")
+   b:pack("f", 0.125);      eq(b:tohex(-4), "00 00 00 3E")
+   b:pack("F", 0.125);      eq(b:tohex(-8), "00 00 00 00 00 00 C0 3F")
+   b:pack("i", 4294967295); eq(b:tohex(-5), "FF FF FF FF 0F")
+   b:pack("j", 4294967295); eq(b:tohex(-1), "01")
+   b:pack("u", 4294967295); eq(b:tohex(-5), "FF FF FF FF 0F")
+   b:pack("x", 4294967295); eq(b:tohex(-4), "FF FF FF FF")
+   b:pack("y", 4294967295); eq(b:tohex(-4), "FF FF FF FF")
+   if _VERSION == "Lua 5.3" then
+      b:pack("I", 9223372036854775807); eq(b:tohex(-9), "FF FF FF FF FF FF FF FF 7F")
+      b:pack("J", 9223372036854775807); eq(b:tohex(-10), "FE FF FF FF FF FF FF FF FF 01")
+      b:pack("U", 9223372036854775807); eq(b:tohex(-9), "FF FF FF FF FF FF FF FF 7F")
+      b:pack("X", 9223372036854775807); eq(b:tohex(-8), "FF FF FF FF FF FF FF 7F")
+      b:pack("Y", 9223372036854775807); eq(b:tohex(-8), "FF FF FF FF FF FF FF 7F")
+   end
+   assert(#b ~= 0)
+   assert(#b:reset() == 0)
+   assert(tostring(b):match 'pb.Buffer')
+
+   b = buffer.new()
+   eq(b:pack("(vvv)", 1,2,3):tohex(-4), "03 01 02 03")
+   eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
+   fail("unmatch '(' in format", function() b:pack "(" end)
+   fail("unexpected ')' in format", function() b:pack ")" end)
+end
+
+function _G.test_slice()
+   local s = slice.new "\3\1\2\3"
+   eq(#s, 4)
+   eq(s:level(), 1)
+   eq({s:level(-1)}, {1,1,4})
+   eq(s:enter(), s)
+   eq(s:level(), 2)
+   eq({s:unpack "vvv"}, {1,2,3})
+   eq(s:unpack "v", nil)
+   eq(s:leave(), s)
+   eq(s:unpack("+s", -4), "\1\2\3")
+
+   eq(s:reset"\3\1\2\3", s)
+   eq(#s, 4)
+   eq(#s:reset(), 0)
+   assert(tostring(s):match 'pb.Slice')
 end
 
 os.exit(lu.LuaUnit.run(), true)
