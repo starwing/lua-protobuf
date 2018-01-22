@@ -371,18 +371,18 @@ PB_API size_t pb_len(pb_Slice s)
 { return s.end - s.p; }
 
 static size_t pb_readvarint_slow(pb_Slice *s, uint64_t *pv) {
+    const char *p = s->p;
     uint64_t n = 0;
-    size_t i = 0, count = pb_len(*s);
-    while (i != count) {
-        int b = s->p[i] & 0x7F;
-        n |= (uint64_t)b << (7*i);
-        ++i;
+    int i = 0;
+    while (s->p < s->end && i < 10) {
+        int b = *s->p++;
+        n |= ((uint64_t)b & 0x7F) << (7*i++);
         if ((b & 0x80) == 0) {
             *pv = n;
-            s->p += i;
             return i;
         }
     }
+    s->p = p;
     return 0;
 }
 
@@ -966,6 +966,7 @@ static pb_NameEntry *pbN_newname(pb_State *S, const char *name, size_t len, unsi
     memcpy(newobj+1, name, len);
     ((char*)(newobj+1))[len] = '\0';
     *list = newobj;
+    ++nt->count;
     return newobj;
 }
 
@@ -978,6 +979,7 @@ static void pbN_delname(pb_State *S, pb_NameEntry *name) {
         else {
             *list = (*list)->next;
             free(name);
+            --nt->count;
             break;
         }
     }

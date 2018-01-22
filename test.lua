@@ -12,6 +12,13 @@ local eq       = lu.assertEquals
 local table_eq = lu.assertItemsEquals
 local fail     = lu.assertErrorMsgContains
 
+local types = 0
+for _ in pb.types() do
+   types = types + 1
+end
+print("pb predefined types: "..types)
+
+
 local function check_msg(name, data)
    local chunk2 = assert(pb.encode(name, data))
    local data2 = assert(pb.decode(name, chunk2))
@@ -114,6 +121,7 @@ function _G.test_extend()
    local P = protoc.new()
 
    P.unknown_import = true
+   P.unknown_type = true
    assert(P:load([[
       syntax = "proto2";
       import "descriptor.proto";
@@ -128,7 +136,8 @@ function _G.test_extend()
       } ]], "extend1.proto"))
    eq(pb.type "Extendable", ".Extendable")
 
-   P.unknown_import = false
+   P.unknown_import = nil
+   P.unknown_type = nil
    local chunk = assert(P:compile [[
       syntax = "proto2";
       import "extend1.proto"
@@ -193,6 +202,7 @@ function _G.test_type()
    }
 
    check_msg(".TestTypes", data)
+   pb.clear "TestTypes"
 end
 
 function _G.test_enum()
@@ -205,6 +215,9 @@ function _G.test_enum()
       message TestEnum {
          optional Color color  = 1;
       } ]])
+   eq(pb.enum("Color", 1), "Red")
+   eq(pb.enum("Color", "Red"), 1)
+   eq({pb.field("TestEnum", "color")}, {"color", 1, ".Color", nil, "optional"})
 
    local data = { color = "Red" }
    check_msg("TestEnum", data)
@@ -249,6 +262,8 @@ function _G.test_conv()
    eq(conv.encode_sint32(-3), 5)
    eq(conv.encode_sint32(-123), 245)
    eq(conv.encode_sint32(123), 246)
+   eq(conv.encode_sint64(-123), 245)
+   eq(conv.encode_sint64(123), 246)
 
    eq(conv.decode_sint32(0), 0)
    eq(conv.decode_sint32(1), -1)
@@ -260,6 +275,8 @@ function _G.test_conv()
    eq(conv.decode_sint32(246), 123)
    eq(conv.decode_sint32(0xFFFFFFFF), -0x80000000)
    eq(conv.decode_sint32(0xFFFFFFFE), 0x7FFFFFFF)
+   eq(conv.decode_sint64(0xFFFFFFFF), -0x80000000)
+   eq(conv.decode_sint64(0xFFFFFFFE), 0x7FFFFFFF)
 
    eq(conv.decode_float(conv.encode_float(123.125)), 123.125)
    eq(conv.decode_double(conv.encode_double(123.125)), 123.125)
@@ -267,10 +284,10 @@ end
 
 function _G.test_buffer()
    eq(buffer.pack("vvv", 1,2,3), "\1\2\3")
-   eq(buffer.tohex(buffer.pack("d", 4294967295)), "FF FF FF FF")
-   eq(buffer.tohex(buffer.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
-   eq(buffer.pack("s", "foo"), "\3foo")
-   eq(buffer.pack("cc", "foo", "bar"), "foobar")
+   eq(buffer.tohex(pb.pack("d", 4294967295)), "FF FF FF FF")
+   eq(buffer.tohex(pb.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
+   eq(pb.pack("s", "foo"), "\3foo")
+   eq(pb.pack("cc", "foo", "bar"), "foobar")
    eq(buffer():pack("vvv", 1,2,3):result(), "\1\2\3")
 
    local b = buffer.new()
@@ -298,6 +315,13 @@ function _G.test_buffer()
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
    fail("unmatch '(' in format", function() b:pack "(" end)
    fail("unexpected ')' in format", function() b:pack ")" end)
+
+   b = buffer.new()
+   eq(b:pack("c", ("a"):rep(1025)):result(), ("a"):rep(1025))
+   eq(b:pack("c", ("b"):rep(1025)):result(), ("a"):rep(1025)..("b"):rep(1025))
+   eq(#b, 2050)
+
+   fail("number expected, got string", function() pb.pack("v", "foo") end)
 end
 
 function _G.test_slice()
@@ -312,9 +336,39 @@ function _G.test_slice()
    eq(s:leave(), s)
    eq(s:unpack("+s", -4), "\1\2\3")
 
-   eq(s:reset"\3\1\2\3", s)
+   assert(s:reset"\3\1\2\3")
+   s:enter(1, 4); eq(s:level(), 2)
+   s:enter(1, 4); eq(s:level(), 3)
+   s:enter(1, 4); eq(s:level(), 4)
+   s:enter(1, 4); eq(s:level(), 5)
+   s:leave(); eq(s:level(), 4)
+   s:leave(); eq(s:level(), 3)
+   s:leave(); eq(s:level(), 2)
+   s:leave(); eq(s:level(), 1)
+   eq(s:tohex(), "03 01 02 03")
+   eq(s:result(-3), "\1\2\3")
    eq(#s, 4)
    eq(#s:reset(), 0)
+
+   table_eq({slice.unpack("\1\2\3", "vvv")}, {1,2,3})
+   eq(pb.unpack("\255\255\255\255", "d"), 4294967295)
+   if _VERSION == "Lua 5.3" then
+      eq(pb.unpack("\255\255\255\255\255\255\255\127", "q"), 9223372036854775807)
+   end
+   eq(pb.unpack("\3foo", "s"), "foo")
+   eq({pb.unpack("foobar", "cc", 3, 3)}, {"foo", "bar"})
+
+   eq(pb.unpack("\255\255\255\127\255", "v"), 0xFFFFFFF)
+   fail("invalid varint value at pos 1", function() pb.unpack("\255\255\255", "v") end)
+   fail("invalid varint value at pos 1", function() pb.unpack("\255\255\255", "v") end)
+   fail("invalid bytes value at pos 1", function() pb.unpack("\3\1\2", "s") end)
+   fail("invalid fixed32 value at pos 1", function() pb.unpack("\1\2\3", "d") end)
+   fail("invalid fixed64 value at pos 1", function() pb.unpack("\1\2\3", "q") end)
+   fail("invalid sub string at pos 1", function() pb.unpack("\3\1\2", "c", 5) end)
+   fail("invalid varint value at pos 1", function() pb.unpack("\255\255\255", "i") end)
+   fail("invalid fixed32 value at pos 1", function() pb.unpack("\255\255\255", "x") end)
+   fail("invalid fixed64 value at pos 1", function() pb.unpack("\255\255\255", "X") end)
+
    assert(tostring(s):match 'pb.Slice')
 end
 

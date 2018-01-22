@@ -262,18 +262,21 @@ end
 function Parser:parsefile(name)
    local info = self.loaded[name]
    if info then return info end
+   local errors = {}
    for _, path in ipairs(self.paths) do
-      local fh = io.open(path.."/"..name)
+      local fn = path.."/"..name
+      local fh, err = io.open(fn)
       if fh then
          local content = fh:read "*a"
          info = self:parse(content, name)
          fh:close()
          return info
       end
+      errors[#errors + 1] = err or fn..": ".."unknown error"
    end
-   info = self.import(name)
+   info = self.import_fallback(name)
    if not info then
-      error("can not find file: "..name)
+      error("module load error: "..name.."\n\t"..table.concat(errors, "\n\t"))
    end
    return info
 end
@@ -412,6 +415,41 @@ local function label_field(self, lex, ident)
    info, map_entry = field(lex, lex:type_name())
    info.label = label
    return info, map_entry
+end
+
+local function make_subparser(self, lex)
+   local sub = {
+      syntax  = "proto2";
+      locmap  = {};
+      prefix  = ".";
+      lex     = lex;
+      parent  = self;
+   }
+   sub.loaded  = self.loaded
+   sub.typemap = self.typemap
+   sub.paths   = self.paths
+
+   function sub.import_fallback(import_name)
+      if self.unknown_import == true then
+         return true
+      elseif type(self.import_fallback) == 'string' then
+         return import_name:match(self.import_fallback) and true or nil
+      elseif self.unknown_import then
+         return self:unknown_import(import_name)
+      end
+   end
+
+   function sub.type_fallback(type_name)
+      if self.unknown_type == true then
+         return true
+      elseif type(self.import_fallback) == 'string' then
+         return type_name:match(self.import_fallback) and true
+      elseif self.unknown_type then
+         return self:unknown_type(type_name)
+      end
+   end
+
+   return setmetatable(sub, Parser)
 end
 
 local toplevel = {} do
@@ -692,22 +730,7 @@ function Parser:parse(src, name)
    local lex = Lexer.new(name or "<input>", src)
    local info = { name = lex.name }
    if name then self.loaded[name] = true end
-   local ctx = setmetatable({
-      syntax  = "proto2";
-      locmap  = {};
-      prefix  = ".";
-      lex     = lex;
-      loaded  = self.loaded;
-      typemap = self.typemap;
-      paths   = self.paths;
-      import  = function(import_name)
-         if self.unknown_import == true then
-            return true
-         elseif self.unknown_import then
-            return self:unknown_import(import_name)
-         end
-      end
-   }, Parser)
+   local ctx = make_subparser(self, lex)
 
    local syntax = lex:keyword('syntax', 'opt')
    if syntax then
@@ -766,6 +789,12 @@ local function check_type(self, lex, tname)
       prefix[i] = op
       local t = self.typemap[tn]
       if t then return t, tn end
+   end
+   local tn, t = self.type_fallback(tname)
+   if tn then
+      t = types[t or "message"]
+      if tn == true then tn = "."..tname end
+      return t, tn
    end
    return lex:error("unknown type '%s'", tname)
 end

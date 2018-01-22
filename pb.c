@@ -168,11 +168,6 @@ static void lpb_addlength(lua_State *L, pb_Buffer *b, size_t len) {
         luaL_error(L, "out of memory when encode packed fields");
 }
 
-static void lpb_readvarint64(lua_State *L, pb_SliceExt *s, uint64_t *pv) {
-    if (pb_readvarint64(&s->base, pv) == 0)
-        luaL_error(L, "invalid varint64 value at pos %s", lpb_pos(s));
-}
-
 static void lpb_readbytes(lua_State *L, pb_SliceExt *s, pb_SliceExt *pv) {
     uint64_t len;
     if (pb_readvarint64(&s->base, &len) == 0 || len > PB_MAX_SIZET)
@@ -246,50 +241,50 @@ static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type) {
         expected = LUA_TSTRING;
         break;
     default:
-        luaL_error(L, "unexpected %s for type '%s'",
-                luaL_typename(L, idx), pb_typename(type, "<unknown>"));
+        argerror(L, idx, "unknown type %s", pb_typename(type, "<unknown>"));
     }
     return ret ? 0 : expected;
 }
 
-static void lpb_readtype(lua_State *L, int type, pb_SliceExt *s, const char *wt) {
+static void lpb_readtype(lua_State *L, int type, pb_SliceExt *s) {
     lpb_Value v;
     switch (type) {
     case PB_Tbool:  case PB_Tenum:
     case PB_Tint32: case PB_Tuint32: case PB_Tsint32:
     case PB_Tint64: case PB_Tuint64: case PB_Tsint64:
-        lpb_readvarint64(L, s, &v.u64);
+        if (pb_readvarint64(&s->base, &v.u64) == 0)
+            luaL_error(L, "invalid varint value at pos %d", lpb_pos(s));
         switch (type) {
-        case PB_Tbool:   lua_pushboolean(L, v.u64 != 0); return;
-        case PB_Tenum:   lua_pushinteger(L, v.u64); return;
-        case PB_Tint32:  lua_pushinteger(L, (int32_t)v.u64); return;
-        case PB_Tuint32: lua_pushinteger(L, (uint32_t)v.u64); return;
-        case PB_Tsint32: lua_pushinteger(L, pb_decode_sint32((uint32_t)v.u64)); return;
-        case PB_Tint64:  lua_pushinteger(L, (int64_t)v.u64); return;
-        case PB_Tuint64: lua_pushinteger(L, (uint64_t)v.u64); return;
-        case PB_Tsint64: lua_pushinteger(L, pb_decode_sint64(v.u64)); return;
+        case PB_Tbool:   lua_pushboolean(L, v.u64 != 0); break;
+        case PB_Tenum:   lua_pushinteger(L, v.u64); break;
+        case PB_Tint32:  lua_pushinteger(L, (int32_t)v.u64); break;
+        case PB_Tuint32: lua_pushinteger(L, (uint32_t)v.u64); break;
+        case PB_Tsint32: lua_pushinteger(L, pb_decode_sint32((uint32_t)v.u64)); break;
+        case PB_Tint64:  lua_pushinteger(L, (int64_t)v.u64); break;
+        case PB_Tuint64: lua_pushinteger(L, (uint64_t)v.u64); break;
+        case PB_Tsint64: lua_pushinteger(L, pb_decode_sint64(v.u64)); break;
         }
         break;
     case PB_Tfloat:
     case PB_Tfixed32:
     case PB_Tsfixed32:
         if (pb_readfixed32(&s->base, &v.u32) == 0)
-            luaL_error(L, "invalid fixed32 value at pos %s", lpb_pos(s));
+            luaL_error(L, "invalid fixed32 value at pos %d", lpb_pos(s));
         switch (type) {
-        case PB_Tfloat:    lua_pushnumber(L, pb_decode_float(v.u32)); return;
-        case PB_Tfixed32:  lua_pushinteger(L, v.u32); return;
-        case PB_Tsfixed32: lua_pushinteger(L, (int32_t)v.u32); return;
+        case PB_Tfloat:    lua_pushnumber(L, pb_decode_float(v.u32)); break;
+        case PB_Tfixed32:  lua_pushinteger(L, v.u32); break;
+        case PB_Tsfixed32: lua_pushinteger(L, (int32_t)v.u32); break;
         }
         break;
     case PB_Tdouble:
     case PB_Tfixed64:
     case PB_Tsfixed64:
         if (pb_readfixed64(&s->base, &v.u64) == 0)
-            luaL_error(L, "invalid fixed64 value at pos %s", lpb_pos(s));
+            luaL_error(L, "invalid fixed64 value at pos %d", lpb_pos(s));
         switch (type) {
-        case PB_Tdouble:   lua_pushnumber(L, pb_decode_double(v.u64)); return;
-        case PB_Tfixed64:  lua_pushinteger(L, v.u64); return;
-        case PB_Tsfixed64: lua_pushinteger(L, (int64_t)v.u64); return;
+        case PB_Tdouble:   lua_pushnumber(L, pb_decode_double(v.u64)); break;
+        case PB_Tfixed64:  lua_pushinteger(L, v.u64); break;
+        case PB_Tsfixed64: lua_pushinteger(L, (int64_t)v.u64); break;
         }
         break;
     case PB_Tbytes:
@@ -297,17 +292,11 @@ static void lpb_readtype(lua_State *L, int type, pb_SliceExt *s, const char *wt)
     case PB_Tmessage:
         lpb_readbytes(L, s, v.s);
         lua_pushlstring(L, v.s->base.p, pb_len(v.s->base));
-        return;
+        break;
+
+    default:
+        luaL_error(L, "unknown type %s", pb_typename(type, NULL));
     }
-    lua_pushfstring(L, "type mismatch at pos %d, %s expected for type %s",
-            lpb_pos(s),
-            pb_wtypename(pb_wtypebytype(type), "nothing"),
-            pb_typename(type, "<unknown>"));
-    if (wt) {
-        lua_pushfstring(L, ", got %s", wt);
-        lua_concat(L, 2);
-    }
-    lua_error(L);
 }
 
 
@@ -707,29 +696,29 @@ static int lpb_unpackscalar(lua_State *L, int *pidx, int top, int fmt, pb_SliceE
     switch (fmt) {
     case 'v':
         if (pb_readvarint64(&s->base, &v.u64) == 0)
-            luaL_error(L, "invalid varint value at pos %s", lpb_pos(s));
+            luaL_error(L, "invalid varint value at pos %d", lpb_pos(s));
         lua_pushinteger(L, v.u64);
         break;
     case 'd':
         if (pb_readfixed32(&s->base, &v.u32) == 0)
-            luaL_error(L, "invalid fixed32 value at pos %s", lpb_pos(s));
+            luaL_error(L, "invalid fixed32 value at pos %d", lpb_pos(s));
         lua_pushinteger(L, v.u32);
         break;
     case 'q':
         if (pb_readfixed64(&s->base, &v.u64) == 0)
-            luaL_error(L, "invalid fixed64 value at pos %s", lpb_pos(s));
+            luaL_error(L, "invalid fixed64 value at pos %d", lpb_pos(s));
         lua_pushinteger(L, v.u64);
         break;
     case 's':
         if (pb_readbytes(&s->base, &v.s->base) == 0)
-            luaL_error(L, "invalid bytes value at pos %s", lpb_pos(s));
+            luaL_error(L, "invalid bytes value at pos %d", lpb_pos(s));
         lua_pushlstring(L, v.s->base.p, pb_len(v.s->base));
         break;
     case 'c':
         luaL_argcheck(L, 1, *pidx <= top, "format argument exceed");
         i = luaL_checkinteger(L, *pidx++);
         if (pb_readslice(&s->base, (size_t)i, &v.s->base) == 0)
-            luaL_error(L, "invalid sub string at pos %s", lpb_pos(s));
+            luaL_error(L, "invalid sub string at pos %d", lpb_pos(s));
         lua_pushlstring(L, v.s->base.p, pb_len(v.s->base));
         break;
     default:
@@ -773,7 +762,7 @@ static int lpb_unpackfmt(lua_State *L, int idx, const char *fmt, pb_SliceExt *s)
         if (!lpb_unpackscalar(L, &idx, top, *fmt, s)) {
             if ((type = lpb_typefmt(fmt)) < 0)
                 argerror(L, 1, "invalid formater: '%c'", *fmt);
-            lpb_readtype(L, type, s, NULL);
+            lpb_readtype(L, type, s);
         }
         ++rets;
     }
@@ -1265,7 +1254,8 @@ static void lpbD_field(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t tag) 
 
     switch (f->type_id) {
     case PB_Tenum:
-        lpb_readvarint64(L, s, &u64);
+        if (pb_readvarint64(&s->base, &u64) == 0)
+            luaL_error(L, "invalid varint value at pos %d", lpb_pos(s));
         ev = pb_field(f->type, (int32_t)u64);
         if (ev) lua_pushstring(L, (char*)ev->name);
         else    lua_pushinteger(L, (lua_Integer)u64);
@@ -1277,7 +1267,13 @@ static void lpbD_field(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t tag) 
         break;
 
     default:
-        lpb_readtype(L, f->type_id, s, pb_wtypename(tag, NULL));
+        if (!f->packed && pb_wtypebytype(f->type_id) != pb_gettype(tag))
+            luaL_error(L, "type mismatch at pos %d, %s expected for type %s, got %s",
+                    lpb_pos(s),
+                    pb_wtypename(pb_wtypebytype(f->type_id), NULL),
+                    pb_typename(f->type_id, NULL),
+                    pb_wtypename(pb_gettype(tag), NULL));
+        lpb_readtype(L, f->type_id, s);
     }
 }
 
