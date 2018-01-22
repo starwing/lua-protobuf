@@ -16,8 +16,17 @@ local types = 0
 for _ in pb.types() do
    types = types + 1
 end
-print("pb predefined types: "..types)
+pbio.write("pb predefined types: ", tostring(types), "\n")
 
+local function check_load(chunk, name)
+   local pbdata = protoc.new():compile(chunk, name)
+   local ret, offset = pb.load(pbdata)
+   if not ret then
+      error("load error at "..offset..
+            "\nproto: "..chunk..
+            "\ndata: "..buffer(pbdata):tohex())
+   end
+end
 
 local function check_msg(name, data)
    local chunk2 = assert(pb.encode(name, data))
@@ -60,6 +69,29 @@ function _G.test_io.test()
    end
    table_eq(ft, { name=true, age=true,address=true,contacts=true })
 
+   fail("type 'Foo' not exists", function() assert(pb.encode("Foo", {})) end)
+   fail("type 'Foo' not exists", function() assert(pb.decode("Foo", "")) end)
+
+   fail("string expected at field 'name', got boolean", function()
+      assert(pb.encode("Person", { name = true }))
+   end)
+
+   fail("type mismatch at offset 2, bytes expected for type string, got varint", function()
+      assert(pb.decode("Person", "\8\1"))
+   end)
+
+   fail("invalid varint value at offset 2", function()
+      assert(pb.decode("Person", "\16\255"))
+   end)
+
+   fail("invalid bytes length: 0 (at offset 2)", function()
+      assert(pb.decode("Person", "\10\255"))
+   end)
+
+   fail("un-finished bytes (len 10 at offset 3)", function()
+      assert(pb.decode("Person", "\10\10"))
+   end)
+
    local data = {
       name = "ilse",
       age  = 18,
@@ -90,7 +122,7 @@ function _G.test_depend.teardown()
 end
 
 function _G.test_depend.test()
-   assert(protoc.new():load [[
+   check_load [[
       syntax = "proto2";
 
       import "depend1.proto";
@@ -98,20 +130,20 @@ function _G.test_depend.test()
       message Depend2Msg {
           optional Depend1Msg dep1  = 1;
           optional int32      other = 2;
-      } ]])
+      } ]]
 
    local t = { dep1 = { id = 1, name = "foo" }, other = 2 }
    local code = assert(pb.encode("Depend2Msg", t))
    table_eq(assert(pb.decode("Depend2Msg", code)), { other = 2 })
 
-   assert(protoc.new():loadfile "depend1.proto")
+   eq(protoc.new():loadfile "depend1.proto", true)
    check_msg("Depend2Msg", t)
 
    pb.clear "Depend1Msg"
    code = assert(pb.encode("Depend2Msg", t))
    table_eq(assert(pb.decode("Depend2Msg", code)), { other = 2 })
 
-   assert(protoc.new():loadfile "depend1.proto")
+   eq(protoc.new():loadfile "depend1.proto", true)
    check_msg("Depend2Msg", t)
 end
 
@@ -164,7 +196,7 @@ function _G.test_extend()
 end
 
 function _G.test_type()
-   assert(protoc.new():load [[
+   check_load [[
    message TestTypes {
       optional double   dv    = 1;
       optional float    fv    = 2;
@@ -181,7 +213,7 @@ function _G.test_type()
       optional sfixed64 sf64v = 16;
       optional sint32   s32v  = 17;
       optional sint64   s64v  = 18;
-   } ]])
+   } ]]
 
    local data = {
       dv    = 0.125;
@@ -206,7 +238,7 @@ function _G.test_type()
 end
 
 function _G.test_enum()
-   assert(protoc.new():load [[
+   check_load [[
       enum Color {
          Red = 1;
          Green = 2;
@@ -214,7 +246,7 @@ function _G.test_enum()
       }
       message TestEnum {
          optional Color color  = 1;
-      } ]])
+      } ]]
    eq(pb.enum("Color", 1), "Red")
    eq(pb.enum("Color", "Red"), 1)
    eq({pb.field("TestEnum", "color")}, {"color", 1, ".Color", nil, "optional"})
@@ -224,19 +256,52 @@ function _G.test_enum()
 
    local data2 = { color = 123 }
    check_msg("TestEnum", data2)
+
+   fail("invalid varint value at offset 2", function()
+      assert(pb.decode("TestEnum", "\8\255"))
+   end)
+   fail("number/string expected at field 'color', got boolean", function()
+      assert(pb.encode("TestEnum", { color = true }))
+   end)
 end
 
 function _G.test_packed()
-   assert(protoc.new():load [[
+   check_load [[
    message TestPacked {
       repeated int64 packs = 1 [packed=true];
-   } ]])
+   } ]]
 
    local data = {
       packs = { 1,2,3,4,-1,-2,3 }
    }
-
    check_msg(".TestPacked", data)
+   fail("table expected at field 'packs', got boolean", function()
+      assert(pb.encode("TestPacked", { packs = true }))
+   end)
+
+   pb.clear "TestPacked"
+   eq(pb.type("TestPacked"), nil)
+end
+
+function _G.test_map()
+   check_load [[
+   syntax = "proto3";
+   message TestMap {
+       map<string, int32> map = 1;
+       map<string, int32> packed_map = 2 [packed=true];
+   } ]]
+
+   local data = {
+      map = { one = 1, two = 2, three = 3 };
+      packed_map = { one = 1, two = 2, three = 3 }
+   }
+   check_msg(".TestMap", data)
+
+   local data2 = { map = { one = 1, [1]=1 } }
+   fail("string expected at field 'key', got number", function()
+      local chunk = assert(pb.encode("TestMap", data2))
+      table_eq(pb.decode("TestMap", chunk), { map = {one = 1} })
+   end)
 end
 
 function _G.test_conv()
@@ -290,6 +355,9 @@ function _G.test_buffer()
    eq(pb.pack("cc", "foo", "bar"), "foobar")
    eq(buffer():pack("vvv", 1,2,3):result(), "\1\2\3")
 
+   eq(buffer("foo", "bar"):result(), "foobar")
+   eq(buffer.new("foo", "bar"):result(), "foobar")
+
    local b = buffer.new()
    b:pack("b", true);       eq(b:tohex(-1), "01")
    b:pack("f", 0.125);      eq(b:tohex(-4), "00 00 00 3E")
@@ -313,8 +381,10 @@ function _G.test_buffer()
    b = buffer.new()
    eq(b:pack("(vvv)", 1,2,3):tohex(-4), "03 01 02 03")
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
-   fail("unmatch '(' in format", function() b:pack "(" end)
-   fail("unexpected ')' in format", function() b:pack ")" end)
+   fail("unmatch '(' in format", function() pb.pack "(" end)
+   fail("unexpected ')' in format", function() pb.pack ")" end)
+   fail("number expected for type 'int32', got string", function() pb.pack("i", "foo") end)
+   fail("invalid formater: '#'", function() pb.pack '#' end)
 
    b = buffer.new()
    eq(b:pack("c", ("a"):rep(1025)):result(), ("a"):rep(1025))
@@ -336,19 +406,21 @@ function _G.test_slice()
    eq(s:leave(), s)
    eq(s:unpack("+s", -4), "\1\2\3")
 
-   assert(s:reset"\3\1\2\3")
-   s:enter(1, 4); eq(s:level(), 2)
-   s:enter(1, 4); eq(s:level(), 3)
-   s:enter(1, 4); eq(s:level(), 4)
-   s:enter(1, 4); eq(s:level(), 5)
-   s:leave(); eq(s:level(), 4)
-   s:leave(); eq(s:level(), 3)
-   s:leave(); eq(s:level(), 2)
-   s:leave(); eq(s:level(), 1)
+   s = slice "\3\1\2\3"
+   for i = 2, 20 do
+      s:enter(1, 4); eq(s:level(), i)
+   end
+   for i = 19, 1 do
+      s:leave(); eq(s:level(), i)
+   end
    eq(s:tohex(), "03 01 02 03")
    eq(s:result(-3), "\1\2\3")
    eq(#s, 4)
    eq(#s:reset(), 0)
+
+   eq({pb.unpack("\255\1", "v@")}, { 255, 3 })
+   eq({pb.unpack("\1", "v*v", 1)}, { 1, 1 })
+   fail("invalid formater: '!'", function() pb.unpack("\1", '!') end)
 
    table_eq({slice.unpack("\1\2\3", "vvv")}, {1,2,3})
    eq(pb.unpack("\255\255\255\255", "d"), 4294967295)
@@ -359,15 +431,15 @@ function _G.test_slice()
    eq({pb.unpack("foobar", "cc", 3, 3)}, {"foo", "bar"})
 
    eq(pb.unpack("\255\255\255\127\255", "v"), 0xFFFFFFF)
-   fail("invalid varint value at pos 1", function() pb.unpack("\255\255\255", "v") end)
-   fail("invalid varint value at pos 1", function() pb.unpack("\255\255\255", "v") end)
-   fail("invalid bytes value at pos 1", function() pb.unpack("\3\1\2", "s") end)
-   fail("invalid fixed32 value at pos 1", function() pb.unpack("\1\2\3", "d") end)
-   fail("invalid fixed64 value at pos 1", function() pb.unpack("\1\2\3", "q") end)
-   fail("invalid sub string at pos 1", function() pb.unpack("\3\1\2", "c", 5) end)
-   fail("invalid varint value at pos 1", function() pb.unpack("\255\255\255", "i") end)
-   fail("invalid fixed32 value at pos 1", function() pb.unpack("\255\255\255", "x") end)
-   fail("invalid fixed64 value at pos 1", function() pb.unpack("\255\255\255", "X") end)
+   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "v") end)
+   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "v") end)
+   fail("invalid bytes value at offset 1", function() pb.unpack("\3\1\2", "s") end)
+   fail("invalid fixed32 value at offset 1", function() pb.unpack("\1\2\3", "d") end)
+   fail("invalid fixed64 value at offset 1", function() pb.unpack("\1\2\3", "q") end)
+   fail("invalid sub string at offset 1", function() pb.unpack("\3\1\2", "c", 5) end)
+   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "i") end)
+   fail("invalid fixed32 value at offset 1", function() pb.unpack("\255\255\255", "x") end)
+   fail("invalid fixed64 value at offset 1", function() pb.unpack("\255\255\255", "X") end)
 
    assert(tostring(s):match 'pb.Slice')
 end

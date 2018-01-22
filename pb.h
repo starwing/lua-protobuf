@@ -670,15 +670,15 @@ static int pb_write64(char *buff, uint64_t n) {
 
 PB_API size_t pb_resizebuffer(pb_Buffer *b, size_t len) {
     size_t newsize = PB_BUFFERSIZE;
-    if (len < b->size) len = b->size;
     while (newsize < PB_MAX_SIZET/2 && newsize < len)
         newsize += newsize >> 1;
-    if (newsize >= len) {
+    if (newsize > b->size) {
         char *newbuff = b->buff == b->init_buff ? NULL : b->buff;
         newbuff = (char*)realloc(newbuff, newsize);
         if (newbuff == NULL) return 0;
-        if (b->buff == b->init_buff) memcpy(newbuff, b->buff, b->size);
-        b->buff = newbuff;
+        if (b->buff == b->init_buff)
+            memcpy(newbuff, b->buff, b->size);
+        b->buff     = newbuff;
         b->capacity = newsize;
     }
     return b->capacity;
@@ -1316,7 +1316,7 @@ static void pbL_FieldOptions(pb_Loader *L, pbL_FieldInfo *info) {
     pbL_beginmsg(L, &s);
     while (pb_readvarint32(&L->s, &tag)) {
         switch (tag) {
-        case pb_pair(2, PB_Tbool): /* bool packed */
+        case pb_pair(2, PB_TVARINT): /* bool packed */
             pbL_readint32(L, &info->packed); break;
         default: pb_skipvalue(&L->s, tag);
         }
@@ -1393,7 +1393,7 @@ static void pbL_MessageOptions(pb_Loader *L, pbL_TypeInfo *info) {
     pbL_beginmsg(L, &s);
     while (pb_readvarint32(&L->s, &tag)) {
         switch (tag) {
-        case pb_pair(7, PB_Tbool): /* bool map_entry */
+        case pb_pair(7, PB_TVARINT): /* bool map_entry */
             pbL_readint32(L, &info->is_map); break;
         default: pb_skipvalue(&L->s, tag);
         }
@@ -1591,8 +1591,8 @@ PB_API int pb_load(pb_State *S, pb_Slice *s) {
         return PB_ERROR;
     else if (ret == 0) {
         L.s = *s;
-        pbL_FileDescriptorSet(&L, &files);
         pb_initbuffer(&b);
+        pbL_FileDescriptorSet(&L, &files);
         pbL_loadFile(S, files, &b);
     }
     pbL_delFileInfo(files);

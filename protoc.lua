@@ -373,10 +373,11 @@ local function inline_option(lex, info)
    end
 end
 
-local function field(lex, ident)
+local function field(self, lex, ident)
    local name, type, type_name, map_entry
    if ident == "map" and lex:test "%<" then
       name, type, type_name, map_entry = map_info(lex)
+      register_type(self, lex, type_name, types.message)
    else
       type, type_name = type_info(lex, ident)
       name = lex:ident()
@@ -407,12 +408,12 @@ local function label_field(self, lex, ident)
       if self.syntax == "proto2" then
          return lex:error("proto2 disallow missing label")
       end
-      return field(lex, ident)
+      return field(self, lex, ident)
    end
    if label == labels.optional and self.syntax == "proto3" then
       return lex:error("proto3 disallow 'optional' label")
    end
-   info, map_entry = field(lex, lex:type_name())
+   info, map_entry = field(self, lex, lex:type_name())
    info.label = label
    return info, map_entry
 end
@@ -555,7 +556,7 @@ function msg_body:oneof(lex, info)
       if ident == "option" then
          toplevel.option(self, lex, oneof)
       else
-         local f, t = field(lex, ident, "no_label")
+         local f, t = field(self, lex, ident, "no_label")
          if t then ts[#ts+1] = t end
          f.oneof_index = index
          fs[#fs+1] = f
