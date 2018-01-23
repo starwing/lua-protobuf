@@ -968,8 +968,13 @@ static int Lpb_clear(lua_State *L) {
     pb_State *S = default_state(L);
     if (lua_isnoneornil(L, 1))
         pb_free(S), pb_init(S);
-    else
+    else if (lua_isnoneornil(L, 2))
         pb_deltype(S, lpb_checktype(L, 1));
+    else {
+        pb_Type *t = lpb_checktype(L, 1);
+        pb_Field *f = pb_fname(t, lpb_checkname(L, 2));
+        if (f) pb_delfield(S, t, f);
+    }
     return 0;
 }
 
@@ -1012,7 +1017,8 @@ static int lpb_pushtype(lua_State *L, pb_Type *t) {
     return 3;
 }
 
-static int lpb_pushfield(lua_State *L, pb_Field *f) {
+static int lpb_pushfield(lua_State *L, pb_Type *t, pb_Field *f) {
+    pb_OneofEntry *e;
     if (f == NULL) return 0;
     lua_pushstring(L, (char*)f->name);
     lua_pushinteger(L, f->number);
@@ -1021,6 +1027,12 @@ static int lpb_pushfield(lua_State *L, pb_Field *f) {
     lua_pushstring(L, (char*)f->default_value);
     lua_pushstring(L, f->packed ? "packed" :
             f->repeated ? "repeated" : "optional");
+    e = (pb_OneofEntry*)pb_gettable(&t->oneof_index, (pb_Key)f);
+    if (e) {
+        lua_pushstring(L, (const char*)e->name);
+        lua_pushinteger(L, e->index-1);
+        return 7;
+    }
     return 5;
 }
 
@@ -1046,7 +1058,7 @@ static int Lpb_fieldsiter(lua_State *L) {
     pb_Field *f = pb_fname(t, prev);
     if ((f == NULL && !lua_isnoneornil(L, 2)) || !pb_nextfield(t, &f))
         return 0;
-    return lpb_pushfield(L, f);
+    return lpb_pushfield(L, t, f);
 }
 
 static int Lpb_fields(lua_State *L) {
@@ -1067,7 +1079,7 @@ static int Lpb_field(lua_State *L) {
     pb_Type *t = lpb_checktype(L, 1);
     int isint, number = (int)lua_tointegerx(L, 2, &isint);
     pb_Field *f = isint ? pb_field(t, number) : pb_fname(t, lpb_toname(L, 2));
-    return lpb_pushfield(L, f);
+    return lpb_pushfield(L, t, f);
 }
 
 static int Lpb_enum(lua_State *L) {
@@ -1272,7 +1284,7 @@ static void lpbD_field(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t tag) 
         break;
 
     default:
-        if (!f->packed && pb_wtypebytype(f->type_id) != pb_gettype(tag))
+        if (!f->packed && pb_wtypebytype(f->type_id) != (int)pb_gettype(tag))
             luaL_error(L, "type mismatch at offset %d, %s expected for type %s, got %s",
                     lpb_offset(s),
                     pb_wtypename(pb_wtypebytype(f->type_id), NULL),
@@ -1402,5 +1414,6 @@ LUALIB_API int luaopen_pb(lua_State *L) {
 }
 
 /* cc: flags+='-ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
- * cc: flags+='-shared -undefined dynamic_lookup' output='pb.so' */
+ * maccc: flags+='-shared -undefined dynamic_lookup' output='pb.so'
+ * win32cc: flags+='-mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */
 

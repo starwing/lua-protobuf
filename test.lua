@@ -69,6 +69,15 @@ function _G.test_io.test()
    end
    table_eq(ft, { name=true, age=true,address=true,contacts=true })
 
+   eq(pb.decode("Person", "\240\255\255\255\255\255\255\255\255\1\1"), {})
+   eq(pb.decode("Person", "\240\255\255\255\255\255\255\255\255\255"), {})
+   eq(pb.decode("Person", "\240\255\255\255\255"), {})
+   eq(pb.decode("Person", "\242\255\255\255\255\1\255"), {})
+   eq(pb.decode("Person", "\x71"), {})
+   eq(pb.decode("Person", "\x73\1\2\3\4\x74"), {})
+   eq(pb.decode("Person", "\x75"), {})
+   eq(pb.decode("Person", "\x75\1\1\1\1"), {})
+
    fail("type 'Foo' not exists", function() assert(pb.encode("Foo", {})) end)
    fail("type 'Foo' not exists", function() assert(pb.decode("Foo", "")) end)
 
@@ -163,6 +172,9 @@ function _G.test_extend()
       }
 
       message Extendable {
+         extend NestExtend {
+            optional string ext_name = 100;
+         }
          optional int32 id = 1;
          extensions 100 to max;
       } ]], "extend1.proto"))
@@ -180,6 +192,11 @@ function _G.test_extend()
          Third  = 3 [(name) = "third"];
       }
 
+      message NestExtend {
+         optional uint32 id = 1;
+         extensions 100 to max;
+      }
+
       extend Extendable {
          optional string ext_name = 100;
       } ]])
@@ -188,6 +205,9 @@ function _G.test_extend()
 
    local t = { ext_name = "foo", id = 10 }
    check_msg("Extendable", t)
+
+   local t2 = { ext_name = "foo", id = 10 }
+   check_msg("NestExtend", t2)
 
    local data = assert(pb.decode("google.protobuf.FileDescriptorSet", chunk))
    eq(data.file[1].enum_type[1].value[1].options.name, "first")
@@ -319,6 +339,12 @@ function _G.test_oneof()
 
    data = { name = "foo", value = 5 }
    check_msg("TestOneof", data)
+   eq(pb.field("TestOneof", "name"), "name")
+   pb.clear("TestOneof", "name")
+   eq(pb.field("TestOneof", "name"), nil)
+   eq(pb.type "TestOneof", ".TestOneof")
+   pb.clear "TestOneof"
+   eq(pb.type "TestOneof", nil)
 end
 
 function _G.test_conv()
@@ -448,6 +474,8 @@ function _G.test_slice()
    eq({pb.unpack("foobar", "cc", 3, 3)}, {"foo", "bar"})
 
    eq(pb.unpack("\255\255\255\127\255", "v"), 0xFFFFFFF)
+   fail("invalid varint value at offset 1", function()
+      pb.unpack(("\255"):rep(10), "v") end)
    fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "v") end)
    fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "v") end)
    fail("invalid bytes value at offset 1", function() pb.unpack("\3\1\2", "s") end)
@@ -459,6 +487,10 @@ function _G.test_slice()
    fail("invalid fixed64 value at offset 1", function() pb.unpack("\255\255\255", "X") end)
 
    assert(tostring(s):match 'pb.Slice')
+end
+
+function _G.test_load()
+   eq({pb.load "\10\2\18\3"}, {false, 4})
 end
 
 os.exit(lu.LuaUnit.run(), true)

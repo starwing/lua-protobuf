@@ -600,7 +600,7 @@ PB_API const char *pb_typename(int type, const char *def) {
 }
 
 PB_API int pb_typebyname(const char *name, int def) {
-    struct entry { const char *name; int value; } static names[] = {
+    static struct entry { const char *name; int value; } names[] = {
 #define X(id, name, v) { name, v },
         PB_WIRETYPES(X)
 #undef  X
@@ -614,7 +614,7 @@ PB_API int pb_typebyname(const char *name, int def) {
 }
 
 PB_API int pb_wtypebyname(const char *name, int def) {
-    struct entry { const char *name; int value; } static names[] = {
+    static struct entry { const char *name; int value; } names[] = {
 #define X(name, t, v) { #name, v },
         PB_TYPES(X)
 #undef  X
@@ -1133,8 +1133,8 @@ static void pbT_inittype(pb_Type *t) {
     pb_inittable(&t->oneof_index, sizeof(pb_OneofEntry));
 }
 
-static void pbT_freefield(pb_State *S, pb_Field *f, int is_enum) {
-    if (!is_enum) pb_delname(S, f->default_value);
+static void pbT_freefield(pb_State *S, pb_Field *f) {
+    pb_delname(S, f->default_value);
     pb_delname(S, f->name);
     pb_poolfree(&S->fieldpool, f);
 }
@@ -1159,7 +1159,7 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     pb_FieldEntry *nf = NULL;
     pb_OneofEntry *ne = NULL;
     while (pb_nextentry(&t->field_names, (pb_Entry**)&nf))
-        if (nf->value != NULL) pbT_freefield(S, nf->value, t->is_enum);
+        if (nf->value != NULL) pbT_freefield(S, nf->value);
     while (pb_nextentry(&t->oneof_index, (pb_Entry**)&ne))
         pb_delname(S, ne->name);
     pb_freetable(&t->field_tags);
@@ -1179,7 +1179,11 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t nu
         pb_Field *f = nf->value;
         if (nf == NULL || tf == NULL || nf->value != tf->value)
             return NULL;
-        if (f) return f;
+        if (f) {
+            pb_delname(S, f->default_value);
+            f->default_value = NULL;
+            return f;
+        }
         f = (pb_Field*)pb_poolalloc(&S->typepool);
         memset(f, 0, sizeof(pb_Field));
         f->name   = fname;
@@ -1200,7 +1204,7 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
     if (nf && nf->value != f) pb_delfield(S, t, nf->value), mask -= 1;
     if (tf && tf->value != f) pb_delfield(S, t, tf->value), mask -= 2;
     if (mask) {
-        pbT_freefield(S, f, t->is_enum);
+        pbT_freefield(S, f);
         --t->field_count;
         if (mask & 1) nf->entry.key = 0, nf->value = NULL;
         if (mask & 2) tf->entry.key = 0, tf->value = NULL;
@@ -1537,7 +1541,7 @@ static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Type *t) {
         f->scalar   = f->type == NULL;
         if (info->oneof_index != 0) {
             pb_OneofEntry *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
-                    info->oneof_index-1), *fe;
+                    info->oneof_index), *fe;
             if (e != NULL) {
                 fe = (pb_OneofEntry*)pb_settable(&t->oneof_index, (pb_Key)f);
                 fe->name = pb_usename(e->name);
@@ -1553,9 +1557,9 @@ static void pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Buffer *b) {
                 pbL_prefixname(b, info->name, &curr)));
     t->is_map = info->is_map;
     for (i = 0, count = pbL_count(info->oneof_decl); i < count; ++i) {
-        pb_OneofEntry *e = (pb_OneofEntry*)pb_settable(&t->oneof_index, i);
+        pb_OneofEntry *e = (pb_OneofEntry*)pb_settable(&t->oneof_index, i+1);
         e->name = pb_newname(S, info->oneof_decl[i]);
-        e->index = i;
+        e->index = i+1;
     }
     for (i = 0, count = pbL_count(info->field); i < count; ++i)
         pbL_loadField(S, &info->field[i], t);

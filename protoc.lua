@@ -500,7 +500,13 @@ end
 function msg_body:extend(lex, info)
    local extension = default(info, 'extension')
    local nested_type = default(info, 'nested_type')
-   toplevel.extend(self, lex, extension, nested_type)
+   local ft, mt = toplevel.extend(self, lex, {})
+   for _, v in ipairs(ft) do
+      extension[#extension+1] = v
+   end
+   for _, v in ipairs(mt) do
+      nested_type[#nested_type+1] = v
+   end
    return self
 end
 
@@ -558,7 +564,7 @@ function msg_body:oneof(lex, info)
       else
          local f, t = field(self, lex, ident, "no_label")
          if t then ts[#ts+1] = t end
-         f.oneof_index = index
+         f.oneof_index = index - 1
          fs[#fs+1] = f
       end
       lex:line_end 'opt'
