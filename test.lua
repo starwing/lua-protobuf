@@ -58,6 +58,14 @@ function _G.test_io.teardown()
 end
 
 function _G.test_io.test()
+   local code = "io.write(require 'pb.io'.read())"
+   assert(pbio.dump("t.lua", code))
+   local fh = assert(io.popen("lua t.lua < t.lua", "r"))
+   eq(fh:read "*a", code)
+   fh:close()
+   assert(os.remove "t.lua")
+   fail("-not-exists-", function() assert(pbio.read "-not-exists-") end)
+
    local chunk = assert(protoc.new():compile(pbio.read "address.proto",
                                              "address.proto"))
    assert(pbio.dump("address.pb", chunk))

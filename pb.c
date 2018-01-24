@@ -239,7 +239,9 @@ static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type) {
         expected = LUA_TSTRING;
         break;
     default:
-        argerror(L, idx, "unknown type %s", pb_typename(type, "<unknown>"));
+        /* NOT REACHED */
+        /* argerror(L, idx, "unknown type %s",
+         *          pb_typename(type, "<unknown>")) */;
     }
     return ret ? 0 : expected;
 }
@@ -254,7 +256,7 @@ static void lpb_readtype(lua_State *L, int type, pb_SliceExt *s) {
             luaL_error(L, "invalid varint value at offset %d", lpb_offset(s));
         switch (type) {
         case PB_Tbool:   lua_pushboolean(L, v.u64 != 0); break;
-        case PB_Tenum:   lua_pushinteger(L, v.u64); break;
+         /*case PB_Tenum:   lua_pushinteger(L, v.u64); break; [> NOT REACHED <]*/
         case PB_Tint32:  lua_pushinteger(L, (int32_t)v.u64); break;
         case PB_Tuint32: lua_pushinteger(L, (uint32_t)v.u64); break;
         case PB_Tsint32: lua_pushinteger(L, pb_decode_sint32((uint32_t)v.u64)); break;
@@ -293,7 +295,8 @@ static void lpb_readtype(lua_State *L, int type, pb_SliceExt *s) {
         break;
 
     default:
-        luaL_error(L, "unknown type %s", pb_typename(type, NULL));
+        /* NOT REACHED */
+        /* luaL_error(L, "unknown type %s", pb_typename(type, NULL)) */;
     }
 }
 
@@ -315,8 +318,7 @@ static int io_write(lua_State *L, FILE *f, int idx) {
         size_t l = pb_len(s);
         status = status && (fwrite(s.p, sizeof(char), l, f) == l);
     }
-    if (status) return 1;  /* file handle already on base top */
-    else return luaL_fileresult(L, status, NULL);
+    return status ? 1 : luaL_fileresult(L, 0, NULL);
 }
 
 static int Lio_read(lua_State *L) {
@@ -908,14 +910,13 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
 /* high level encode/decode routines */
 
 static int Lpb_delete(lua_State *L) {
-    pb_State *S;
-    if (lua53_getfield(L, LUA_REGISTRYINDEX, PB_STATE) != LUA_TUSERDATA)
-        return 0;
-    S = (pb_State*)lua_touserdata(L, -1);
-    if (S != NULL) {
-        pb_free(S);
-        lua_pushnil(L);
-        lua_setfield(L, LUA_REGISTRYINDEX, PB_STATE);
+    if (lua53_getfield(L, LUA_REGISTRYINDEX, PB_STATE) == LUA_TUSERDATA) {
+        pb_State *S = (pb_State*)lua_touserdata(L, -1);
+        if (S != NULL) {
+            pb_free(S);
+            lua_pushnil(L);
+            lua_setfield(L, LUA_REGISTRYINDEX, PB_STATE);
+        }
     }
     return 0;
 }
