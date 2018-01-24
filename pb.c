@@ -88,10 +88,13 @@ typedef struct pb_SliceExt {
     const char *head;
 } pb_SliceExt;
 
+static int lpb_offset(pb_SliceExt *s) { return (int)(s->base.p-s->head) + 1; }
+
 static pb_SliceExt lpb_initext(pb_Slice s)
 { pb_SliceExt ext; ext.base = s, ext.head = s.p; return ext; }
 
-static int lpb_offset(pb_SliceExt *s) { return (int)(s->base.p - s->head) + 1; }
+static void lpb_addlength(lua_State *L, pb_Buffer *b, size_t len)
+{ if (pb_addlength(b, len) == 0) luaL_error(L, "encode bytes fail"); }
 
 static int typeerror(lua_State *L, int idx, const char *type) {
     lua_pushfstring(L, "%s expected, got %s", type, luaL_typename(L, idx));
@@ -161,11 +164,6 @@ static pb_Slice lpb_checkslice(lua_State *L, int idx) {
     pb_Slice ret = lpb_toslice(L, idx);
     if (ret.p == NULL) typeerror(L, idx, "string/buffer/slice");
     return ret;
-}
-
-static void lpb_addlength(lua_State *L, pb_Buffer *b, size_t len) {
-    if (pb_addlength(b, len) == 0)
-        luaL_error(L, "out of memory when encode packed fields");
 }
 
 static void lpb_readbytes(lua_State *L, pb_SliceExt *s, pb_SliceExt *pv) {
@@ -820,7 +818,7 @@ static int Lslice_level(lua_State *L) {
             se = &s->curr;
         else
             se = &s->buff[level];
-        lua_pushinteger(L, se->base.p   - se->head + 1);
+        lua_pushinteger(L, se->base.p   - s->buff[0].head + 1);
         lua_pushinteger(L, se->head     - s->buff[0].head + 1);
         lua_pushinteger(L, se->base.end - s->buff[0].head);
         return 3;
@@ -995,7 +993,7 @@ static int Lpb_loadfile(lua_State *L) {
     int ret;
     FILE *fp = fopen(filename, "rb");
     if (fp == NULL)
-        return luaL_fileresult(L, errno, filename);
+        return luaL_fileresult(L, 0, filename);
     pb_initbuffer(&b);
     do {
         size = fread(pb_prepbuffsize(&b, BUFSIZ), 1, BUFSIZ, fp);

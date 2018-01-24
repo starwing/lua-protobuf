@@ -74,7 +74,9 @@ function _G.test_io.test()
    eq(pb.decode("Person", "\240\255\255\255\255"), {})
    eq(pb.decode("Person", "\242\255\255\255\255\1\255"), {})
    eq(pb.decode("Person", "\x71"), {})
-   eq(pb.decode("Person", "\x73\1\2\3\4\x74"), {})
+   eq(pb.decode("Person", "\x33\1\2\3\4\x34"), {})
+   eq(pb.decode("Person", "\x33\1\2\3\4\x44"), {})
+   eq(pb.decode("Person", "\x33\1\2\3\4"), {})
    eq(pb.decode("Person", "\x75"), {})
    eq(pb.decode("Person", "\x75\1\1\1\1"), {})
 
@@ -110,6 +112,11 @@ function _G.test_io.test()
       }
    }
    check_msg(".Person", data)
+
+   pb.clear()
+   protoc.reload()
+
+   fail("-not-exists-", function() assert(pb.loadfile "-not-exists-") end)
 end
 
 end
@@ -322,6 +329,7 @@ function _G.test_map()
       local chunk = assert(pb.encode("TestMap", data2))
       table_eq(pb.decode("TestMap", chunk), { map = {one = 1} })
    end)
+   eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
 end
 
 function _G.test_oneof()
@@ -433,6 +441,8 @@ function _G.test_buffer()
    eq(b:pack("c", ("a"):rep(1025)):result(), ("a"):rep(1025))
    eq(b:pack("c", ("b"):rep(1025)):result(), ("a"):rep(1025)..("b"):rep(1025))
    eq(#b, 2050)
+   b:reset("foo", "bar")
+   eq(#b, 6)
 
    fail("number expected, got string", function() pb.pack("v", "foo") end)
 end
@@ -441,9 +451,13 @@ function _G.test_slice()
    local s = slice.new "\3\1\2\3"
    eq(#s, 4)
    eq(s:level(), 1)
+   eq(s:level(1), 1)
+   eq(s:level(2), nil)
    eq({s:level(-1)}, {1,1,4})
    eq(s:enter(), s)
    eq(s:level(), 2)
+   eq({s:level(-1)}, {2,2,4})
+   eq({s:level(1)}, {5,1,4})
    eq({s:unpack "vvv"}, {1,2,3})
    eq(s:unpack "v", nil)
    eq(s:leave(), s)
@@ -460,6 +474,7 @@ function _G.test_slice()
    eq(s:result(-3), "\1\2\3")
    eq(#s, 4)
    eq(#s:reset(), 0)
+   eq(#s:reset"foo", 3)
 
    eq({pb.unpack("\255\1", "v@")}, { 255, 3 })
    eq({pb.unpack("\1", "v*v", 1)}, { 1, 1 })
@@ -485,6 +500,20 @@ function _G.test_slice()
    fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "i") end)
    fail("invalid fixed32 value at offset 1", function() pb.unpack("\255\255\255", "x") end)
    fail("invalid fixed64 value at offset 1", function() pb.unpack("\255\255\255", "X") end)
+   fail("string/buffer/slice expected, got boolean", function() pb.unpack(true, "v") end)
+   fail("bytes wireformat expected at offset 1", function() slice"\1":enter() end)
+
+   fail("level (3) exceed max level 2", function()
+      local s1 = slice.new "\1\2\3"
+      s1:enter()
+      s1:leave(3)
+   end)
+
+   s:reset "\1\2\3"
+   eq({s:leave()}, {s, 1})
+   eq(s:level(), 1)
+   eq({s:level(-1)}, {1,1,3})
+
 
    assert(tostring(s):match 'pb.Slice')
 end
