@@ -27,7 +27,6 @@
 
 # define LUA_OK        0
 # define lua_rawlen    lua_objlen
-# define luaL_newlib(L,l) (lua_newtable(L), luaL_register(L,NULL,l))
 # define luaL_setfuncs(L,l,n) (assert(n==0), luaL_register(L,NULL,l))
 # define luaL_setmetatable(L, name) \
     (luaL_getmetatable((L), (name)), lua_setmetatable(L, -2))
@@ -49,11 +48,21 @@ void lua_rawsetp(lua_State *L, int idx, const void *p) {
     lua_rawset(L, relindex(idx, 1));
 }
 
+#ifndef luaL_newlib /* not LuaJIT 2.1 */
+#define luaL_newlib(L,l) (lua_newtable(L), luaL_register(L,NULL,l))
+
 static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isint) {
     lua_Integer i = lua_tointeger(L, idx);
     if (isint) *isint = (i != 0 || lua_type(L, idx) == LUA_TNUMBER);
     return i;
 }
+
+static lua_Number lua_tonumberx(lua_State *L, int idx, int *isnum) {
+    lua_Number i = lua_tonumber(L, idx);
+    if (isnum) *isnum = (i != 0 || lua_type(L, idx) == LUA_TNUMBER);
+    return i;
+}
+#endif
 
 #ifdef LUAI_BITSINT /* not LuaJIT */
 #include <errno.h>
@@ -834,7 +843,7 @@ static int Lslice_enter(lua_State *L) {
     pb_SliceExt view;
     if (lua_isnoneornil(L, 2)) {
         if (pb_readbytes(&s->curr.base, &view.base) == 0)
-            argerror(L, 1, "bytes wireformat expected at offset %d",
+            return argerror(L, 1, "bytes wireformat expected at offset %d",
                     lpb_offset(&s->curr));
         view.head = view.base.p;
         lpb_enterview(L, s, view);
@@ -1412,7 +1421,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
     return 1;
 }
 
-/* cc: flags+='-ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
+/* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
  * maccc: flags+='-shared -undefined dynamic_lookup' output='pb.so'
  * win32cc: flags+='-mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */
 

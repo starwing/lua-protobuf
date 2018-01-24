@@ -409,7 +409,9 @@ end
 function _G.test_buffer()
    eq(buffer.pack("vvv", 1,2,3), "\1\2\3")
    eq(buffer.tohex(pb.pack("d", 4294967295)), "FF FF FF FF")
-   eq(buffer.tohex(pb.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
+   if _VERSION == "Lua 5.3" then
+      eq(buffer.tohex(pb.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
+   end
    eq(pb.pack("s", "foo"), "\3foo")
    eq(pb.pack("cc", "foo", "bar"), "foobar")
    eq(buffer():pack("vvv", 1,2,3):result(), "\1\2\3")
