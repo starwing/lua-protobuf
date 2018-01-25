@@ -518,12 +518,13 @@ static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char **pfmt, i
     return idx;
 }
 
-static int lpb_tohex(lua_State *L, int idx, pb_Slice s) {
+static int Lpb_tohex(lua_State *L) {
+    pb_Slice s = lpb_checkslice(L, 1);
     const char *hexa = "0123456789ABCDEF";
     char hex[4] = "XX ";
     lua_Integer i = 1, j = -1;
     luaL_Buffer lb;
-    rangerelat(L, idx, &i, &j, pb_len(s));
+    rangerelat(L, 2, &i, &j, pb_len(s));
     luaL_buffinit(L, &lb);
     for (; i <= j; ++i) {
         unsigned int ch = s.p[i-1];
@@ -536,9 +537,10 @@ static int lpb_tohex(lua_State *L, int idx, pb_Slice s) {
     return 1;
 }
 
-static int lpb_result(lua_State *L, int idx, pb_Slice s) {
+static int Lpb_result(lua_State *L) {
+    pb_Slice s = lpb_checkslice(L, 1);
     lua_Integer i = 1, j = -1;
-    size_t range = rangerelat(L, idx, &i, &j, pb_len(s));
+    size_t range = rangerelat(L, 2, &i, &j, pb_len(s));
     lua_pushlstring(L, s.p+i-1, range);
     return 1;
 }
@@ -600,28 +602,18 @@ static int Lbuf_pack(lua_State *L) {
     return 1;
 }
 
-static int Lbuf_tohex(lua_State *L) {
-    pb_Slice s = lpb_checkslice(L, 1);
-    return lpb_tohex(L, 2, s);
-}
-
-static int Lbuf_result(lua_State *L) {
-    pb_Slice s = lpb_checkslice(L, 1);
-    return lpb_result(L, 2, s);
-}
-
 LUALIB_API int luaopen_pb_buffer(lua_State *L) {
     luaL_Reg libs[] = {
         { "__tostring", Lbuf_tostring },
         { "__len",      Lbuf_len },
         { "__gc",       Lbuf_reset },
         { "delete",     Lbuf_reset },
+        { "tohex",      Lpb_tohex },
+        { "result",     Lpb_result },
 #define ENTRY(name) { #name, Lbuf_##name }
         ENTRY(new),
         ENTRY(reset),
         ENTRY(pack),
-        ENTRY(tohex),
-        ENTRY(result),
 #undef  ENTRY
         { NULL, NULL }
     };
@@ -890,9 +882,9 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
         { "__tostring", Lslice_tostring },
         { "__len",      Lslice_len   },
         { "__gc",       Lslice_reset },
-        { "tohex",      Lbuf_tohex   },
-        { "result",     Lbuf_result  },
         { "delete",     Lslice_reset },
+        { "tohex",      Lpb_tohex   },
+        { "result",     Lpb_result  },
 #define ENTRY(name) { #name, Lslice_##name }
         ENTRY(new),
         ENTRY(reset),
@@ -1414,6 +1406,8 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(type),
         ENTRY(field),
         ENTRY(enum),
+        ENTRY(tohex),
+        ENTRY(result),
 #undef  ENTRY
         { NULL, NULL }
     };

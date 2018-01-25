@@ -242,6 +242,9 @@ end
 end
 
 local Parser = meta "Parser" do
+Parser.typemap = {}
+Parser.loaded  = {}
+Parser.paths   = { "." }
 
 function Parser.new()
    local self = {}
