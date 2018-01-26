@@ -319,6 +319,20 @@ static void lpb_readtype(lua_State *L, int type, pb_SliceExt *s) {
 # define setmode(a,b)  ((void)0)
 #endif
 
+static int io_read(lua_State *L) {
+    FILE *fp = (FILE*)lua_touserdata(L, 1);
+    size_t nr;
+    luaL_Buffer b;
+    luaL_buffinit(L, &b);
+    do {  /* read file in chunks of LUAL_BUFFERSIZE bytes */
+        char *p = luaL_prepbuffer(&b);
+        nr = fread(p, sizeof(char), LUAL_BUFFERSIZE, fp);
+        luaL_addsize(&b, nr);
+    } while (nr == LUAL_BUFFERSIZE);
+    luaL_pushresult(&b);  /* close buffer */
+    return 1;
+}
+
 static int io_write(lua_State *L, FILE *f, int idx) {
     int nargs = lua_gettop(L) - idx + 1;
     int status = 1;
@@ -332,22 +346,18 @@ static int io_write(lua_State *L, FILE *f, int idx) {
 
 static int Lio_read(lua_State *L) {
     const char *fname = luaL_optstring(L, 1, NULL);
-    luaL_Buffer b;
     FILE *fp = stdin;
-    size_t nr;
+    int ret;
     if (fname == NULL)
         (void)setmode(fileno(stdin), O_BINARY);
     else if ((fp = fopen(fname, "rb")) == NULL)
         return luaL_fileresult(L, 0, fname);
-    luaL_buffinit(L, &b);
-    do {  /* read file in chunks of LUAL_BUFFERSIZE bytes */
-        char *p = luaL_prepbuffer(&b);
-        nr = fread(p, sizeof(char), LUAL_BUFFERSIZE, fp);
-        luaL_addsize(&b, nr);
-    } while (nr == LUAL_BUFFERSIZE);
+    lua_pushcfunction(L, io_read);
+    lua_pushlightuserdata(L, fp);
+    ret = lua_pcall(L, 1, 1, 0);
     if (fp != stdin) fclose(fp);
     else (void)setmode(fileno(stdin), O_TEXT);
-    luaL_pushresult(&b);  /* close buffer */
+    if (ret != LUA_OK) { lua_pushnil(L); lua_insert(L, -2); return 2; }
     return 1;
 }
 
@@ -998,9 +1008,12 @@ static int Lpb_loadfile(lua_State *L) {
         return luaL_fileresult(L, 0, filename);
     pb_initbuffer(&b);
     do {
-        size = fread(pb_prepbuffsize(&b, BUFSIZ), 1, BUFSIZ, fp);
+        void *d = pb_prepbuffsize(&b, BUFSIZ);
+        if (d == NULL) { fclose(fp); return luaL_error(L, "out of memory"); }
+        size = fread(d, 1, BUFSIZ, fp);
         pb_addsize(&b, size);
     } while (size == BUFSIZ);
+    fclose(fp);
     s = lpb_initext(pb_result(&b));
     ret = pb_load(S, &s.base);
     pb_resetbuffer(&b);
@@ -1417,5 +1430,5 @@ LUALIB_API int luaopen_pb(lua_State *L) {
 
 /* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
  * maccc: flags+='-shared -undefined dynamic_lookup' output='pb.so'
- * win32cc: flags+='-mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */
+ * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */
 

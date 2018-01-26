@@ -954,11 +954,10 @@ static size_t pbN_resize(pb_State *S, size_t size) {
 static pb_NameEntry *pbN_newname(pb_State *S, const char *name, size_t len, unsigned hash) {
     pb_NameTable *nt = &S->nametable;
     pb_NameEntry **list, *newobj;
-    if (nt->count >= nt->size && pbN_resize(S, nt->size * 2) == 0)
-        return NULL;
+    if (nt->count >= nt->size && !pbN_resize(S, nt->size * 2)) return NULL;
     list = &nt->hash[hash & (nt->size - 1)];
     newobj = (pb_NameEntry*)malloc(sizeof(pb_NameEntry) + len + 1);
-	if (newobj == NULL) return NULL;
+    if (newobj == NULL) return NULL;
     newobj->next = *list;
     newobj->length = (unsigned)len;
     newobj->refcount = 1;
@@ -1064,30 +1063,24 @@ PB_API void pb_free(pb_State *S) {
 }
 
 PB_API pb_Type *pb_type(pb_State *S, pb_Name *tname) {
-    if (S != NULL && tname != NULL) {
-        pb_TypeEntry *te = (pb_TypeEntry*)pb_gettable(
-                &S->types, (pb_Key)tname);
-        if (te) return te->value;
-    }
-    return NULL;
+    pb_TypeEntry *te = NULL;
+    if (S != NULL && tname != NULL)
+        te = (pb_TypeEntry*)pb_gettable(&S->types, (pb_Key)tname);
+    return te ? te->value : NULL;
 }
 
 PB_API pb_Field *pb_fname(pb_Type *t, pb_Name *name) {
-    if (t != NULL && name != NULL) {
-        pb_FieldEntry *fe = (pb_FieldEntry*)pb_gettable(
-                &t->field_names, (pb_Key)name);
-        if (fe) return fe->value;
-    }
-    return NULL;
+    pb_FieldEntry *fe = NULL;
+    if (t != NULL && name != NULL)
+        fe = (pb_FieldEntry*)pb_gettable(&t->field_names, (pb_Key)name);
+    return fe ? fe->value : NULL;
 }
 
 PB_API pb_Field *pb_field(pb_Type *t, int32_t number) {
-    if (t != NULL) {
-        pb_FieldEntry *fe = (pb_FieldEntry*)pb_gettable(
-                &t->field_tags, number);
-        if (fe) return fe->value;
-    }
-    return NULL;
+    pb_FieldEntry *fe = NULL;
+    if (t != NULL && number != 0)
+        fe = (pb_FieldEntry*)pb_gettable(&t->field_tags, number);
+    return fe ? fe->value : NULL;
 }
 
 PB_API int pb_nexttype(pb_State *S, pb_Type **ptype) {
