@@ -31,11 +31,8 @@
 # define luaL_setmetatable(L, name) \
     (luaL_getmetatable((L), (name)), lua_setmetatable(L, -2))
 
-static int relindex(int idx, int offset) {
-    if (idx < 0 && idx > LUA_REGISTRYINDEX)
-        return idx + offset;
-    return idx;
-}
+static int relindex(int idx, int offset)
+{ return idx < 0 && idx > LUA_REGISTRYINDEX ? idx + offset : idx; }
 
 void lua_rawgetp(lua_State *L, int idx, const void *p) {
     lua_pushlightuserdata(L, (void*)p);
@@ -70,10 +67,9 @@ static int luaL_fileresult(lua_State *L, int stat, const char *fname) {
     int en = errno;
     if (stat) { lua_pushboolean(L, 1); return 1; }
     lua_pushnil(L);
-    if (fname)
-        lua_pushfstring(L, "%s: %s", fname, strerror(en));
-    else
-        lua_pushstring(L, strerror(en));
+    lua_pushfstring(L, "%s: %s", fname, strerror(en));
+    /*if (fname) lua_pushfstring(L, "%s: %s", fname, strerror(en));
+      else       lua_pushstring(L, strerror(en));*//* NOT USED */
     lua_pushinteger(L, en);
     return 3;
 }
@@ -84,11 +80,14 @@ static int luaL_fileresult(lua_State *L, int stat, const char *fname) {
 #if LUA_VERSION_NUM >= 503
 # define lua53_getfield lua_getfield
 # define lua53_rawgeti  lua_rawgeti
+# define lua53_rawgetp  lua_rawgetp
 #else
 static int lua53_getfield(lua_State *L, int idx, const char *field)
 { lua_getfield(L, idx, field); return lua_type(L, -1); }
 static int lua53_rawgeti(lua_State *L, int idx, lua_Integer i)
 { lua_rawgeti(L, idx, i); return lua_type(L, -1); }
+static int lua53_rawgetp(lua_State *L, int idx, const void *p)
+{ lua_rawgetp(L, idx, p); return lua_type(L, -1); }
 #endif
 
 
@@ -922,13 +921,15 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
 
 #define default_state(L) ((pb_State*)default_lstate(L))
 
+static const char state_name[] = PB_STATE;
+
 typedef struct lpb_State {
     pb_State base;
     int enum_as_value;
 } lpb_State;
 
 static int Lpb_delete(lua_State *L) {
-    if (lua53_getfield(L, LUA_REGISTRYINDEX, PB_STATE) == LUA_TUSERDATA) {
+    if (lua53_rawgetp(L, LUA_REGISTRYINDEX, state_name) == LUA_TUSERDATA) {
         lpb_State *LS = (lpb_State*)lua_touserdata(L, -1);
         if (LS != NULL) {
             pb_free(&LS->base);
@@ -941,19 +942,20 @@ static int Lpb_delete(lua_State *L) {
 
 static lpb_State *default_lstate(lua_State *L) {
     lpb_State *LS;
-    if (lua53_getfield(L, LUA_REGISTRYINDEX, PB_STATE) == LUA_TUSERDATA) {
+    if (lua53_rawgetp(L, LUA_REGISTRYINDEX, state_name) == LUA_TUSERDATA) {
         LS = (lpb_State*)lua_touserdata(L, -1);
         lua_pop(L, 1);
     }
     else {
         LS = lua_newuserdata(L, sizeof(lpb_State));
+        lua_replace(L, -2);
         memset(LS, 0, sizeof(lpb_State));
         pb_init(&LS->base);
         lua_createtable(L, 0, 1);
         lua_pushcfunction(L, Lpb_delete);
         lua_setfield(L, -2, "__gc");
         lua_setmetatable(L, -2);
-        lua_setfield(L, LUA_REGISTRYINDEX, PB_STATE);
+        lua_rawsetp(L, LUA_REGISTRYINDEX, state_name);
     }
     return LS;
 }
