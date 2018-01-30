@@ -28,13 +28,13 @@ local function check_load(chunk, name)
    end
 end
 
-local function check_msg(name, data)
+local function check_msg(name, data, r)
    local chunk2 = assert(pb.encode(name, data))
    local data2 = assert(pb.decode(name, chunk2))
    --print("msg: ", name, "<"..chunk2:gsub(".", function(s)
       --return ("%02X "):format(s:byte())
    --end)..">")
-   eq(data2, data)
+   eq(data2, r or data)
 end
 
 _G.test_io = {} do
@@ -291,6 +291,12 @@ function _G.test_enum()
 
    local data2 = { color = 123 }
    check_msg("TestEnum", data2)
+
+   pb.option "enum_as_value"
+   check_msg("TestEnum", data, { color = 1 })
+
+   pb.option "enum_as_name"
+   check_msg("TestEnum", data, { color = "Red" })
 
    fail("invalid varint value at offset 2", function()
       assert(pb.decode("TestEnum", "\8\255"))

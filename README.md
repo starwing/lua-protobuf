@@ -186,6 +186,7 @@ all functions returns `nil, errmsg` when meet errors.
 | `pb.field(type, string)     | see below | return informations for specific field of type |
 | `pb.enum(type, string)`     | number    | get the value of a enum by name          |
 | `pb.enum(type, number)`     | string    | get the name of a enum by value          |
+| `pb.option(string)`         | string    | set options to decoder/encoder           |
 
 You can use `pb.(type|field)[s]()` functions to retrieve type informations for loaded messages.  
 
@@ -236,6 +237,13 @@ print(pb.enum("Color", "Red")) --> 1
 print(pb.enum("Color", 2)) --> "Green"
 ```
 
+You can set options to change the behavior or decoder/encoder.
+current these options are supported:
+
+| Option          | Description                              |
+| --------------- | ---------------------------------------- |
+| `enum_as_name`  | set value to enum name when decode a enum |
+| `enum_as_value` | set value to enum value when decode a enum |
 
 
 ### `pb.io` Module

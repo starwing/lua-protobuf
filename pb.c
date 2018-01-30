@@ -920,11 +920,18 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
 
 /* high level encode/decode routines */
 
+#define default_state(L) ((pb_State*)default_lstate(L))
+
+typedef struct lpb_State {
+    pb_State base;
+    int enum_as_value;
+} lpb_State;
+
 static int Lpb_delete(lua_State *L) {
     if (lua53_getfield(L, LUA_REGISTRYINDEX, PB_STATE) == LUA_TUSERDATA) {
-        pb_State *S = (pb_State*)lua_touserdata(L, -1);
-        if (S != NULL) {
-            pb_free(S);
+        lpb_State *LS = (lpb_State*)lua_touserdata(L, -1);
+        if (LS != NULL) {
+            pb_free(&LS->base);
             lua_pushnil(L);
             lua_setfield(L, LUA_REGISTRYINDEX, PB_STATE);
         }
@@ -932,22 +939,23 @@ static int Lpb_delete(lua_State *L) {
     return 0;
 }
 
-static pb_State *default_state(lua_State *L) {
-    pb_State *S;
+static lpb_State *default_lstate(lua_State *L) {
+    lpb_State *LS;
     if (lua53_getfield(L, LUA_REGISTRYINDEX, PB_STATE) == LUA_TUSERDATA) {
-        S = (pb_State*)lua_touserdata(L, -1);
+        LS = (lpb_State*)lua_touserdata(L, -1);
         lua_pop(L, 1);
     }
     else {
-        S = lua_newuserdata(L, sizeof(pb_State));
-        pb_init(S);
+        LS = lua_newuserdata(L, sizeof(lpb_State));
+        memset(LS, 0, sizeof(lpb_State));
+        pb_init(&LS->base);
         lua_createtable(L, 0, 1);
         lua_pushcfunction(L, Lpb_delete);
         lua_setfield(L, -2, "__gc");
         lua_setmetatable(L, -2);
         lua_setfield(L, LUA_REGISTRYINDEX, PB_STATE);
     }
-    return S;
+    return LS;
 }
 
 static pb_Name *lpb_str2name(lua_State *L, const char *s) {
@@ -1287,6 +1295,7 @@ static void lpbD_field(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t tag) 
         if (pb_readvarint64(&s->base, &u64) == 0)
             luaL_error(L, "invalid varint value at offset %d", lpb_offset(s));
         ev = pb_field(f->type, (int32_t)u64);
+        if (default_lstate(L)->enum_as_value) ev = NULL;
         if (ev) lua_pushstring(L, (char*)ev->name);
         else    lua_pushinteger(L, (lua_Integer)u64);
         break;
@@ -1404,6 +1413,22 @@ static int Lpb_decode(lua_State *L) {
     return 1;
 }
 
+static int Lpb_option(lua_State *L) {
+    static const char *opts[] = {
+        "enum_as_value", "enum_as_name", NULL
+    };
+    lpb_State *LS = default_lstate(L);
+    switch (luaL_checkoption(L, 1, NULL, opts)) {
+    case 0: /* enum_as_value */
+        LS->enum_as_value = 1;
+        break;
+    case 1: /* enum_as_name */
+        LS->enum_as_value = 0;
+        break;
+    }
+    return 0;
+}
+
 LUALIB_API int luaopen_pb(lua_State *L) {
     luaL_Reg libs[] = {
         { "pack",   Lbuf_pack     },
@@ -1421,6 +1446,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(enum),
         ENTRY(tohex),
         ENTRY(result),
+        ENTRY(option),
 #undef  ENTRY
         { NULL, NULL }
     };
