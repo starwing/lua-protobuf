@@ -1063,8 +1063,10 @@ static int Lpb_typesiter(lua_State *L) {
     pb_State *S = default_state(L);
     pb_Name *prev = lpb_toname(L, 2);
     pb_Type *t = pb_type(S, prev);
-    if ((t == NULL && !lua_isnoneornil(L, 2)) || !pb_nexttype(S, &t))
+    if ((t == NULL && !lua_isnoneornil(L, 2)))
         return 0;
+    while (pb_nexttype(S, &t) && t->field_count == 0)
+        continue;
     return lpb_pushtype(L, t);
 }
 

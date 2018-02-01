@@ -322,6 +322,10 @@ function _G.test_packed()
 
    pb.clear "TestPacked"
    eq(pb.type("TestPacked"), nil)
+   for _, name in pb.types() do
+      assert(name ~= "TestPacked", name)
+   end
+   eq(pb.types()(nil, "not-exists"), nil)
 end
 
 function _G.test_map()
