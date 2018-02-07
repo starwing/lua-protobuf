@@ -29,7 +29,7 @@ local function check_load(chunk, name)
 end
 
 local function check_msg(name, data, r)
-   local chunk2 = assert(pb.encode(name, data))
+   local chunk2, len = assert(pb.encode(name, data))
    local data2 = assert(pb.decode(name, chunk2))
    --print("msg: ", name, "<"..chunk2:gsub(".", function(s)
       --return ("%02X "):format(s:byte())
@@ -351,9 +351,14 @@ function _G.test_packed()
       {
           repeated MessageA messageValue = 1;
       } ]]
+   check_msg("MessageB", { messageValue = { {} } })
    check_msg("MessageB", { messageValue = { { intValue = 1 } } })
    eq(pb.tohex(pb.encode(
+      "MessageB", { messageValue = { {} } })), "0A 00")
+   eq(pb.tohex(pb.encode(
       "MessageB", { messageValue = { { intValue = 1 } } })), "0A 02 08 01")
+   pb.clear "MessageA"
+   pb.clear "MessageB"
 end
 
 function _G.test_map()
@@ -483,7 +488,7 @@ function _G.test_buffer()
    fail("unmatch '(' in format", function() pb.pack "(" end)
    fail("unexpected ')' in format", function() pb.pack ")" end)
    fail("number expected for type 'int32', got string", function() pb.pack("i", "foo") end)
-   fail("invalid formater: '#'", function() pb.pack '#' end)
+   fail("invalid formater: '!'", function() pb.pack '!' end)
 
    b = buffer.new()
    eq(b:pack("c", ("a"):rep(1025)):result(), ("a"):rep(1025))
@@ -493,6 +498,18 @@ function _G.test_buffer()
    eq(#b, 6)
 
    fail("number expected, got string", function() pb.pack("v", "foo") end)
+
+   b = buffer.new()
+   fail("encode bytes fail", function() b:pack("#", 10) end)
+   check_load [[
+   message Test { optional int32 value = 1 }
+   ]]
+   local len = #b
+   eq(#b, 0)
+   eq(pb.encode("Test", { value = 1 }, b), b)
+   eq(#b, 2)
+   b:pack("#", len)
+   eq(b:tohex(), "02 08 01")
 end
 
 function _G.test_slice()

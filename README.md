@@ -177,6 +177,7 @@ all functions returns `nil, errmsg` when meet errors.
 | `pb.load(data)`             | true      | load a binary schema data into `pb` module |
 | `pb.loadfile(string)`       | true      | same as `pb.load()`, but accept file name |
 | `pb.encode(type, table)`    | string    | encode a message table into binary form  |
+| `pb.encode(type, table, b)` | buffer    | encode a message table into binary form to buffer |
 | `pb.decode(type, data)`     | table     | decode a binary message into Lua tabl    |
 | `pb.pack(fmt, ...)`         | string    | same as `buffer.pack()` but return string |
 | `pb.unpack(data, fmt, ...)` | values... | same as `slice.unpack()` but accept data |
@@ -353,6 +354,15 @@ e.g.
 ```lua
 b:pack("(vvv)", 1, 2, 3) -- get a bytes value that contains three varint value.
 ```
+
+`buffer.pack()` also support '#' format, it means prepends a length into buffer.
+
+e.g.
+
+```lua
+b:pack("#", 5) -- prepends a varint length #b-5+1 at offset 5
+```
+
 
 parenthesis could be nested.
 

@@ -133,7 +133,7 @@ static lua_Integer posrelat(lua_Integer pos, size_t len) {
     else return (lua_Integer)len + pos + 1;
 }
 
-static size_t rangerelat(lua_State *L, int idx, lua_Integer *i, lua_Integer *j, size_t len) {
+static lua_Integer rangerelat(lua_State *L, int idx, lua_Integer *i, lua_Integer *j, size_t len) {
     *i = posrelat(luaL_optinteger(L, idx, 1), len);
     *j = posrelat(luaL_optinteger(L, idx+1, len), len);
     if (*i < 1) *i = 1;
@@ -501,6 +501,7 @@ static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char **pfmt, i
         case 'q': pb_addfixed64(b, (uint64_t)luaL_checkinteger(L, idx++)); break;
         case 'c': pb_addslice(b, lpb_checkslice(L, idx++)); break;
         case 's': pb_addbytes(b, lpb_checkslice(L, idx++)); break;
+        case '#': lpb_addlength(L, b, (size_t)luaL_checkinteger(L, idx++)); break;
         case '(':
             len = pb_bufflen(b);
             ++fmt;
@@ -549,8 +550,8 @@ static int Lpb_tohex(lua_State *L) {
 static int Lpb_result(lua_State *L) {
     pb_Slice s = lpb_checkslice(L, 1);
     lua_Integer i = 1, j = -1;
-    size_t range = rangerelat(L, 2, &i, &j, pb_len(s));
-    lua_pushlstring(L, s.p+i-1, range);
+    lua_Integer range = rangerelat(L, 2, &i, &j, pb_len(s));
+    lua_pushlstring(L, s.p+i-1, (size_t)range);
     return 1;
 }
 
@@ -664,7 +665,7 @@ static void lpb_resetslice(lua_State *L, lpb_Slice *s) {
 static pb_SliceExt lpb_checkview(lua_State *L, int idx, pb_SliceExt *ps) {
     pb_Slice src = lpb_checkslice(L, idx);
     lua_Integer i = 1, j = -1;
-    size_t range = rangerelat(L, idx+1, &i, &j, pb_len(src));
+    lua_Integer range = rangerelat(L, idx+1, &i, &j, pb_len(src));
     pb_SliceExt ret;
     if (ps) ps->base = src, ps->head = src.p;
     ret.base.p   = src.p + i - 1;
@@ -851,7 +852,7 @@ static int Lslice_enter(lua_State *L) {
     }
     else {
         lua_Integer i = 1, j = -1;
-        size_t range = rangerelat(L, 2, &i, &j, s->curr.base.end - s->curr.head);
+        lua_Integer range = rangerelat(L, 2, &i, &j, s->curr.base.end - s->curr.head);
         view.base.p   = s->curr.head + i - 1;
         view.base.end = view.base.p + range;
         view.head     = s->curr.head;
@@ -871,7 +872,7 @@ static int Lslice_leave(lua_State *L) {
         s->used = 1;
     }
     else {
-        s->used -= count;
+        s->used -= (size_t)count;
         s->curr = s->buff[s->used];
     }
     lua_settop(L, 1);
@@ -1159,7 +1160,7 @@ static void lpbE_field(lua_State *L, pb_Buffer *b, pb_Field *f, int hastag) {
         lpb_checktable(L, f);
         len = pb_bufflen(b);
         lpb_encode(L, b, f->type);
-        if (pb_bufflen(b) > len) lpb_addlength(L, b, len);
+        lpb_addlength(L, b, len);
         break;
 
     default:
@@ -1176,29 +1177,14 @@ static void lpbE_map(lua_State *L, pb_Buffer *b, pb_Field *f) {
     size_t len;
     if (kf == NULL || vf == NULL) return;
     lpb_checktable(L, f);
-    if (f->packed) {
+    lua_pushnil(L);
+    while (lua_next(L, -2)) {
         pb_addvarint32(b, pb_pair(f->number, PB_TBYTES));
         len = pb_bufflen(b);
-        lua_pushnil(L);
-        while (lua_next(L, -2)) {
-            size_t ilen = pb_bufflen(b);
-            lpbE_field(L, b, vf, 1);
-            lua_pop(L, 1);
-            lpbE_field(L, b, kf, 1);
-            lpb_addlength(L, b, ilen);
-        }
+        lpbE_field(L, b, vf, 1);
+        lua_pop(L, 1);
+        lpbE_field(L, b, kf, 1);
         lpb_addlength(L, b, len);
-    }
-    else {
-        lua_pushnil(L);
-        while (lua_next(L, -2)) {
-            pb_addvarint32(b, pb_pair(f->number, PB_TBYTES));
-            len = pb_bufflen(b);
-            lpbE_field(L, b, vf, 1);
-            lua_pop(L, 1);
-            lpbE_field(L, b, kf, 1);
-            lpb_addlength(L, b, len);
-        }
     }
 }
 
@@ -1246,33 +1232,37 @@ static void lpb_encode(lua_State *L, pb_Buffer *b, pb_Type *t) {
 static int lpb_encode_helper(lua_State *L) {
     pb_Buffer *b = (pb_Buffer*)lua_touserdata(L, 1);
     pb_Type *t = (pb_Type*)lua_touserdata(L, 2);
+    pb_Buffer *r = test_buffer(L, 3);
     lpb_encode(L, b, t);
-    lua_pushlstring(L, b->buff, b->size);
+	if (r != b)
+		lua_pushlstring(L, b->buff, b->size);
+	else
+		lua_pop(L, 1);
     return 1;
 }
 
 static int Lpb_encode(lua_State *L) {
     pb_Type *t = lpb_checktype(L, 1);
-    pb_Buffer b;
-    int ret = 1;
+    pb_Buffer buf, *b = test_buffer(L, 3);
     luaL_checktype(L, 2, LUA_TTABLE);
     if (t == NULL) {
         lua_pushnil(L);
         lua_pushfstring(L, "type '%s' not exists", lua_tostring(L, 1));
         return 2;
     }
-    pb_initbuffer(&b);
+    if (b == NULL) pb_initbuffer(&buf), b = &buf;
     lua_pushcfunction(L, lpb_encode_helper);
-    lua_pushlightuserdata(L, &b);
+    lua_pushlightuserdata(L, b);
     lua_pushlightuserdata(L, t);
+    lua_pushvalue(L, 3);
     lua_pushvalue(L, 2);
-    if (lua_pcall(L, 3, 1, 0) != LUA_OK) {
+    if (lua_pcall(L, 4, 1, 0) != LUA_OK) {
         lua_pushnil(L);
         lua_insert(L, -2);
-        ret = 2;
+        return 2;
     }
-    pb_resetbuffer(&b);
-    return ret;
+    if (b == &buf) pb_resetbuffer(&buf);
+    return 1;
 }
 
 
@@ -1320,36 +1310,25 @@ static void lpbD_field(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t tag) 
     }
 }
 
-static void lpbD_mapentry(lua_State *L, pb_SliceExt *s, pb_Type *t, int top) {
+static void lpbD_map(lua_State *L, pb_SliceExt *s, pb_Field *f) {
+    lpb_fetchtable(L, f);
     pb_SliceExt p;
-    int mask = 0;
+    int mask = 0, top = lua_gettop(L);
     uint32_t tag;
     lpb_readbytes(L, s, &p);
-    if (t == NULL) return;
+    if (f->type == NULL) return;
     lua_pushnil(L);
     lua_pushnil(L);
     while (pb_readvarint32(&p.base, &tag)) {
         int n = pb_gettag(tag);
         if (n == 1 || n == 2) {
             mask |= n;
-            lpbD_field(L, &p, pb_field(t, n), tag);
+            lpbD_field(L, &p, pb_field(f->type, n), tag);
             lua_replace(L, top+n);
         }
     }
     if (mask == 3) lua_rawset(L, -3);
     else           lua_pop(L, 2);
-}
-
-static void lpbD_map(lua_State *L, pb_SliceExt *s, pb_Field *f) {
-    lpb_fetchtable(L, f);
-    if (!f->packed)
-        lpbD_mapentry(L, s, f->type, lua_gettop(L));
-    else {
-        pb_SliceExt p;
-        lpb_readbytes(L, s, &p);
-        while (p.base.p < p.base.end)
-            lpbD_mapentry(L, &p, f->type, lua_gettop(L));
-    }
     lua_pop(L, 1);
 }
 

@@ -1199,8 +1199,8 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
     if (mask) {
         pbT_freefield(S, f);
         --t->field_count;
-        if (mask & 1) nf->entry.key = 0, nf->value = NULL;
-        if (mask & 2) tf->entry.key = 0, tf->value = NULL;
+        if (nf && mask & 1) nf->entry.key = 0, nf->value = NULL;
+        if (tf && mask & 2) tf->entry.key = 0, tf->value = NULL;
     }
 }
 
