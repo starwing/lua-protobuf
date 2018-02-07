@@ -339,6 +339,21 @@ function _G.test_packed()
                               intList = { 1,2,3 }
                            }))
    eq(pb.tohex(b), "0A 03 01 02 03")
+
+   check_load [[
+      syntax="proto3";
+
+      message MessageA
+      {
+          int32 intValue = 1;
+      }
+      message MessageB
+      {
+          repeated MessageA messageValue = 1;
+      } ]]
+   check_msg("MessageB", { messageValue = { { intValue = 1 } } })
+   eq(pb.tohex(pb.encode(
+      "MessageB", { messageValue = { { intValue = 1 } } })), "0A 02 08 01")
 end
 
 function _G.test_map()

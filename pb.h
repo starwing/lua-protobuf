@@ -1537,6 +1537,7 @@ static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Loader *L, pb_Typ
         f->type_id  = info->type;
         f->repeated = info->label == 3; /* repeated */
         f->packed   = info->packed >= 0 ? info->packed : L->is_proto3;
+        if (f->type_id >= 9 && f->type_id <= 12) f->packed = 0;
         f->scalar   = f->type == NULL;
         if (info->oneof_index != 0) {
             pb_OneofEntry *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
