@@ -1227,6 +1227,8 @@ static void pbL_DescriptorProto (pb_Loader *L, pbL_TypeInfo *info);
 struct pb_Loader {
     jmp_buf   jbuf;
     pb_Slice  s;
+    pb_Buffer b;
+    int       is_proto3;
 };
 
 /* parsers */
@@ -1265,6 +1267,7 @@ struct pbL_TypeInfo {
 
 struct pbL_FileInfo {
     pb_Slice       package;
+    pb_Slice       syntax;
     pbL_EnumInfo  *enum_type;
     pbL_TypeInfo  *message_type;
     pbL_FieldInfo *extension;
@@ -1325,6 +1328,7 @@ static void pbL_FieldDescriptorProto(pb_Loader *L, pbL_FieldInfo *info) {
     pb_Slice s;
     uint32_t tag;
     pbL_beginmsg(L, &s);
+    info->packed = -1;
     while (pb_readvarint32(&L->s, &tag)) {
         switch (tag) {
         case pb_pair(1, PB_TBYTES): /* string name */
@@ -1452,6 +1456,8 @@ static void pbL_FileDescriptorProto(pb_Loader *L, pbL_FileInfo *info) {
             pbL_EnumDescriptorProto(L, pbL_add(info->enum_type)); break;
         case pb_pair(7, PB_TBYTES): /* FieldDescriptorProto extension */
             pbL_FieldDescriptorProto(L, pbL_add(info->extension)); break;
+        case pb_pair(12, PB_TBYTES): /* string syntax */
+            pbL_readbytes(L, &info->syntax); break;
         default: pb_skipvalue(&L->s, tag);
         }
     }
@@ -1504,19 +1510,19 @@ static pb_Slice pbL_prefixname(pb_Buffer *b, pb_Slice s, size_t *ps) {
     return pb_result(b);
 }
 
-static void pbL_loadEnum(pb_State *S, pbL_EnumInfo *info, pb_Buffer *b) {
+static void pbL_loadEnum(pb_State *S, pbL_EnumInfo *info, pb_Loader *L) {
     size_t i, count, curr;
     pb_Type *t = pb_newtype(S, pb_newname(S,
-                pbL_prefixname(b, info->name, &curr)));
+                pbL_prefixname(&L->b, info->name, &curr)));
     t->is_enum = 1;
     for (i = 0, count = pbL_count(info->value); i < count; ++i) {
         pbL_EnumValueInfo *ev = &info->value[i];
         pb_newfield(S, t, pb_newname(S, ev->name), ev->number);
     }
-    b->size = curr;
+    L->b.size = curr;
 }
 
-static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Type *t) {
+static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Loader *L, pb_Type *t) {
     if (t != NULL || pb_len(info->extendee) != 0) {
         pb_Type *ft = pb_newtype(S, pb_newname(S, info->type_name));
         pb_Field *f;
@@ -1530,7 +1536,7 @@ static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Type *t) {
         f->type     = ft;
         f->type_id  = info->type;
         f->repeated = info->label == 3; /* repeated */
-        f->packed   = info->packed;
+        f->packed   = info->packed >= 0 ? info->packed : L->is_proto3;
         f->scalar   = f->type == NULL;
         if (info->oneof_index != 0) {
             pb_OneofEntry *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
@@ -1544,10 +1550,10 @@ static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Type *t) {
     }
 }
 
-static void pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Buffer *b) {
+static void pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Loader *L) {
     size_t i, count, curr;
     pb_Type *t = pb_newtype(S, pb_newname(S,
-                pbL_prefixname(b, info->name, &curr)));
+                pbL_prefixname(&L->b, info->name, &curr)));
     t->is_map = info->is_map;
     for (i = 0, count = pbL_count(info->oneof_decl); i < count; ++i) {
         pb_OneofEntry *e = (pb_OneofEntry*)pb_settable(&t->oneof_index, i+1);
@@ -1555,45 +1561,47 @@ static void pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Buffer *b) {
         e->index = i+1;
     }
     for (i = 0, count = pbL_count(info->field); i < count; ++i)
-        pbL_loadField(S, &info->field[i], t);
+        pbL_loadField(S, &info->field[i], L, t);
     for (i = 0, count = pbL_count(info->extension); i < count; ++i)
-        pbL_loadField(S, &info->extension[i], NULL);
+        pbL_loadField(S, &info->extension[i], L, NULL);
     for (i = 0, count = pbL_count(info->enum_type); i < count; ++i)
-        pbL_loadEnum(S, &info->enum_type[i], b);
+        pbL_loadEnum(S, &info->enum_type[i], L);
     for (i = 0, count = pbL_count(info->nested_type); i < count; ++i)
-        pbL_loadType(S, &info->nested_type[i], b);
-    b->size = curr;
+        pbL_loadType(S, &info->nested_type[i], L);
+    L->b.size = curr;
 }
 
-static void pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Buffer *b) {
+static void pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Loader *L) {
     size_t i, count, j, jcount, curr = 0;
     for (i = 0, count = pbL_count(info); i < count; ++i) {
-        if (info[i].package.p) pbL_prefixname(b, info[i].package, &curr);
+        if (info[i].package.p) pbL_prefixname(&L->b, info[i].package, &curr);
+        if (pb_newname(S, info[i].syntax) == pb_newname(S, pb_slice("proto3")))
+            L->is_proto3 = 1;
         for (j = 0, jcount = pbL_count(info[i].enum_type); j < jcount; ++j)
-            pbL_loadEnum(S, &info[i].enum_type[j], b);
+            pbL_loadEnum(S, &info[i].enum_type[j], L);
         for (j = 0, jcount = pbL_count(info[i].message_type); j < jcount; ++j)
-            pbL_loadType(S, &info[i].message_type[j], b);
+            pbL_loadType(S, &info[i].message_type[j], L);
         for (j = 0, jcount = pbL_count(info[i].extension); j < jcount; ++j)
-            pbL_loadField(S, &info[i].extension[j], NULL);
-        b->size = curr;
+            pbL_loadField(S, &info[i].extension[j], L, NULL);
+        L->b.size = curr;
     }
 }
 
 PB_API int pb_load(pb_State *S, pb_Slice *s) {
     pbL_FileInfo *files = NULL;
     pb_Loader L;
-    pb_Buffer b;
     int ret;
     if ((ret = setjmp(L.jbuf)) < 0)
         return PB_ERROR;
     else if (ret == 0) {
         L.s = *s;
-        pb_initbuffer(&b);
+        L.is_proto3 = 0;
+        pb_initbuffer(&L.b);
         pbL_FileDescriptorSet(&L, &files);
-        pbL_loadFile(S, files, &b);
+        pbL_loadFile(S, files, &L);
     }
     pbL_delFileInfo(files);
-    pb_resetbuffer(&b);
+    pb_resetbuffer(&L.b);
     s->p = L.s.p;
     return ret;
 }

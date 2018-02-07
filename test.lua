@@ -71,6 +71,7 @@ function _G.test_io.test()
    assert(pbio.dump("address.pb", chunk))
    assert(pb.loadfile "address.pb")
    assert(pb.type "Person")
+   eq(pb.type "-not-exists-", nil)
    local ft = {}
    for name in pb.fields "Person" do
       ft[name] = true
@@ -326,6 +327,18 @@ function _G.test_packed()
       assert(name ~= "TestPacked", name)
    end
    eq(pb.types()(nil, "not-exists"), nil)
+
+   check_load [[
+      syntax="proto3";
+
+      message MyMessage
+      {
+          repeated int32 intList = 1;
+      } ]]
+   local b = assert(pb.encode("MyMessage", {
+                              intList = { 1,2,3 }
+                           }))
+   eq(pb.tohex(b), "0A 03 01 02 03")
 end
 
 function _G.test_map()
