@@ -601,8 +601,8 @@ PB_API const char *pb_typename(int type, const char *def) {
 
 PB_API int pb_typebyname(const char *name, int def) {
     static struct entry { const char *name; int value; } names[] = {
-#define X(id, name, v) { name, v },
-        PB_WIRETYPES(X)
+#define X(name, t, v) { #name, v },
+        PB_TYPES(X)
 #undef  X
         { NULL, 0 }
     };
@@ -615,8 +615,8 @@ PB_API int pb_typebyname(const char *name, int def) {
 
 PB_API int pb_wtypebyname(const char *name, int def) {
     static struct entry { const char *name; int value; } names[] = {
-#define X(name, t, v) { #name, v },
-        PB_TYPES(X)
+#define X(id, name, v) { name, v },
+        PB_WIRETYPES(X)
 #undef  X
         { NULL, 0 }
     };

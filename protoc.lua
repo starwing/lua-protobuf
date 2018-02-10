@@ -277,7 +277,9 @@ function Parser:parsefile(name)
       end
       errors[#errors + 1] = err or fn..": ".."unknown error"
    end
-   info = self.import_fallback(name)
+   if self.import_fallback then
+      info = self.import_fallback(name)
+   end
    if not info then
       error("module load error: "..name.."\n\t"..table.concat(errors, "\n\t"))
    end
@@ -394,7 +396,7 @@ local function field(self, lex, ident)
    }
    local options = inline_option(lex)
    if options then
-      info.default_value, options.default = options.default, nil
+      info.default_value, options.default = tostring(options.default), nil
       info.json_name, options.json_name = options.json_name, nil
    end
    info.options = options
@@ -436,8 +438,8 @@ local function make_subparser(self, lex)
    function sub.import_fallback(import_name)
       if self.unknown_import == true then
          return true
-      elseif type(self.import_fallback) == 'string' then
-         return import_name:match(self.import_fallback) and true or nil
+      elseif type(self.unknown_import) == 'string' then
+         return import_name:match(self.unknown_import) and true or nil
       elseif self.unknown_import then
          return self:unknown_import(import_name)
       end
@@ -446,8 +448,8 @@ local function make_subparser(self, lex)
    function sub.type_fallback(type_name)
       if self.unknown_type == true then
          return true
-      elseif type(self.import_fallback) == 'string' then
-         return type_name:match(self.import_fallback) and true
+      elseif type(self.unknown_type) == 'string' then
+         return type_name:match(self.unknown_type) and true
       elseif self.unknown_type then
          return self:unknown_type(type_name)
       end
@@ -800,7 +802,10 @@ local function check_type(self, lex, tname)
       local t = self.typemap[tn]
       if t then return t, tn end
    end
-   local tn, t = self.type_fallback(tname)
+   local tn, t
+   if self.type_fallback then
+      tn, t = self.type_fallback(tname)
+   end
    if tn then
       t = types[t or "message"]
       if tn == true then tn = "."..tname end
