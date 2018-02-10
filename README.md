@@ -88,9 +88,6 @@ print(require "serpent".block(data2))
 
 ```
 
-## License
-
-It has the same license as the [Lua license](https://www.lua.org/license.html).
 
 ## Usage
 
