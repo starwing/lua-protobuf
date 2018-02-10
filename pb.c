@@ -1311,10 +1311,10 @@ static void lpbD_field(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t tag) 
 }
 
 static void lpbD_map(lua_State *L, pb_SliceExt *s, pb_Field *f) {
-    lpb_fetchtable(L, f);
     pb_SliceExt p;
-    int mask = 0, top = lua_gettop(L);
+    int mask = 0, top = lua_gettop(L) + 1;
     uint32_t tag;
+    lpb_fetchtable(L, f);
     lpb_readbytes(L, s, &p);
     if (f->type == NULL) return;
     lua_pushnil(L);

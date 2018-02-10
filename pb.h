@@ -1055,10 +1055,13 @@ PB_API void pb_init(pb_State *S) {
 
 PB_API void pb_free(pb_State *S) {
     if (S != NULL) {
-        pbN_free(S);
+        pb_TypeEntry *te = NULL;
+        while (pb_nextentry(&S->types, (pb_Entry**)&te))
+            if (te->value != NULL) pb_deltype(S, te->value);
         pb_freetable(&S->types);
         pb_freepool(&S->typepool);
         pb_freepool(&S->fieldpool);
+        pbN_free(S);
     }
 }
 
