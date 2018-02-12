@@ -29,7 +29,7 @@ local function check_load(chunk, name)
 end
 
 local function check_msg(name, data, r)
-   local chunk2, len = assert(pb.encode(name, data))
+   local chunk2, _ = assert(pb.encode(name, data))
    local data2 = assert(pb.decode(name, chunk2))
    --print("msg: ", name, "<"..chunk2:gsub(".", function(s)
       --return ("%02X "):format(s:byte())
@@ -89,8 +89,8 @@ function _G.test_io.test()
    eq(pb.decode("Person", "\x75"), {})
    eq(pb.decode("Person", "\x75\1\1\1\1"), {})
 
-   fail("type 'Foo' not exists", function() assert(pb.encode("Foo", {})) end)
-   fail("type 'Foo' not exists", function() assert(pb.decode("Foo", "")) end)
+   fail("type 'Foo' does not exists", function() assert(pb.encode("Foo", {})) end)
+   fail("type 'Foo' does not exists", function() assert(pb.decode("Foo", "")) end)
 
    fail("string expected at field 'name', got boolean", function()
       assert(pb.encode("Person", { name = true }))
@@ -271,6 +271,18 @@ function _G.test_type()
 
    check_msg(".TestTypes", data)
    pb.clear "TestTypes"
+end
+
+function _G.test_default()
+   check_load [[
+      message TestDefault {
+         // some fields here
+         optional int32 foo = 1;
+
+         optional int32 defaulted_num = 10 [ default = 777 ];
+      } ]]
+   check_msg("TestDefault", { foo = 1 })
+   pb.clear "TestDefault"
 end
 
 function _G.test_enum()

@@ -494,7 +494,7 @@ PB_API size_t pb_readbytes(pb_Slice *s, pb_Slice *pv) {
     pv->p   = s->p;
     pv->end = s->p + len;
     s->p = pv->end;
-    return (size_t)len;
+    return s->p - p;
 }
 
 PB_API size_t pb_readgroup(pb_Slice *s, uint32_t tag, pb_Slice *pv) {

@@ -918,7 +918,7 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
 }
 
 
-/* high level encode/decode routines */
+/* high level typeinfo/encode/decode routines */
 
 #define default_state(L) ((pb_State*)default_lstate(L))
 
@@ -1234,10 +1234,10 @@ static int lpb_encode_helper(lua_State *L) {
     pb_Type *t = (pb_Type*)lua_touserdata(L, 2);
     pb_Buffer *r = test_buffer(L, 3);
     lpb_encode(L, b, t);
-	if (r != b)
-		lua_pushlstring(L, b->buff, b->size);
-	else
-		lua_pop(L, 1);
+    if (r != b)
+        lua_pushlstring(L, b->buff, b->size);
+    else
+        lua_pop(L, 1);
     return 1;
 }
 
@@ -1247,7 +1247,7 @@ static int Lpb_encode(lua_State *L) {
     luaL_checktype(L, 2, LUA_TTABLE);
     if (t == NULL) {
         lua_pushnil(L);
-        lua_pushfstring(L, "type '%s' not exists", lua_tostring(L, 1));
+        lua_pushfstring(L, "type '%s' does not exists", lua_tostring(L, 1));
         return 2;
     }
     if (b == NULL) pb_initbuffer(&buf), b = &buf;
@@ -1381,7 +1381,7 @@ static int Lpb_decode(lua_State *L) {
     pb_SliceExt s;
     if (t == NULL) {
         lua_pushnil(L);
-        lua_pushfstring(L, "type '%s' not exists", lua_tostring(L, 1));
+        lua_pushfstring(L, "type '%s' does not exists", lua_tostring(L, 1));
         return 2;
     }
     s = lpb_initext(lpb_checkslice(L, 2));
@@ -1395,6 +1395,9 @@ static int Lpb_decode(lua_State *L) {
     }
     return 1;
 }
+
+
+/* pb module interface */
 
 static int Lpb_option(lua_State *L) {
     static const char *opts[] = {
