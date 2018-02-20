@@ -455,6 +455,12 @@ local function make_subparser(self, lex)
       end
    end
 
+   function sub.on_import(info)
+      if self.on_import then
+         return self.on_import(info)
+      end
+   end
+
    return setmetatable(sub, Parser)
 end
 
@@ -475,7 +481,10 @@ function toplevel:import(lex, info)
    end
    local name = lex:quote()
    lex:line_end()
-   self:parsefile(name)
+   local result = self:parsefile(name)
+   if self.on_import then
+      self.on_import(result)
+   end
    local dep = default(info, 'dependency')
    local index = #dep
    dep[index+1] = name
@@ -989,28 +998,45 @@ if has_pb then
    "\4 \1(\9\18!\10\25leading_detached_comments\24\6 \3(\9B)\10\19com.google"..
    ".protobufB\16DescriptorProtosH\1"
 
-   function Parser.reload()
-      assert(pb.load(descriptor_pb))
+function Parser.reload()
+   assert(pb.load(descriptor_pb))
+end
+
+local function do_compile(self, f, ...)
+   if self.include_imports then
+      local old = self.on_import
+      local infos = {}
+      function self.on_import(info)
+         infos[#infos+1] = info
+      end
+      local r = f(...)
+      infos[#infos+1] = r
+      self.on_import = old
+      return { file = infos }
    end
+   return { file = { f(...) } }
+end
 
 function Parser:compile(s, name)
-   local info = self:parse(s, name)
-   local set = { file = { info } }
+   local set = do_compile(self, self.parse, self, s, name)
    return assert(pb.encode('.google.protobuf.FileDescriptorSet', set))
 end
 
 function Parser:compilefile(fn)
-   local info = self:parsefile(fn)
-   local set = { file = { info } }
+   local set = do_compile(self, self.parsefile, self, fn)
    return assert(pb.encode('.google.protobuf.FileDescriptorSet', set))
 end
 
 function Parser:load(s, name)
-   return pb.load(self:compile(s, name))
+   local ret, pos = pb.load(self:compile(s, name))
+   if ret then return ret, pos end
+   error("load failed at offset "..pos)
 end
 
 function Parser:loadfile(fn)
-   return pb.load(self:compilefile(fn))
+   local ret, pos = pb.load(self:compilefile(fn))
+   if ret then return ret, pos end
+   error("load failed at offset "..pos)
 end
 
 Parser.reload()

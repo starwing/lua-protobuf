@@ -38,6 +38,7 @@ local function check_msg(name, data, r)
 end
 
 _G.test_io = {} do
+
 function _G.test_io.setup()
    pbio.dump("address.proto", [[
    message Phone {
@@ -147,28 +148,37 @@ function _G.test_depend.teardown()
 end
 
 function _G.test_depend.test()
-   check_load [[
-      syntax = "proto2";
+   local function load_depend(p)
+      p:load [[
+         syntax = "proto2";
 
-      import "depend1.proto";
+         import "depend1.proto";
 
-      message Depend2Msg {
-          optional Depend1Msg dep1  = 1;
-          optional int32      other = 2;
-      } ]]
+         message Depend2Msg {
+             optional Depend1Msg dep1  = 1;
+             optional int32      other = 2;
+         } ]]
+   end
 
+   load_depend(protoc.new())
    local t = { dep1 = { id = 1, name = "foo" }, other = 2 }
-   local code = assert(pb.encode("Depend2Msg", t))
-   table_eq(assert(pb.decode("Depend2Msg", code)), { other = 2 })
+   check_msg("Depend2Msg", t, { other = 2 })
 
    eq(protoc.new():loadfile "depend1.proto", true)
    check_msg("Depend2Msg", t)
 
    pb.clear "Depend1Msg"
-   code = assert(pb.encode("Depend2Msg", t))
-   table_eq(assert(pb.decode("Depend2Msg", code)), { other = 2 })
+   check_msg("Depend2Msg", t, { other = 2 })
 
    eq(protoc.new():loadfile "depend1.proto", true)
+   check_msg("Depend2Msg", t)
+
+   pb.clear "Depend1Msg"
+   pb.clear "Depend2Msg"
+
+   local p = protoc.new()
+   p.include_imports = true
+   load_depend(p)
    check_msg("Depend2Msg", t)
 end
 
@@ -334,12 +344,9 @@ function _G.test_enum()
         }
         repeated AliasedEnum aliased_enumf = 2;
       } ]]
-   -- check_msg("TestAlias", { aliased_enumf = { 0, 1, 2, 23, 1 } })
-   --check_msg("TestAlias", { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "ONE" } })
-   local data3 = { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "ONE" } }
-   local chunk = assert(pb.encode("TestAlias", data3))
-   table_eq(assert(pb.decode("TestAlias", chunk)), {
-            aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "FIRST" } })
+   check_msg("TestAlias",
+             { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "ONE" } },
+             { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "FIRST" } })
 end
 
 function _G.test_packed()

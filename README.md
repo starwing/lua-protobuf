@@ -93,20 +93,21 @@ print(require "serpent".block(data2))
 
 ### `protoc` Module
 
-| Function                | Returns       | Descriptions                             |
-| ----------------------- | ------------- | ---------------------------------------- |
-| `protoc.new()`          | Proroc object | create a new compiler instance           |
+| Function                | Returns       | Descriptions                                         |
+| ----------------------- | ------------- | ---------------------------------------------------- |
+| `protoc.new()`          | Proroc object | create a new compiler instance                       |
 | `protoc.reload()`       | true          | reload all google standard messages into `pb` module |
-| `p:parse(string)`       | table         | transform schema to `DescriptorProto` table |
-| `p:parsefile(string)`   | table         | like `p:parse()`, but accept filename    |
-| `p:compile(string)`     | string        | transform schema to binary *.pb format data |
-| `p:compilefile(string)` | string        | like `p:compile()`, but accept filename  |
-| `p:load(string)`        | true          | load schema into `pb` module             |
-| `p:loadfile(string)`    | true          | like `pb:loadfile()`, but accept filename |
-| `p.loaded`              | table         | contains all parsed `DescriptorProto` table |
-| `p.paths`               | table         | a table contains import search directories |
-| `p.unknown_module`      | see below     | handle schema import error               |
-| `p.unknown_type`        | see below     | handle unknown type in schema            |
+| `p:parse(string)`       | table         | transform schema to `DescriptorProto` table          |
+| `p:parsefile(string)`   | table         | like `p:parse()`, but accept filename                |
+| `p:compile(string)`     | string        | transform schema to binary *.pb format data          |
+| `p:compilefile(string)` | string        | like `p:compile()`, but accept filename              |
+| `p:load(string)`        | true          | load schema into `pb` module                         |
+| `p:loadfile(string)`    | true          | like `pb:loadfile()`, but accept filename            |
+| `p.loaded`              | table         | contains all parsed `DescriptorProto` table          |
+| `p.paths`               | table         | a table contains import search directories           |
+| `p.unknown_module`      | see below     | handle schema import error                           |
+| `p.unknown_type`        | see below     | handle unknown type in schema                        |
+| p.include_imports       | bool          | auto load imported proto                             |
 
 To parse a text schema file, you should create a compiler instance first:
 
@@ -120,6 +121,7 @@ Then, you can set some options to compiler, e.g. the search path, the unknown ha
 p.paths[#p.paths+1] = "whatever/folder/hold/.proto/files"
 p.unknown_module = function(self, module_name) ... end
 p.unknown_type = function(self, type_name) ... end
+p.include_imports = true
 ```
 
 The `unknwon_module` and `unknown_type` handle could be `true`, string or a function.  If set it to `true`, means all non-exists module or type are given a default value and do not trigger a error.  If set it to a string, that string will be a Lua pattern that indicate whether a unknown module or type should produce a error, e.g.
@@ -346,11 +348,15 @@ Buffer module used to construct a protobuf data format stream in low level way, 
 
 the `buffer.pack()` use the same format syntax with `slice.unpack()`, and support '()' format, if you use a pair of parenthesis, it means the inner value will be encoded as a length delimited value, i.e. a message value encoded format.
 
+parenthesis could be nested.
+
 e.g.
 
 ```lua
 b:pack("(vvv)", 1, 2, 3) -- get a bytes value that contains three varint value.
 ```
+
+
 
 `buffer.pack()` also support '#' format, it means prepends a length into buffer.
 
@@ -359,9 +365,6 @@ e.g.
 ```lua
 b:pack("#", 5) -- prepends a varint length #b-5+1 at offset 5
 ```
-
-
-parenthesis could be nested.
 
 | Function            | Returns       | Description                              |
 | ------------------- | ------------- | ---------------------------------------- |
