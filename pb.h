@@ -1141,7 +1141,7 @@ PB_API pb_Type *pb_newtype(pb_State *S, pb_Name *tname) {
         pb_Type *t;
         if (te == NULL) return NULL;
         if ((t = te->value) != NULL) return t;
-        t = (pb_Type*)pb_poolalloc(&S->typepool);
+        if (!(t = (pb_Type*)pb_poolalloc(&S->typepool))) return NULL;
         pbT_inittype(t);
         t->name = tname;
         t->basename = pbT_basename((const char*)tname);
@@ -1153,7 +1153,16 @@ PB_API pb_Type *pb_newtype(pb_State *S, pb_Name *tname) {
 PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     pb_FieldEntry *nf = NULL;
     pb_OneofEntry *ne = NULL;
-    while (pb_nextentry(&t->field_names, (pb_Entry**)&nf))
+    while (pb_nextentry(&t->field_names, (pb_Entry**)&nf)) {
+        if (nf->value != NULL) {
+            pb_FieldEntry *of = (pb_FieldEntry*)pb_gettable(
+                    &t->field_tags, nf->value->number);
+            if (of && of->value == nf->value)
+                of->entry.key = 0, of->value = NULL;
+            pbT_freefield(S, nf->value);
+        }
+    }
+    while (pb_nextentry(&t->field_tags, (pb_Entry**)&nf))
         if (nf->value != NULL) pbT_freefield(S, nf->value);
     while (pb_nextentry(&t->oneof_index, (pb_Entry**)&ne))
         pb_delname(S, ne->name);
@@ -1171,19 +1180,22 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t nu
                 &t->field_names, (pb_Key)fname);
         pb_FieldEntry *tf = (pb_FieldEntry*)pb_settable(
                 &t->field_tags, number);
-        pb_Field *f = nf->value;
-        if (nf == NULL || tf == NULL || nf->value != tf->value)
-            return NULL;
-        if (f) {
+        pb_Field *f;
+        if (nf == NULL || tf == NULL) return NULL;
+        if ((f = nf->value) != NULL && tf->value == f) {
             pb_delname(S, f->default_value);
             f->default_value = NULL;
             return f;
         }
-        f = (pb_Field*)pb_poolalloc(&S->typepool);
+        if (!(f = (pb_Field*)pb_poolalloc(&S->typepool))) return NULL;
         memset(f, 0, sizeof(pb_Field));
         f->name   = fname;
         f->type   = t;
         f->number = number;
+        if (nf->value && pb_field(t, nf->value->number) != nf->value)
+            pbT_freefield(S, nf->value), --t->field_count;
+        if (tf->value && pb_fname(t, tf->value->name) != tf->value)
+            pbT_freefield(S, tf->value), --t->field_count;
         ++t->field_count;
         return nf->value = tf->value = f;
     }
@@ -1195,15 +1207,10 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
             (pb_Key)f->name);
     pb_FieldEntry *tf = (pb_FieldEntry*)pb_gettable(&t->field_tags,
             (pb_Key)f->number);
-    int mask = 3;
-    if (nf && nf->value != f) pb_delfield(S, t, nf->value), mask -= 1;
-    if (tf && tf->value != f) pb_delfield(S, t, tf->value), mask -= 2;
-    if (mask) {
-        pbT_freefield(S, f);
-        --t->field_count;
-        if (nf && mask & 1) nf->entry.key = 0, nf->value = NULL;
-        if (tf && mask & 2) tf->entry.key = 0, tf->value = NULL;
-    }
+    int count = 0;
+    if (nf && nf->value == f) nf->entry.key = 0, nf->value = NULL, ++count;
+    if (tf && tf->value == f) tf->entry.key = 0, nf->value = NULL, ++count;
+    if (count) pbT_freefield(S, f), --t->field_count;
 }
 
 

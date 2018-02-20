@@ -319,6 +319,27 @@ function _G.test_enum()
    fail("number/string expected at field 'color', got boolean", function()
       assert(pb.encode("TestEnum", { color = true }))
    end)
+   fail("can not encode unknown enum 'foo' at field 'color'", function()
+      assert(pb.encode("TestEnum", { color = "foo" }))
+   end)
+
+   check_load [[
+      message TestAlias {
+        enum AliasedEnum {
+          option allow_alias = true;
+          ZERO = 0;
+          ONE = 1;
+          TWO = 2;
+          FIRST = 1;
+        }
+        repeated AliasedEnum aliased_enumf = 2;
+      } ]]
+   -- check_msg("TestAlias", { aliased_enumf = { 0, 1, 2, 23, 1 } })
+   --check_msg("TestAlias", { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "ONE" } })
+   local data3 = { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "ONE" } }
+   local chunk = assert(pb.encode("TestAlias", data3))
+   table_eq(assert(pb.decode("TestAlias", chunk)), {
+            aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "FIRST" } })
 end
 
 function _G.test_packed()

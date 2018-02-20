@@ -1143,7 +1143,10 @@ static void lpbE_enum(lua_State *L, pb_Buffer *b, pb_Field *f) {
     else {
         pb_Name *name = lpb_toname(L, -1);
         pb_Field *ev = pb_fname(f->type, name);;
-        if (ev) pb_addvarint32(b, ev->number);
+        if (ev == NULL) 
+            argerror(L, 2, "can not encode unknown enum '%s' at field '%s'",
+                    lua_tostring(L, -1), (char*)f->name);
+        pb_addvarint32(b, ev->number);
     }
 }
 
