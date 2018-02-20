@@ -288,15 +288,17 @@ end
 function _G.test_enum()
    check_load [[
       enum Color {
-         Red = 1;
-         Green = 2;
-         Blue = 3;
+         Red = 0;
+         Green = 1;
+         Blue = 2;
       }
       message TestEnum {
          optional Color color  = 1;
       } ]]
-   eq(pb.enum("Color", 1), "Red")
-   eq(pb.enum("Color", "Red"), 1)
+   eq(pb.enum("Color", 0), "Red")
+   eq(pb.enum("Color", "Red"), 0)
+   eq(pb.enum("Color", 1), "Green")
+   eq(pb.enum("Color", "Green"), 1)
    eq({pb.field("TestEnum", "color")}, {"color", 1, ".Color", nil, "optional"})
 
    local data = { color = "Red" }
@@ -306,7 +308,7 @@ function _G.test_enum()
    check_msg("TestEnum", data2)
 
    pb.option "enum_as_value"
-   check_msg("TestEnum", data, { color = 1 })
+   check_msg("TestEnum", data, { color = 0 })
 
    pb.option "enum_as_name"
    check_msg("TestEnum", data, { color = "Red" })

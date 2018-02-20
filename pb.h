@@ -815,7 +815,7 @@ static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
     if (t->size == 0 && pb_resizetable(t, t->size*2) == 0) return NULL;
     mp = pbT_index(t->hash, (key & (t->size - 1)) * t->entry_size);
     if (mp->key != 0) {
-        while (t->lastfree > 0) {
+        while (t->lastfree > t->entry_size) {
             pb_Entry *cur = pbT_index(t->hash, t->lastfree -= t->entry_size);
             if (cur->key == 0 && cur->next == 0) { f = cur; break; }
         }
@@ -867,7 +867,7 @@ PB_API size_t pb_resizetable(pb_Table *t, size_t size) {
 
 PB_API pb_Entry *pb_gettable(pb_Table *t, pb_Key key) {
     pb_Entry *entry;
-    if (t == NULL || t->size == 0 || key == 0)
+    if (t == NULL || t->size == 0)
         return NULL;
     for (entry = pbT_index(t->hash, (key & (t->size - 1)) * t->entry_size);
             entry->key != key;
@@ -1081,8 +1081,7 @@ PB_API pb_Field *pb_fname(pb_Type *t, pb_Name *name) {
 
 PB_API pb_Field *pb_field(pb_Type *t, int32_t number) {
     pb_FieldEntry *fe = NULL;
-    if (t != NULL && number != 0)
-        fe = (pb_FieldEntry*)pb_gettable(&t->field_tags, number);
+    if (t != NULL) fe = (pb_FieldEntry*)pb_gettable(&t->field_tags, number);
     return fe ? fe->value : NULL;
 }
 
