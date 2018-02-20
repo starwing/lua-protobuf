@@ -410,7 +410,7 @@ local function label_field(self, lex, ident)
    local label = labels[ident]
    local info, map_entry
    if not label then
-      if self.syntax == "proto2" then
+      if self.syntax == "proto2" and ident ~= "map" then
          return lex:error("proto2 disallow missing label")
       end
       return field(self, lex, ident)

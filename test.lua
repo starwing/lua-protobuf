@@ -393,6 +393,13 @@ function _G.test_map()
       table_eq(pb.decode("TestMap", chunk), { map = {one = 1} })
    end)
    eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
+
+   check_load [[
+   syntax = "proto2";
+   message TestMap2 {
+       map<string, int32> map = 1;
+   } ]]
+   check_msg("TestMap2", { map = { one = 1, two = 2, three = 3 } })
 end
 
 function _G.test_oneof()
