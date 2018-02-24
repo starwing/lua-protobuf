@@ -721,7 +721,7 @@ function toplevel:service(lex, info)
       local ident = lex:type_name()
       local body_parser = svr_body[ident]
       if body_parser then
-         body_parser(self, lex, type)
+         body_parser(self, lex, svr)
       else
          return lex:error "expected 'rpc' or 'option' in service body"
       end
@@ -729,7 +729,7 @@ function toplevel:service(lex, info)
    end
    lex:line_end 'opt'
    if info then
-      info = default(info, 'enum_type')
+      info = default(info, 'service')
       info[#info+1] = svr
    end
    return svr
@@ -870,12 +870,12 @@ local function check_service(self, lex, info)
       check_dup(self, lex, 'rpc name', names, 'name', v)
       local t, tn = check_type(self, lex, v.input_type)
       v.input_type = tn
-      if not t ~= types.message then
+      if t ~= types.message then
          lex:error "message type expected in parameter"
       end
       t, tn = check_type(self, lex, v.output_type)
       v.output_type = tn
-      if not t ~= types.message then
+      if t ~= types.message then
          lex:error "message type expected in return"
       end
    end

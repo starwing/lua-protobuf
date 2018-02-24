@@ -107,7 +107,7 @@ print(require "serpent".block(data2))
 | `p.paths`               | table         | a table contains import search directories           |
 | `p.unknown_module`      | see below     | handle schema import error                           |
 | `p.unknown_type`        | see below     | handle unknown type in schema                        |
-| p.include_imports       | bool          | auto load imported proto                             |
+| `p.include_imports`     | bool          | auto load imported proto                             |
 
 To parse a text schema file, you should create a compiler instance first:
 
