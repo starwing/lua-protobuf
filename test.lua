@@ -309,6 +309,11 @@ function _G.test_enum()
    eq(pb.enum("Color", "Red"), 0)
    eq(pb.enum("Color", 1), "Green")
    eq(pb.enum("Color", "Green"), 1)
+   local t = {}
+   for name, number in pb.fields "Color" do
+      t[name] = number
+   end
+   table_eq(t, {Red=0, Green=1, Blue=2})
    eq({pb.field("TestEnum", "color")}, {"color", 1, ".Color", nil, "optional"})
 
    local data = { color = "Red" }

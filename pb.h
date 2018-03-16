@@ -253,8 +253,9 @@ PB_API int pb_nextentry (pb_Table *t, pb_Entry **pentry);
 
 struct pb_Table {
     size_t    size;
-    size_t    entry_size;
     size_t    lastfree;
+    unsigned  entry_size : sizeof(size_t) - 1;
+    unsigned  has_zero   : 1;
     pb_Entry *hash;
 };
 
@@ -810,19 +811,27 @@ PB_API void pb_inittable(pb_Table *t, size_t entrysize)
 PB_API void pb_freetable(pb_Table *t)
 { free(t->hash); pb_inittable(t, t->entry_size); }
 
+static pb_Entry *pbT_hash(pb_Table *t, pb_Key key) {
+    size_t h = ((size_t)key*2654435761)&(t->size-1);
+    if (key && h == 0) h = 1;
+    return pbT_index(t->hash, h*t->entry_size);
+}
+
 static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
     pb_Entry *mp, *othern, *next, *f = NULL;
     if (t->size == 0 && pb_resizetable(t, t->size*2) == 0) return NULL;
-    mp = pbT_index(t->hash, (key & (t->size - 1)) * t->entry_size);
-    if (mp->key != 0) {
+    if (key == 0) {
+        mp = t->hash;
+        t->has_zero = 1;
+    }
+    else if ((mp = pbT_hash(t, key))->key != 0) {
         while (t->lastfree > t->entry_size) {
             pb_Entry *cur = pbT_index(t->hash, t->lastfree -= t->entry_size);
             if (cur->key == 0 && cur->next == 0) { f = cur; break; }
         }
         if (f == NULL) return pb_resizetable(t, t->size*2) ?
             pbT_newkey(t, key) : NULL;
-        othern = pbT_index(t->hash, (mp->key & (t->size - 1)) * t->entry_size);
-        if (othern != mp) {
+        if ((othern = pbT_hash(t, mp->key)) != mp) {
             while ((next = pbT_index(othern, othern->next)) != mp)
                 othern = next;
             othern->next = pbT_offset(f, othern);
@@ -869,7 +878,9 @@ PB_API pb_Entry *pb_gettable(pb_Table *t, pb_Key key) {
     pb_Entry *entry;
     if (t == NULL || t->size == 0)
         return NULL;
-    for (entry = pbT_index(t->hash, (key & (t->size - 1)) * t->entry_size);
+    if (key == 0)
+        return t->has_zero ? t->hash : NULL;
+    for (entry = pbT_hash(t, key);
             entry->key != key;
             entry = pbT_index(entry, entry->next))
         if (entry->next == 0) return NULL;
@@ -886,6 +897,10 @@ PB_API pb_Entry *pb_settable(pb_Table *t, pb_Key key) {
 PB_API int pb_nextentry(pb_Table *t, pb_Entry **pentry) {
     size_t i = *pentry ? pbT_offset(*pentry, t->hash) : 0;
     size_t size = t->size*t->entry_size;
+    if (*pentry == NULL && t->has_zero) {
+        *pentry = t->hash;
+        return 1;
+    }
     while (i += t->entry_size, i < size) {
         pb_Entry *entry = pbT_index(t->hash, i);
         if (entry->key != 0) {
