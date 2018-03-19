@@ -64,6 +64,7 @@ typedef signed   long long  int64_t;
 #endif
 
 #include <stddef.h>
+#include <limits.h>
 
 PB_NS_BEGIN
 
@@ -254,7 +255,7 @@ PB_API int pb_nextentry (pb_Table *t, pb_Entry **pentry);
 struct pb_Table {
     size_t    size;
     size_t    lastfree;
-    unsigned  entry_size : sizeof(size_t) - 1;
+    unsigned  entry_size : sizeof(unsigned)*CHAR_BIT - 1;
     unsigned  has_zero   : 1;
     pb_Entry *hash;
 };
