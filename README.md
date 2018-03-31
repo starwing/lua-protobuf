@@ -33,21 +33,31 @@ git clone https://github.com/starwing/lua-protobuf
 luarocks make rockspecs/lua-protobuf-scm-1.rockspec
 ```
 
-or you can build it by hand, it only have a pure Lua module and a pair of C file: pb.h and pb.c
+If you don't have luarocks, use `hererocks` to install Lua and luarocks:
 
-to build it on macOS, use your favor compiler:
+```shell
+pip install hererocks
+git clone https://github.com/starwing/lua-protobuf
+hererocks -j 2.0 -rlatest .
+bin/luarocks make lua-protobuf/rockspecs/lua-protobuf-scm-1.rockspec CFLAGS="-fPIC -Wall -Wextra" LIBFLAGS="-shared"
+cp protoc.lua pb.so ..
+```
+
+Or you can build it by hand, it only have a pure Lua module and a pair of C file: pb.h and pb.c
+
+To build it on macOS, use your favor compiler:
 
 ```shell
 gcc -O2 -shared -undefined dynamic_lookup pb.c -o pb.so
 ```
 
-on Linux, use the nearly same command:
+On Linux, use the nearly same command:
 
 ```shell
 gcc -O2 -shared -fPIC pb.c -o pb.so
 ```
 
-on Windows, you could use MinGW or MSVC, create a sln project or build it on command line:
+On Windows, you could use MinGW or MSVC, create a sln project or build it on command line:
 
 ```shell
 cl /O2 /LD /Fepb.dll /I Lua53\include /DLUA_BUILD_AS_DLL pb.c Lua53\lib\lua53.lib
@@ -169,24 +179,26 @@ in below functions, we have several types that has special means:
 
 all functions returns `nil, errmsg` when meet errors.
 
-| Function                    | Returns   | Description                              |
-| --------------------------- | --------- | ---------------------------------------- |
-| `pb.clear()`                | None      | clear all types                          |
-| `pb.clear(type)`            | None      | delete specific type                     |
-| `pb.load(data)`             | true      | load a binary schema data into `pb` module |
-| `pb.loadfile(string)`       | true      | same as `pb.load()`, but accept file name |
-| `pb.encode(type, table)`    | string    | encode a message table into binary form  |
-| `pb.encode(type, table, b)` | buffer    | encode a message table into binary form to buffer |
-| `pb.decode(type, data)`     | table     | decode a binary message into Lua tabl    |
-| `pb.pack(fmt, ...)`         | string    | same as `buffer.pack()` but return string |
-| `pb.unpack(data, fmt, ...)` | values... | same as `slice.unpack()` but accept data |
-| `pb.types()`                | iterator  | iterate all types in `pb` module         |
-| `pb.type(type)`             | see below | return informations for specific type    |
-| `pb.fields(type)`           | iterator  | iterate all fields in a message          |
-| `pb.field(type, string)     | see below | return informations for specific field of type |
-| `pb.enum(type, string)`     | number    | get the value of a enum by name          |
-| `pb.enum(type, number)`     | string    | get the name of a enum by value          |
-| `pb.option(string)`         | string    | set options to decoder/encoder           |
+| Function                       | Returns   | Description                                       |
+| ------------------------------ | --------- | ------------------------------------------------- |
+| `pb.clear()`                   | None      | clear all types                                   |
+| `pb.clear(type)`               | None      | delete specific type                              |
+| `pb.load(data)`                | true      | load a binary schema data into `pb` module        |
+| `pb.loadfile(string)`          | true      | same as `pb.load()`, but accept file name         |
+| `pb.encode(type, table)`       | string    | encode a message table into binary form           |
+| `pb.encode(type, table, b)`    | buffer    | encode a message table into binary form to buffer |
+| `pb.decode(type, data)`        | table     | decode a binary message into Lua table            |
+| `pb.decode(type, data, table)` | table     | decode a binary message into a given Lua table    |
+| `pb.pack(fmt, ...)`            | string    | same as `buffer.pack()` but return string         |
+| `pb.unpack(data, fmt, ...)`    | values... | same as `slice.unpack()` but accept data          |
+| `pb.types()`                   | iterator  | iterate all types in `pb` module                  |
+| `pb.type(type)`                | see below | return informations for specific type             |
+| `pb.fields(type)`              | iterator  | iterate all fields in a message                   |
+| `pb.field(type, string)`       | see below | return informations for specific field of type    |
+| `pb.enum(type, string)`        | number    | get the value of a enum by name                   |
+| `pb.enum(type, number)`        | string    | get the name of a enum by value                   |
+| `pb.defaults(type[, table])`   | table     | get the default table of type                     |
+| `pb.option(string)`            | string    | set options to decoder/encoder                    |
 
 You can use `pb.(type|field)[s]()` functions to retrieve type informations for loaded messages.  
 
@@ -236,6 +248,29 @@ enum Color { Red = 1; Green = 2; Blue = 3 }
 print(pb.enum("Color", "Red")) --> 1
 print(pb.enum("Color", 2)) --> "Green"
 ```
+
+Using `pb.defaults()`, you could get a table with all default values from a message:
+
+```lua
+   check_load [[
+      message TestDefault {
+         optional int32 defaulted_int = 10 [ default = 777 ];
+         optional bool defaulted_bool = 11 [ default = true ];
+         optional string defaulted_str = 12 [ default = "foo" ];
+         optional float defaulted_num = 13 [ default = 0.125 ];
+      } ]]
+   print(require "serpent".block(pb.defaults "TestDefault"))
+-- output:
+-- {
+--   defaulted_bool = true,
+--   defaulted_int = 777,
+--   defaulted_num = 0.125,
+--   defaulted_str = "foo"
+-- } --[[table: 0x7f8c1e52b050]]
+
+```
+
+
 
 You can set options to change the behavior or decoder/encoder.
 current these options are supported:

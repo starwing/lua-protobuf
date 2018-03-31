@@ -168,16 +168,16 @@ function Lexer:number(opt)
    elseif self:test "inf%f[%A]" then
       return 1.0/0.0
    end
-   local ns, d1, s, d2, pos = self "^([+-]?)(%.?)([0-9]+)(%.?)()"
+   local ns, d1, s, d2, s2, pos = self "^([+-]?)(%.?)([0-9]+)(%.?)([0-9]*)()"
    if not ns then
       return self:opterror(opt, 'floating-point number expected')
    end
    local es, pos2 = self("([eE][+-]?[0-9]+)%s*()", pos)
-   if (d1 == "" and d2 == "" and not es) or (d1 == "." and d2 == ".") then
+   if d1 == "." and d2 == "." then
       return self:error "malformed floating-point number"
    end
    self.pos = pos2 or pos
-   local n = tonumber(d1..s..d2..es)
+   local n = tonumber(d1..s..d2..s2..(es or ""))
    return ns == '-' and -n or n
 end
 
@@ -207,7 +207,6 @@ end
 
 function Lexer:constant(opt)
    local c = self:full_ident('constant', 'opt') or
-             self:integer('opt') or
              self:number('opt') or
              self:quote('opt')
    if not c and not opt then

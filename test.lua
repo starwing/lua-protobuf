@@ -59,7 +59,7 @@ function _G.test_io.teardown()
 end
 
 function _G.test_io.test()
-   local code = "io.write(require 'pb.io'.read())"
+   local code = "assert(io.write(require 'pb.io'.read()))"
    assert(pbio.dump("t.lua", code))
    local fh = assert(io.popen("lua t.lua < t.lua", "r"))
    eq(fh:read "*a", code)
@@ -285,14 +285,36 @@ end
 
 function _G.test_default()
    check_load [[
+      enum TestDefaultColor {
+         RED = 0;
+         GREEN = 1;
+         BLUE = 2;
+      }
       message TestDefault {
          // some fields here
          optional int32 foo = 1;
 
-         optional int32 defaulted_num = 10 [ default = 777 ];
+         optional int32 defaulted_int = 10 [ default = 777 ];
+         optional bool defaulted_bool = 11 [ default = true ];
+         optional string defaulted_str = 12 [ default = "foo" ];
+         optional float defaulted_num = 13 [ default = 0.125 ];
+
+         optional TestDefaultColor color = 14 [default = RED];
+         optional bool bool1 = 15 [default=false];
+         optional bool bool2 = 16 [default=foo];
       } ]]
    check_msg("TestDefault", { foo = 1 })
+   table_eq(pb.defaults "TestDefault", {
+            defaulted_int = 777,
+            defaulted_bool = true,
+            defaulted_str = "foo",
+            defaulted_num = 0.125,
+            color = "RED",
+            bool1 = false,
+            bool2 = nil
+         })
    pb.clear "TestDefault"
+   pb.clear "TestDefaultColor"
 end
 
 function _G.test_enum()

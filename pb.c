@@ -246,10 +246,9 @@ static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type) {
         if ((ret = v.s->base.p != NULL)) pb_addbytes(b, v.s->base);
         expected = LUA_TSTRING;
         break;
-    default:
-        /* NOT REACHED */
-        /* argerror(L, idx, "unknown type %s",
-         *          pb_typename(type, "<unknown>")) */;
+    /* NOT REACHED */
+    /* default:
+     *     argerror(L, idx, "unknown type %s", pb_typename(type, "<unknown>")); */
     }
     return ret ? 0 : expected;
 }
@@ -301,10 +300,9 @@ static void lpb_readtype(lua_State *L, int type, pb_SliceExt *s) {
         lpb_readbytes(L, s, v.s);
         lua_pushlstring(L, v.s->base.p, pb_len(v.s->base));
         break;
-
-    default:
-        /* NOT REACHED */
-        /* luaL_error(L, "unknown type %s", pb_typename(type, NULL)) */;
+    /* NOT REACHED */
+    /*default:
+     *    luaL_error(L, "unknown type %s", pb_typename(type, NULL));*/
     }
 }
 
@@ -1120,6 +1118,57 @@ static int Lpb_enum(lua_State *L) {
     return 1;
 }
 
+static int lpb_pushdefault(lua_State *L, lpb_State *S, pb_Field *f) {
+    lua_Number ln;
+    lua_Integer li;
+    char *end;
+    switch (f->type_id) {
+    case PB_Tbytes: case PB_Tstring:
+        lua_pushstring(L, (char*)f->default_value);
+        break;
+    case PB_Tenum:
+        if (!(f = pb_fname(f->type, f->default_value))) return 0;
+        if (S->enum_as_value) lua_pushinteger(L, (lua_Integer)f->number);
+        else                  lua_pushstring(L, (char*)f->name);
+        break;
+    case PB_Tbool:
+        if (f->default_value == pb_name(&S->base, "true"))
+            lua_pushboolean(L, 1);
+        else if (f->default_value == pb_name(&S->base, "false"))
+            lua_pushboolean(L, 0);
+        else return 0;
+        break;
+    case PB_Tdouble: case PB_Tfloat:
+        ln = (lua_Number)strtod((char*)f->default_value, &end);
+        if ((char*)f->default_value == end) return 0;
+        lua_pushnumber(L, ln);
+        break;
+    default:
+        li = (lua_Integer)strtol((char*)f->default_value, &end, 10);
+        if ((char*)f->default_value == end) return 0;
+        lua_pushinteger(L, li);
+        break;
+    }
+    return 1;
+}
+
+static int Lpb_defaults(lua_State *L) {
+    lpb_State *S = default_lstate(L);
+    pb_Type *t = lpb_checktype(L, 1);
+    pb_Field *f = NULL;
+    if (!lua_istable(L, 2)) {
+        lua_settop(L, 1);
+        lua_newtable(L);
+    }
+    while (pb_nextfield(t, &f)) {
+        int type = lua53_getfield(L, 2, (char*)f->name);
+        if (f->default_value && type == LUA_TNIL && lpb_pushdefault(L, S, f))
+            lua_setfield(L, 2, (char*)f->name);
+        lua_pop(L, 1);
+    }
+    return 1;
+}
+
 
 /* encode protobuf */
 
@@ -1299,7 +1348,10 @@ static void lpbD_field(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t tag) 
 
     case PB_Tmessage:
         lpb_readbytes(L, s, &sv);
-        if (f->type) lpb_decode(L, &sv, f->type);
+        if (f->type) {
+            lua_newtable(L);
+            lpb_decode(L, &sv, f->type);
+        }
         break;
 
     default:
@@ -1355,7 +1407,6 @@ static void lpbD_repeated(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t ta
 
 static int lpb_decode(lua_State *L, pb_SliceExt *s, pb_Type *t) {
     uint32_t tag;
-    lua_newtable(L);
     while (pb_readvarint32(&s->base, &tag)) {
         pb_Field *f = pb_field(t, pb_gettag(tag));
         if (f == NULL)
@@ -1365,9 +1416,18 @@ static int lpb_decode(lua_State *L, pb_SliceExt *s, pb_Type *t) {
         else if (f->repeated)
             lpbD_repeated(L, s, f, tag);
         else if (!f->type || f->type->field_count != 0) {
-            lua_pushstring(L, (char*)f->name);
-            lpbD_field(L, s, f, tag);
-            lua_rawset(L, -3);
+            if (f->type && f->type_id == PB_Tmessage) {
+                pb_SliceExt sv;
+                lpb_fetchtable(L, f);
+                lpb_readbytes(L, s, &sv);
+                lpb_decode(L, &sv, f->type);
+                lua_pop(L, 1);
+            }
+            else {
+                lua_pushstring(L, (char*)f->name);
+                lpbD_field(L, s, f, tag);
+                lua_rawset(L, -3);
+            }
         }
     }
     return 1;
@@ -1388,10 +1448,15 @@ static int Lpb_decode(lua_State *L) {
         return 2;
     }
     s = lpb_initext(lpb_checkslice(L, 2));
+    if (!lua_istable(L, 3)) {
+        lua_settop(L, 2);
+        lua_newtable(L);
+    }
     lua_pushcfunction(L, lpb_decode_helper);
     lua_pushlightuserdata(L, &s);
     lua_pushlightuserdata(L, t);
-    if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
+    lua_pushvalue(L, 3);
+    if (lua_pcall(L, 3, 1, 0) != LUA_OK) {
         lua_pushnil(L);
         lua_insert(L, -2);
         return 2;
@@ -1433,6 +1498,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(type),
         ENTRY(field),
         ENTRY(enum),
+        ENTRY(defaults),
         ENTRY(tohex),
         ENTRY(result),
         ENTRY(option),
@@ -1443,7 +1509,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
     return 1;
 }
 
-/* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
+/* cc: flags+='-O0 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
  * maccc: flags+='-shared -undefined dynamic_lookup' output='pb.so'
  * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */
 
