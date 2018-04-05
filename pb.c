@@ -959,39 +959,37 @@ static lpb_State *default_lstate(lua_State *L) {
     return LS;
 }
 
-static pb_Name *lpb_str2name(lua_State *L, const char *s) {
-    pb_State *S = default_state(L);
-    pb_Name *n = pb_name(S, s);
-    if (n == NULL && s != NULL && *s != '.') {
-        luaL_Buffer B;
-        luaL_buffinit(L, &B);
-        luaL_addchar(&B, '.');
-        luaL_addstring(&B, s);
-        luaL_pushresult(&B);
-        n = pb_name(S, lua_tostring(L, -1));
-        lua_pop(L, 1);
+static pb_Type *lpb_type(pb_State *S, const char *name) {
+    pb_Type *t;
+    if (name == NULL || *name == '.')
+        t = pb_type(S, pb_name(S, name));
+    else {
+        pb_Buffer b;
+        pb_initbuffer(&b);
+        pb_addchar(&b, '.');
+        pb_addslice(&b, pb_slice(name));
+        pb_addchar(&b, '\0');
+        t = pb_type(S, pb_name(S, pb_buffer(&b)));
+        pb_resetbuffer(&b);
     }
-    return n;
+    return t;
 }
 
-static pb_Name *lpb_toname(lua_State *L, int idx)
-{ return lpb_str2name(L, lua_tostring(L, idx)); }
-
-static pb_Name *lpb_checkname(lua_State *L, int idx)
-{ return lpb_str2name(L, luaL_checkstring(L, idx)); }
-
-static pb_Type *lpb_checktype(lua_State *L, int idx)
-{ return pb_type(default_state(L), lpb_checkname(L, idx)); }
+static pb_Field *lpb_checkfield(lua_State *L, int idx, pb_Type *t) {
+    int isint, number = (int)lua_tointegerx(L, idx, &isint);
+    if (isint) return pb_field(t, number);
+    return pb_fname(t, pb_name(default_state(L), luaL_checkstring(L, idx)));
+}
 
 static int Lpb_clear(lua_State *L) {
     pb_State *S = default_state(L);
     if (lua_isnoneornil(L, 1))
         pb_free(S), pb_init(S);
     else if (lua_isnoneornil(L, 2))
-        pb_deltype(S, lpb_checktype(L, 1));
+        pb_deltype(S, lpb_type(S, luaL_checkstring(L, 1)));
     else {
-        pb_Type *t = lpb_checktype(L, 1);
-        pb_Field *f = pb_fname(t, lpb_checkname(L, 2));
+        pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
+        pb_Field *f = lpb_checkfield(L, 2, t);
         if (f) pb_delfield(S, t, f);
     }
     return 0;
@@ -1060,8 +1058,7 @@ static int lpb_pushfield(lua_State *L, pb_Type *t, pb_Field *f) {
 
 static int Lpb_typesiter(lua_State *L) {
     pb_State *S = default_state(L);
-    pb_Name *prev = lpb_toname(L, 2);
-    pb_Type *t = pb_type(S, prev);
+    pb_Type *t = lpb_type(S, lua_tostring(L, 2));
     if ((t == NULL && !lua_isnoneornil(L, 2)))
         return 0;
     while (pb_nexttype(S, &t) && t->field_count == 0)
@@ -1077,9 +1074,9 @@ static int Lpb_types(lua_State *L) {
 }
 
 static int Lpb_fieldsiter(lua_State *L) {
-    pb_Type *t = lpb_checktype(L, 1);
-    pb_Name *prev = lpb_toname(L, 2);
-    pb_Field *f = pb_fname(t, prev);
+    pb_State *S = default_state(L);
+    pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
+    pb_Field *f = pb_fname(t, pb_name(S, lua_tostring(L, 2)));
     if ((f == NULL && !lua_isnoneornil(L, 2)) || !pb_nextfield(t, &f))
         return 0;
     return lpb_pushfield(L, t, f);
@@ -1093,25 +1090,25 @@ static int Lpb_fields(lua_State *L) {
 }
 
 static int Lpb_type(lua_State *L) {
-    pb_Type *t = lpb_checktype(L, 1);
+    pb_State *S = default_state(L);
+    pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
     if (t == NULL || t->field_count == 0)
         return 0;
     return lpb_pushtype(L, t);
 }
 
 static int Lpb_field(lua_State *L) {
-    pb_Type *t = lpb_checktype(L, 1);
-    int isint, number = (int)lua_tointegerx(L, 2, &isint);
-    pb_Field *f = isint ? pb_field(t, number) : pb_fname(t, lpb_toname(L, 2));
-    return lpb_pushfield(L, t, f);
+    pb_State *S = default_state(L);
+    pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
+    return lpb_pushfield(L, t, lpb_checkfield(L, 2, t));
 }
 
 static int Lpb_enum(lua_State *L) {
-    pb_Type *t = lpb_checktype(L, 1);
-    int isint, number = (int)lua_tointegerx(L, 2, &isint);
-    pb_Field *f = isint ? pb_field(t, number) : pb_fname(t, lpb_toname(L, 2));
+    pb_State *S = default_state(L);
+    pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
+    pb_Field *f = lpb_checkfield(L, 2, t);
     if (f == NULL) return 0;
-    if (isint)
+    if (lua_type(L, 2) == LUA_TNUMBER)
         lua_pushstring(L, (char*)f->name);
     else
         lua_pushinteger(L, f->number);
@@ -1154,7 +1151,7 @@ static int lpb_pushdefault(lua_State *L, lpb_State *S, pb_Field *f) {
 
 static int Lpb_defaults(lua_State *L) {
     lpb_State *S = default_lstate(L);
-    pb_Type *t = lpb_checktype(L, 1);
+    pb_Type *t = lpb_type(&S->base, luaL_checkstring(L, 1));
     pb_Field *f = NULL;
     if (!lua_istable(L, 2)) {
         lua_settop(L, 1);
@@ -1190,8 +1187,8 @@ static void lpbE_enum(lua_State *L, pb_Buffer *b, pb_Field *f) {
         argerror(L, 2, "number/string expected at field '%s', got %s",
                 (char*)f->name, luaL_typename(L, -1));
     else {
-        pb_Name *name = lpb_toname(L, -1);
-        pb_Field *ev = pb_fname(f->type, name);;
+        pb_State *S = default_state(L);
+        pb_Field *ev = pb_fname(f->type, pb_name(S, lua_tostring(L, -1)));
         if (ev == NULL) 
             argerror(L, 2, "can not encode unknown enum '%s' at field '%s'",
                     lua_tostring(L, -1), (char*)f->name);
@@ -1267,7 +1264,8 @@ static void lpb_encode(lua_State *L, pb_Buffer *b, pb_Type *t) {
     lua_pushnil(L);
     while (lua_next(L, -2)) {
         if (lua_type(L, -2) == LUA_TSTRING) {
-            pb_Field *f = pb_fname(t, lpb_toname(L, -2));
+            pb_State *S = default_state(L);
+            pb_Field *f = pb_fname(t, pb_name(S, lua_tostring(L, -2)));
             if (f == NULL)
                 /* skip */;
             else if (f->type && f->type->is_map)
@@ -1294,7 +1292,8 @@ static int lpb_encode_helper(lua_State *L) {
 }
 
 static int Lpb_encode(lua_State *L) {
-    pb_Type *t = lpb_checktype(L, 1);
+    pb_State *S = default_state(L);
+    pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
     pb_Buffer buf, *b = test_buffer(L, 3);
     luaL_checktype(L, 2, LUA_TTABLE);
     if (t == NULL) {
@@ -1440,7 +1439,8 @@ static int lpb_decode_helper(lua_State *L) {
 }
 
 static int Lpb_decode(lua_State *L) {
-    pb_Type *t = lpb_checktype(L, 1);
+    pb_State *S = default_state(L);
+    pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
     pb_SliceExt s;
     if (t == NULL) {
         lua_pushnil(L);

@@ -281,6 +281,17 @@ function _G.test_type()
 
    check_msg(".TestTypes", data)
    pb.clear "TestTypes"
+
+   check_load [[
+      message test_type {
+         optional uint32 r = 1;
+      }
+      message test2 {
+        optional test_type test_type = 1;
+      } ]]
+   check_msg("test_type", {r = 1})
+   pb.clear "test_type"
+   pb.clear "test2"
 end
 
 function _G.test_default()
