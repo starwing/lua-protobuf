@@ -842,7 +842,11 @@ local function check_enum(self, lex, info)
    for _, v in iter(info, 'value') do
       lex.pos = self.locmap[v]
       check_dup(self, lex, 'enum name', names, 'name', v)
-      check_dup(self, lex, 'enum number', numbers, 'number', v)
+      if info.options and info.options.options and info.options.options.allow_alias then
+          --nothing todo for allow_alias skip the enum value check
+      else
+          check_dup(self, lex, 'enum number', numbers, 'number', v)
+      end
    end
 end
 
