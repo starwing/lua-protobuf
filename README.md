@@ -4,6 +4,8 @@
 
 中文使用说明：https://zhuanlan.zhihu.com/p/26014103
 
+QQ群：485016061 [![lua-protobuf1交流群](https://pub.idqqimg.com/wpa/images/group.png)](https://shang.qq.com/wpa/qunwpa?idkey=d7e2973604a723c4f77d0a837df39be26e15be2c2ec29d5ebfdb64f94e74e6ae)
+
 This project offers a simple C library for basic protobuf wire format encode/decode, it splits to several modules:
   - `pb.slice`: a wire format decode module.
   - `pb.buffer`: a buffer implement that use to encode basic types into protobuf's wire format.  It also can be used to support streaming decode protobuf data.
