@@ -6,3 +6,7 @@
 *.gcov
 *.gcda
 *.gcno
+*.pb
+*.dSYM
+*.out
+test*.lua

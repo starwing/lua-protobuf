@@ -84,7 +84,7 @@ end
 
 function Lexer:comment()
    local pos = self "^%/%/[^\n]*\n?()"
-   if pos then
+   if not pos then
       if self "^%/%*" then
          pos = self "^%/%*.-%*%/()"
          if not pos then
@@ -422,47 +422,6 @@ local function label_field(self, lex, ident)
    return info, map_entry
 end
 
-local function make_subparser(self, lex)
-   local sub = {
-      syntax  = "proto2";
-      locmap  = {};
-      prefix  = ".";
-      lex     = lex;
-      parent  = self;
-   }
-   sub.loaded  = self.loaded
-   sub.typemap = self.typemap
-   sub.paths   = self.paths
-
-   function sub.import_fallback(import_name)
-      if self.unknown_import == true then
-         return true
-      elseif type(self.unknown_import) == 'string' then
-         return import_name:match(self.unknown_import) and true or nil
-      elseif self.unknown_import then
-         return self:unknown_import(import_name)
-      end
-   end
-
-   function sub.type_fallback(type_name)
-      if self.unknown_type == true then
-         return true
-      elseif type(self.unknown_type) == 'string' then
-         return type_name:match(self.unknown_type) and true
-      elseif self.unknown_type then
-         return self:unknown_type(type_name)
-      end
-   end
-
-   function sub.on_import(info)
-      if self.on_import then
-         return self.on_import(info)
-      end
-   end
-
-   return setmetatable(sub, Parser)
-end
-
 local toplevel = {} do
 
 function toplevel:package(lex, info)
@@ -736,6 +695,47 @@ end
 
 end
 
+local function make_context(self, lex)
+   local ctx = {
+      syntax  = "proto2";
+      locmap  = {};
+      prefix  = ".";
+      lex     = lex;
+      parser  = self;
+   }
+   ctx.loaded  = self.loaded
+   ctx.typemap = self.typemap
+   ctx.paths   = self.paths
+
+   function ctx.import_fallback(import_name)
+      if self.unknown_import == true then
+         return true
+      elseif type(self.unknown_import) == 'string' then
+         return import_name:match(self.unknown_import) and true or nil
+      elseif self.unknown_import then
+         return self:unknown_import(import_name)
+      end
+   end
+
+   function ctx.type_fallback(type_name)
+      if self.unknown_type == true then
+         return true
+      elseif type(self.unknown_type) == 'string' then
+         return type_name:match(self.unknown_type) and true
+      elseif self.unknown_type then
+         return self:unknown_type(type_name)
+      end
+   end
+
+   function ctx.on_import(info)
+      if self.on_import then
+         return self.on_import(info)
+      end
+   end
+
+   return setmetatable(ctx, Parser)
+end
+
 function Parser:parse(src, name)
    name = name or "<input>"
 
@@ -750,7 +750,7 @@ function Parser:parse(src, name)
    local lex = Lexer.new(name or "<input>", src)
    local info = { name = lex.name }
    if name then self.loaded[name] = true end
-   local ctx = make_subparser(self, lex)
+   local ctx = make_context(self, lex)
 
    local syntax = lex:keyword('syntax', 'opt')
    if syntax then
@@ -842,9 +842,9 @@ local function check_enum(self, lex, info)
    for _, v in iter(info, 'value') do
       lex.pos = self.locmap[v]
       check_dup(self, lex, 'enum name', names, 'name', v)
-      if info.options and info.options.options and info.options.options.allow_alias then
-          --nothing todo for allow_alias skip the enum value check
-      else
+      if not (info.options
+              and info.options.options
+              and info.options.options.allow_alias) then
           check_dup(self, lex, 'enum number', numbers, 'number', v)
       end
    end
