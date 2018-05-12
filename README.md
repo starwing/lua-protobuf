@@ -295,8 +295,8 @@ All these functions return true value when success, and return `nil, errmsg` whe
 | ----------------------- | ------- | ----------------------------------- |
 | `io.read()`             | string  | read all binary data from `stdin`   |
 | `io.read(string)`       | string  | read all binary data from file name |
-| `io.write(string, ...)` | string  | write binary data to file name      |
-| `io.dump(...)`          | true    | write binary data to `stdout`       |
+| `io.write(...)`         | true    | write binary data to `stdout`       |
+| `io.dump(string, ...)`  | string  | write binary data to file name      |
 
 
 
