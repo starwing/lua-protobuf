@@ -300,9 +300,8 @@ static void lpb_readtype(lua_State *L, int type, pb_SliceExt *s) {
         lpb_readbytes(L, s, v.s);
         lua_pushlstring(L, v.s->base.p, pb_len(v.s->base));
         break;
-    /* NOT REACHED */
-    /*default:
-     *    luaL_error(L, "unknown type %s", pb_typename(type, NULL));*/
+	default:
+		luaL_error(L, "unknown type %s (%d)", pb_typename(type, NULL), type);
     }
 }
 
@@ -1347,11 +1346,11 @@ static void lpbD_field(lua_State *L, pb_SliceExt *s, pb_Field *f, uint32_t tag) 
 
     case PB_Tmessage:
         lpb_readbytes(L, s, &sv);
-        if (f->type) {
+		if (f->type) {
             lua_newtable(L);
             lpb_decode(L, &sv, f->type);
+			break;
         }
-        break;
 
     default:
         if (!f->packed && pb_wtypebytype(f->type_id) != (int)pb_gettype(tag))

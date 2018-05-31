@@ -859,6 +859,9 @@ local function check_message(self, lex, info)
       check_dup(self, lex, 'field number', numbers, 'number', v)
       check_field(self, lex, v)
    end
+   for _, v in iter(info, 'nested_type') do
+      check_message(self, lex, v)
+   end
    for _, v in iter(info, 'extension') do
       lex.pos = self.locmap[v]
       check_field(self, lex, v)
