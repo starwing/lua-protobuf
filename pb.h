@@ -305,9 +305,10 @@ struct pb_Type {
     pb_Table    field_tags;
     pb_Table    field_names;
     pb_Table    oneof_index;
-    unsigned    field_count : 30;
-    unsigned    is_enum  : 1;
-    unsigned    is_map   : 1;
+    unsigned    field_count : 29;
+    unsigned    is_enum   : 1;
+    unsigned    is_map    : 1;
+    unsigned    is_proto3 : 1;
 };
 
 
@@ -1219,14 +1220,16 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t nu
 }
 
 PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
-    pb_FieldEntry *nf = (pb_FieldEntry*)pb_gettable(&t->field_names,
-            (pb_Key)f->name);
-    pb_FieldEntry *tf = (pb_FieldEntry*)pb_gettable(&t->field_tags,
-            (pb_Key)f->number);
-    int count = 0;
-    if (nf && nf->value == f) nf->entry.key = 0, nf->value = NULL, ++count;
-    if (tf && tf->value == f) tf->entry.key = 0, nf->value = NULL, ++count;
-    if (count) pbT_freefield(S, f), --t->field_count;
+    if (S && t && f) {
+        pb_FieldEntry *nf = (pb_FieldEntry*)pb_gettable(&t->field_names,
+                (pb_Key)f->name);
+        pb_FieldEntry *tf = (pb_FieldEntry*)pb_gettable(&t->field_tags,
+                (pb_Key)f->number);
+        int count = 0;
+        if (nf && nf->value == f) nf->entry.key = 0, nf->value = NULL, ++count;
+        if (tf && tf->value == f) tf->entry.key = 0, nf->value = NULL, ++count;
+        if (count) pbT_freefield(S, f), --t->field_count;
+    }
 }
 
 
@@ -1579,6 +1582,7 @@ static void pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Loader *L) {
     pb_Type *t = pb_newtype(S, pb_newname(S,
                 pbL_prefixname(&L->b, info->name, &curr)));
     t->is_map = info->is_map;
+    t->is_proto3 = L->is_proto3;
     for (i = 0, count = pbL_count(info->oneof_decl); i < count; ++i) {
         pb_OneofEntry *e = (pb_OneofEntry*)pb_settable(&t->oneof_index, i+1);
         e->name = pb_newname(S, info->oneof_decl[i]);

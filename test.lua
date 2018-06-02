@@ -315,8 +315,17 @@ function _G.test_default()
          optional bool bool2 = 16 [default=foo];
       } ]]
    check_msg("TestDefault", { foo = 1 })
+   local function copy_no_meta(t)
+      local r = {}
+      for k, v in pairs(t) do
+         if k ~= "__index" then
+            r[k] = v
+         end
+      end
+      return r
+   end
    pb.option "enum_as_value"
-   table_eq(pb.defaults "TestDefault", {
+   table_eq(copy_no_meta(pb.defaults "TestDefault"), {
             defaulted_int = 777,
             defaulted_bool = true,
             defaulted_str = "foo",
@@ -326,7 +335,8 @@ function _G.test_default()
             bool2 = nil
          })
    pb.option "enum_as_name"
-   table_eq(pb.defaults "TestDefault", {
+   pb.defaults("TestDefault", "clear")
+   table_eq(copy_no_meta(pb.defaults "TestDefault"), {
             defaulted_int = 777,
             defaulted_bool = true,
             defaulted_str = "foo",
@@ -337,6 +347,56 @@ function _G.test_default()
          })
    pb.clear "TestDefault"
    pb.clear "TestDefaultColor"
+
+   check_load [[
+      syntax = "proto3";
+      enum TestDefaultColor {
+         RED = 0;
+         GREEN = 1;
+         BLUE = 2;
+      }
+      message TestNest{}
+      message TestDefault {
+         // some fields here
+         int32 foo = 1;
+
+         int32 defaulted_int = 10;
+         bool defaulted_bool = 11;
+         string defaulted_str = 12;
+         float defaulted_num = 13;
+
+         TestDefaultColor color = 14;
+         bool bool1 = 15;
+         bool bool2 = 16;
+         TestNest nest = 17;
+      } ]]
+   pb.option "enum_as_value"
+   table_eq(copy_no_meta(pb.defaults "TestDefault"), {
+            defaulted_int = 0,
+            defaulted_bool = false,
+            defaulted_str = "",
+            defaulted_num = 0.0,
+            color = 0,
+            bool1 = false,
+            bool2 = false
+         })
+
+   pb.option "use_default_metatable"
+   local dt = assert(pb.decode("TestDefault", ""))
+   eq(getmetatable(dt), pb.defaults "TestDefault")
+   eq(dt.defaulted_int, 0)
+   eq(dt.defaulted_bool, false)
+   eq(dt.defaulted_str, "")
+   eq(dt.defaulted_num, 0.0)
+   eq(dt.color, 0)
+   eq(dt.bool1, false)
+   eq(dt.bool2, false)
+
+   pb.option "no_default_metatable"
+
+   pb.option "enum_as_name"
+   pb.clear "TestDefault"
+   pb.clear "TestNest"
 end
 
 function _G.test_enum()
