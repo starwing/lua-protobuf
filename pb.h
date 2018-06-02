@@ -1227,7 +1227,7 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
                 (pb_Key)f->number);
         int count = 0;
         if (nf && nf->value == f) nf->entry.key = 0, nf->value = NULL, ++count;
-        if (tf && tf->value == f) tf->entry.key = 0, nf->value = NULL, ++count;
+        if (tf && tf->value == f) tf->entry.key = 0, tf->value = NULL, ++count;
         if (count) pbT_freefield(S, f), --t->field_count;
     }
 }

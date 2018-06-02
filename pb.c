@@ -263,8 +263,11 @@ static int lpb_hexchar(char ch) {
 static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
     int neg = 0;
     const char *s, *os;
-    lua_Integer li = lua_tointegerx(L, idx, isint);
-    uint64_t v = sizeof(li) >= 8 ? (uint64_t)li : pb_expandsig(li & 0xFFFFFFFF);
+#if LUA_VERSION_NUM >= 503
+    uint64_t v = (uint64_t)lua_tointegerx(L, idx, isint);
+#else
+    uint64_t v = (uint64_t)lua_tonumberx(L, idx, isint);
+#endif
     if (*isint) return v;
     if ((os = s = lua_tostring(L, idx)) == NULL) return 0;
     while (*s == '#' || *s == '+' || *s == '-')
@@ -314,7 +317,7 @@ static void lpb_pushinteger(lua_State *L, int64_t n, int mode) {
         lua_pushstring(L, p);
     }
     else if (LUA_VERSION_NUM >= 503 && sizeof(lua_Integer) >= 8)
-        lua_pushinteger(L, n);
+        lua_pushinteger(L, (lua_Integer)n);
     else
         lua_pushnumber(L, (lua_Number)n);
 }
@@ -1329,10 +1332,11 @@ static void lpbE_enum(lua_State *L, pb_Buffer *b, pb_Field *f) {
     else {
         pb_State *S = default_state(L);
         pb_Field *ev = pb_fname(f->type, pb_name(S, lua_tostring(L, -1)));
-        if (ev == NULL)
+        if (ev != NULL)
+            pb_addvarint32(b, ev->number);
+        else
             argerror(L, 2, "can not encode unknown enum '%s' at field '%s'",
                     lua_tostring(L, -1), (char*)f->name);
-        pb_addvarint32(b, ev->number);
     }
 }
 
