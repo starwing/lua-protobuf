@@ -93,7 +93,7 @@ function _G.test_io.test()
    fail("type 'Foo' does not exists", function() assert(pb.encode("Foo", {})) end)
    fail("type 'Foo' does not exists", function() assert(pb.decode("Foo", "")) end)
 
-   fail("string expected at field 'name', got boolean", function()
+   fail("string expected for field 'name', got boolean", function()
       assert(pb.encode("Person", { name = true }))
    end)
 
@@ -315,6 +315,17 @@ function _G.test_default()
          optional bool bool2 = 16 [default=foo];
       } ]]
    check_msg("TestDefault", { foo = 1 })
+   pb.option "enum_as_value"
+   table_eq(pb.defaults "TestDefault", {
+            defaulted_int = 777,
+            defaulted_bool = true,
+            defaulted_str = "foo",
+            defaulted_num = 0.125,
+            color = 0,
+            bool1 = false,
+            bool2 = nil
+         })
+   pb.option "enum_as_name"
    table_eq(pb.defaults "TestDefault", {
             defaulted_int = 777,
             defaulted_bool = true,
@@ -456,7 +467,7 @@ function _G.test_map()
    check_msg(".TestMap", data)
 
    local data2 = { map = { one = 1, [1]=1 } }
-   fail("string expected at field 'key', got number", function()
+   fail("string expected for field 'key', got number", function()
       local chunk = assert(pb.encode("TestMap", data2))
       table_eq(pb.decode("TestMap", chunk), { map = {one = 1} })
    end)
@@ -534,6 +545,20 @@ function _G.test_conv()
 
    eq(conv.decode_float(conv.encode_float(123.125)), 123.125)
    eq(conv.decode_double(conv.encode_double(123.125)), 123.125)
+
+   pb.option "int64_as_string"
+   eq(conv.decode_sint64(conv.encode_sint64("#1311768467294899695")), "#1311768467294899695")
+   pb.option "int64_as_hexstring"
+   eq(conv.decode_sint64(conv.encode_sint64("#0x1234567890ABCDEF")), "#0x1234567890ABCDEF")
+   pb.option "int64_as_number"
+   if _VERSION == "Lua 5.3" then
+      eq(conv.decode_sint64(conv.encode_sint64("#0x1234567890ABCDEF")), 0x1234567890ABCDEF)
+   else
+      assert(conv.decode_sint64(conv.encode_sint64("#0x1234567890ABCDEF")))
+   end
+
+   fail("number/string expected, got boolean", function() conv.encode_sint64(true) end)
+   fail("integer format error: '@xyz'", function() conv.encode_sint64('@xyz') end)
 end
 
 function _G.test_buffer()
@@ -541,6 +566,8 @@ function _G.test_buffer()
    eq(buffer.tohex(pb.pack("d", 4294967295)), "FF FF FF FF")
    if _VERSION == "Lua 5.3" then
       eq(buffer.tohex(pb.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
+   else
+      eq(buffer.tohex(pb.pack("q", "#9223372036854775807")), "FF FF FF FF FF FF FF 7F")
    end
    eq(pb.pack("s", "foo"), "\3foo")
    eq(pb.pack("cc", "foo", "bar"), "foobar")
@@ -564,6 +591,12 @@ function _G.test_buffer()
       b:pack("U", 9223372036854775807); eq(b:tohex(-9), "FF FF FF FF FF FF FF FF 7F")
       b:pack("X", 9223372036854775807); eq(b:tohex(-8), "FF FF FF FF FF FF FF 7F")
       b:pack("Y", 9223372036854775807); eq(b:tohex(-8), "FF FF FF FF FF FF FF 7F")
+   else
+      b:pack("I", "#9223372036854775807"); eq(b:tohex(-9), "FF FF FF FF FF FF FF FF 7F")
+      b:pack("J", "#9223372036854775807"); eq(b:tohex(-10), "FE FF FF FF FF FF FF FF FF 01")
+      b:pack("U", "#9223372036854775807"); eq(b:tohex(-9), "FF FF FF FF FF FF FF FF 7F")
+      b:pack("X", "#9223372036854775807"); eq(b:tohex(-8), "FF FF FF FF FF FF FF 7F")
+      b:pack("Y", "#9223372036854775807"); eq(b:tohex(-8), "FF FF FF FF FF FF FF 7F")
    end
    assert(#b ~= 0)
    assert(#b:reset() == 0)
@@ -574,7 +607,8 @@ function _G.test_buffer()
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
    fail("unmatch '(' in format", function() pb.pack "(" end)
    fail("unexpected ')' in format", function() pb.pack ")" end)
-   fail("number expected for type 'int32', got string", function() pb.pack("i", "foo") end)
+   fail("integer format error: 'foo'", function() pb.pack("i", "foo") end)
+   fail("number expected for type 'int32', got boolean", function() pb.pack("i", true) end)
    fail("invalid formater: '!'", function() pb.pack '!' end)
 
    b = buffer.new()
@@ -584,7 +618,7 @@ function _G.test_buffer()
    b:reset("foo", "bar")
    eq(#b, 6)
 
-   fail("number expected, got string", function() pb.pack("v", "foo") end)
+   fail("integer format error: 'foo'", function() pb.pack("v", "foo") end)
 
    b = buffer.new()
    fail("encode bytes fail", function() b:pack("#", 10) end)
@@ -636,6 +670,10 @@ function _G.test_slice()
    eq(pb.unpack("\255\255\255\255", "d"), 4294967295)
    if _VERSION == "Lua 5.3" then
       eq(pb.unpack("\255\255\255\255\255\255\255\127", "q"), 9223372036854775807)
+   else
+      pb.option 'int64_as_string'
+      eq(pb.unpack("\255\255\255\255\255\255\255\127", "q"), '#9223372036854775807')
+      pb.option 'int64_as_number'
    end
    eq(pb.unpack("\3foo", "s"), "foo")
    eq({pb.unpack("foobar", "cc", 3, 3)}, {"foo", "bar"})
@@ -672,6 +710,94 @@ end
 
 function _G.test_load()
    eq({pb.load "\10\2\18\3"}, {false, 4})
+
+   local buf = buffer.new()
+   local function v(n) return n*8 + 0 end
+   local function s(n) return n*8 + 2 end
+   buf:pack("v(v(vsv(vsvvvvv(vvvv)vv)vvv(vv)v(vv)))vv",
+            s(1), -- FileDescriptorSet.file
+            s(4), -- FileDescriptorProto.message_type
+            s(1), -- DescriptorProto.name
+            "load_test",
+            s(2), -- DescriptorProto.field
+            s(1), -- FieldDescriptorProto.name
+            "test_unknown",
+            v(3), -- FieldDescriptorProto.number
+            1,
+            v(4), -- FieldDescriptorProto.label
+            1,
+            s(8), -- FieldDescriptorProto.options
+            v(2), -- FieldOptions.packed
+            1,
+            v(100), 0, -- unknown field options
+            v(100), 0, -- unknown field entry
+            v(100), 0, -- unknown type entry
+            s(8), -- DescriptorProto.oneof_decl
+            v(100), 0, -- unknown oneof entry
+            s(7), -- DescriptorProto.options
+            v(100), 0, -- unknown type options
+            v(100), 0 -- unknown file options
+            )
+   eq(pb.load(buf:result()), true)
+   fail("unknown type <unknown>", function() assert(pb.encode("load_test", { test_unknown = 1 })) end)
+   fail("unknown type <unknown>", function() assert(pb.decode("load_test", "\8\1")) end)
+
+   buf:reset()
+   buf:pack("v(v(vsv(vsvvvv)))",
+            s(1), s(4), s(1), "load_test",
+            s(2), s(1), "test_unknown", v(3), 1, v(4), 1)
+   eq(pb.load(buf:result()), true)
+   fail("type mismatch at offset 2, <unknown> expected for type <unknown>, got varint",
+            function() assert(pb.decode("load_test", "\8\1")) end)
+
+   buf:reset()
+   buf:pack("v(v(vsv(vsvvvv)))",
+            s(1), s(4), s(1), "load_test",
+            s(2), s(1), "test_unknown", v(3), 2, v(4), 1)
+   eq(pb.load(buf:result()), true)
+
+   buf:reset()
+   buf:pack("v(v(vsv(vsvvvv)))",
+            s(1), s(4), s(1), "load_test",
+            s(2), s(1), "test_unknown", v(3), 1, v(4), 1)
+   eq(pb.load(buf:result()), true)
+
+   buf:reset()
+   buf:pack("v(v(vsv(vsvvvv)))",
+            s(1), s(4), s(1), "load_test",
+            s(2), s(1), "test_unknown2", v(3), 1, v(4), 1)
+   eq(pb.load(buf:result()), true)
+
+   buf:reset()
+   buf:pack("v(v(vsv(vsvvvv)))",
+            s(1), s(4), s(1), "load_test",
+            s(2), s(1), "test_unknown", v(3), 1, v(4), 1)
+   eq(pb.load(buf:result()), true)
+
+   buf:reset()
+   buf:pack("v(v(vsv(vvvv)))",
+            s(1), s(4), s(1), "load_test",
+            s(2), v(3), 1, v(4), 1)
+   eq(pb.load(buf:result()), true)
+
+   buf:reset()
+   buf:pack("v(v(vsv(vvvvvv)))",
+            s(1), s(4), s(1), "load_test",
+            s(2), v(3), 1, v(4), 1, v(5), 11)
+   eq(pb.load(buf:result()), true)
+
+   buf:reset()
+   buf:pack("v(v(vsv(vvvv)))",
+            s(1), s(4), s(1), "load_test",
+            s(6), v(3), 1, v(4), 1)
+   eq(pb.load(buf:result()), true)
+
+   buf:reset()
+   buf:pack("v(v(v(vx)))", s(1), s(4), s(6), v(3), -1)
+   eq({pb.load(buf:result())}, { false, 8 })
+
+   pb.clear "load_test"
 end
 
 os.exit(lu.LuaUnit.run(), true)
+-- cc: run='rm *.gcda; lua test.lua; gcov pb.c'

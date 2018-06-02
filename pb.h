@@ -334,13 +334,13 @@ PB_NS_BEGIN
 /* conversions */
 
 PB_API uint32_t pb_encode_sint32(int32_t value)
-{ return ((uint32_t)value << 1) ^ (value >> 31); }
+{ return ((uint32_t)value << 1) ^ (value < 0 ? ~(uint32_t)0 : (uint32_t)0); }
 
 PB_API int32_t pb_decode_sint32(uint32_t value)
 { return (value >> 1) ^ -(int32_t)(value & 1); }
 
 PB_API uint64_t pb_encode_sint64(int64_t value)
-{ return ((uint64_t)value << 1) ^ (value >> 63); }
+{ return ((uint64_t)value << 1) ^ (value < 0 ? ~(uint64_t)0 : (uint64_t)0); }
 
 PB_API int64_t pb_decode_sint64(uint64_t value)
 { return (value >> 1) ^ -(int64_t)(value & 1); }
@@ -676,8 +676,8 @@ PB_API size_t pb_resizebuffer(pb_Buffer *b, size_t len) {
         newsize += newsize >> 1;
     if (newsize > b->size) {
         char *newbuff = b->buff == b->init_buff ? NULL : b->buff;
-        newbuff = (char*)realloc(newbuff, newsize);
-        if (newbuff == NULL) return 0;
+        if ((newbuff = (char*)realloc(newbuff, newsize)) == NULL)
+            return 0;
         if (b->buff == b->init_buff)
             memcpy(newbuff, b->buff, b->size);
         b->buff     = newbuff;
@@ -1548,30 +1548,28 @@ static void pbL_loadEnum(pb_State *S, pbL_EnumInfo *info, pb_Loader *L) {
 }
 
 static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Loader *L, pb_Type *t) {
-    if (t != NULL || pb_len(info->extendee) != 0) {
-        pb_Type *ft = pb_newtype(S, pb_newname(S, info->type_name));
-        pb_Field *f;
-        if (!ft && (info->type == PB_Tmessage || info->type == PB_Tenum))
-            return;
-        if (t == NULL && !(t = pb_newtype(S, pb_newname(S, info->extendee))))
-            return;
-        if (!(f = pb_newfield(S, t, pb_newname(S, info->name), info->number)))
-            return;
-        f->default_value = pb_newname(S, info->default_value);
-        f->type     = ft;
-        f->type_id  = info->type;
-        f->repeated = info->label == 3; /* repeated */
-        f->packed   = info->packed >= 0 ? info->packed : L->is_proto3;
-        if (f->type_id >= 9 && f->type_id <= 12) f->packed = 0;
-        f->scalar   = f->type == NULL;
-        if (info->oneof_index != 0) {
-            pb_OneofEntry *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
-                    info->oneof_index), *fe;
-            if (e != NULL) {
-                fe = (pb_OneofEntry*)pb_settable(&t->oneof_index, (pb_Key)f);
-                fe->name = pb_usename(e->name);
-                fe->index = e->index;
-            }
+    pb_Type *ft = pb_newtype(S, pb_newname(S, info->type_name));
+    pb_Field *f;
+    if (!ft && (info->type == PB_Tmessage || info->type == PB_Tenum))
+        return;
+    if (t == NULL && !(t = pb_newtype(S, pb_newname(S, info->extendee))))
+        return;
+    if (!(f = pb_newfield(S, t, pb_newname(S, info->name), info->number)))
+        return;
+    f->default_value = pb_newname(S, info->default_value);
+    f->type     = ft;
+    f->type_id  = info->type;
+    f->repeated = info->label == 3; /* repeated */
+    f->packed   = info->packed >= 0 ? info->packed : L->is_proto3;
+    if (f->type_id >= 9 && f->type_id <= 12) f->packed = 0;
+    f->scalar   = f->type == NULL;
+    if (info->oneof_index != 0) {
+        pb_OneofEntry *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
+                info->oneof_index), *fe;
+        if (e != NULL) {
+            fe = (pb_OneofEntry*)pb_settable(&t->oneof_index, (pb_Key)f);
+            fe->name = pb_usename(e->name);
+            fe->index = e->index;
         }
     }
 }
