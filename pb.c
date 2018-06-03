@@ -1321,23 +1321,19 @@ static void lpb_checktable(lua_State *L, pb_Field *f) {
 }
 
 static void lpbE_enum(lua_State *L, pb_Buffer *b, pb_Field *f) {
+    pb_Field *ev;
     int type = lua_type(L, -1);
-    if (type == LUA_TNUMBER) {
-        lua_Integer v = lua_tointeger(L, -1);
-        pb_addvarint64(b, (uint64_t)v);
-    }
-    else if (type != LUA_TSTRING && type != LUA_TUSERDATA)
+    if (type == LUA_TNUMBER)
+        pb_addvarint64(b, (uint64_t)lua_tonumber(L, -1));
+    else if ((ev = pb_fname(f->type, pb_name(default_state(L),
+                        lua_tostring(L, -1)))) != NULL)
+        pb_addvarint32(b, ev->number);
+    else if (type != LUA_TSTRING)
         argerror(L, 2, "number/string expected at field '%s', got %s",
                 (char*)f->name, luaL_typename(L, -1));
-    else {
-        pb_State *S = default_state(L);
-        pb_Field *ev = pb_fname(f->type, pb_name(S, lua_tostring(L, -1)));
-        if (ev != NULL)
-            pb_addvarint32(b, ev->number);
-        else
-            argerror(L, 2, "can not encode unknown enum '%s' at field '%s'",
-                    lua_tostring(L, -1), (char*)f->name);
-    }
+    else
+        argerror(L, 2, "can not encode unknown enum '%s' at field '%s'",
+                lua_tostring(L, -1), (char*)f->name);
 }
 
 static void lpbE_field(lua_State *L, pb_Buffer *b, pb_Field *f, int hastag) {
