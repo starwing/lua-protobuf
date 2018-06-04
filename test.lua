@@ -769,7 +769,9 @@ function _G.test_slice()
 end
 
 function _G.test_load()
-   eq({pb.load "\10\2\18\3"}, {false, 4})
+   local old = pb.state(nil) -- discard previous one and save
+   eq({pb.load "\16\255\255\1\10\2\18\3"}, {false, 8})
+   pb.state(nil) -- discard previous one
 
    local buf = buffer.new()
    local function v(n) return n*8 + 0 end
@@ -856,8 +858,9 @@ function _G.test_load()
    buf:pack("v(v(v(vx)))", s(1), s(4), s(6), v(3), -1)
    eq({pb.load(buf:result())}, { false, 8 })
 
-   pb.clear "load_test"
+   pb.state(old)
 end
 
 os.exit(lu.LuaUnit.run(), true)
--- cc: run='rm *.gcda; lua test.lua; gcov pb.c'
+-- unixcc: run='rm *.gcda; lua test.lua; gcov pb.c'
+-- win32cc: run='del *.gcda & lua test.lua & gcov pb.c'

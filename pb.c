@@ -152,20 +152,30 @@ static lpb_State *default_lstate(lua_State *L) {
     if (lua53_rawgetp(L, LUA_REGISTRYINDEX, state_name) == LUA_TUSERDATA) {
         LS = (lpb_State*)lua_touserdata(L, -1);
         lua_pop(L, 1);
-    }
-    else {
+    } else {
+        lua_pop(L, 1);
         LS = lua_newuserdata(L, sizeof(lpb_State));
-        lua_replace(L, -2);
         memset(LS, 0, sizeof(lpb_State));
         LS->defs_index = LUA_NOREF;
         pb_init(&LS->base);
-        lua_createtable(L, 0, 1);
-        lua_pushcfunction(L, Lpb_delete);
-        lua_setfield(L, -2, "__gc");
-        lua_setmetatable(L, -2);
+        luaL_setmetatable(L, PB_STATE);
         lua_rawsetp(L, LUA_REGISTRYINDEX, state_name);
     }
     return LS;
+}
+
+static int Lpb_state(lua_State *L) {
+    default_lstate(L);
+    lua_rawgetp(L, LUA_REGISTRYINDEX, state_name);
+    if (lua_isnil(L, 1)) {
+        lua_pushnil(L);
+        lua_rawsetp(L, LUA_REGISTRYINDEX, state_name);
+    } else if (!lua_isnoneornil(L, 1)) {
+        luaL_checkudata(L, 1, PB_STATE);
+        lua_pushvalue(L, 1);
+        lua_rawsetp(L, LUA_REGISTRYINDEX, state_name);
+    }
+    return 1;
 }
 
 
@@ -218,8 +228,7 @@ static pb_Slice lpb_toslice(lua_State *L, int idx) {
         size_t len;
         const char *s = lua_tolstring(L, idx, &len);
         ret = pb_lslice(s, len);
-    }
-    else if (type == LUA_TUSERDATA) {
+    } else if (type == LUA_TUSERDATA) {
         pb_Buffer *buffer;
         pb_SliceExt *s;
         if ((buffer = test_buffer(L, idx)) != NULL)
@@ -278,8 +287,7 @@ static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
             if (n < 0) break;
             v = v << 4 | n;
         }
-    }
-    else {
+    } else {
         for (; *s != '\0'; ++s) {
             int n = lpb_hexchar(*s);
             if (n < 0 || n > 10) break;
@@ -306,8 +314,7 @@ static void lpb_pushinteger(lua_State *L, int64_t n, int mode) {
         if (mode == LPB_STRING) {
             for (*p = '\0'; un > 0; un /= 10)
                 *--p = "0123456789"[un % 10];
-        }
-        else if (mode == LPB_HEXSTRING) {
+        } else if (mode == LPB_HEXSTRING) {
             for (*p = '\0'; un > 0; un >>= 4)
                 *--p = "0123456789ABCDEF"[un & 0xF];
             *--p = 'x', *--p = '0';
@@ -315,8 +322,7 @@ static void lpb_pushinteger(lua_State *L, int64_t n, int mode) {
         if (neg) *--p = '-';
         *--p = '#';
         lua_pushstring(L, p);
-    }
-    else if (LUA_VERSION_NUM >= 503 && sizeof(lua_Integer) >= 8)
+    } else if (LUA_VERSION_NUM >= 503 && sizeof(lua_Integer) >= 8)
         lua_pushinteger(L, (lua_Integer)n);
     else
         lua_pushnumber(L, (lua_Number)n);
@@ -995,8 +1001,7 @@ static int Lslice_enter(lua_State *L) {
                     lpb_offset(&s->curr));
         view.head = view.base.p;
         lpb_enterview(L, s, view);
-    }
-    else {
+    } else {
         lua_Integer i = 1, j = -1;
         lua_Integer range = rangerelat(L, 2, &i, &j, s->curr.base.end - s->curr.head);
         view.base.p   = s->curr.head + i - 1;
@@ -1016,8 +1021,7 @@ static int Lslice_leave(lua_State *L) {
     else if (count == (lua_Integer)s->used) {
         s->curr = s->buff[0];
         s->used = 1;
-    }
-    else {
+    } else {
         s->used -= (size_t)count;
         s->curr = s->buff[s->used];
     }
@@ -1224,8 +1228,7 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_prot
                 ret = 1, lua_pushstring(L, (char*)f->name);
             else
                 ret = 1, lpb_pushinteger(L, f->number, LS->int64_mode);
-        }
-        else if (is_proto3) ret = 1, lua_pushinteger(L, 0);
+        } else if (is_proto3) ret = 1, lua_pushinteger(L, 0);
         break;
     case PB_Tmessage:
         return 0;
@@ -1235,16 +1238,14 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_prot
                 ret = 1, lua_pushboolean(L, 1);
             else if (f->default_value == pb_name(&LS->base, "false"))
                 ret = 1, lua_pushboolean(L, 0);
-        }
-        else if (is_proto3) ret = 1, lua_pushboolean(L, 0);
+        } else if (is_proto3) ret = 1, lua_pushboolean(L, 0);
         break;
     case PB_Tdouble: case PB_Tfloat:
         if (f->default_value) {
             lua_Number ln = (lua_Number)strtod((char*)f->default_value, &end);
             if ((char*)f->default_value == end) return 0;
             ret = 1, lua_pushnumber(L, ln);
-        }
-        else if (is_proto3) ret = 1, lua_pushnumber(L, 0.0);
+        } else if (is_proto3) ret = 1, lua_pushnumber(L, 0.0);
         break;
 
     default:
@@ -1252,8 +1253,7 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_prot
             lua_Integer li = (lua_Integer)strtol((char*)f->default_value, &end, 10);
             if ((char*)f->default_value == end) return 0;
             ret = 1, lpb_pushinteger(L, li, LS->int64_mode);
-        }
-        else if (is_proto3) ret = 1, lua_pushnumber(L, 0.0);
+        } else if (is_proto3) ret = 1, lua_pushnumber(L, 0.0);
     }
     return ret;
 }
@@ -1389,8 +1389,7 @@ static void lpbE_repeated(lua_State *L, pb_Buffer *b, pb_Field *f) {
             lua_pop(L, 1);
         }
         lpb_addlength(L, b, len);
-    }
-    else {
+    } else {
         for (i = 1; lua53_rawgeti(L, -1, i) != LUA_TNIL; ++i) {
             lpbE_field(L, b, f, 1);
             lua_pop(L, 1);
@@ -1536,8 +1535,7 @@ static void lpbD_repeated(lua_State *L, lpb_State *LS, pb_SliceExt *s, pb_Field 
             lpbD_field(L, LS, &p, f, tag);
             lua_rawseti(L, -2, ++len);
         }
-    }
-    else {
+    } else {
         lpbD_field(L, LS, s, f, tag);
         lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
     }
@@ -1561,8 +1559,7 @@ static int lpb_decode(lua_State *L, lpb_State *LS, pb_SliceExt *s, pb_Type *t) {
                 lpb_readbytes(L, s, &sv);
                 lpb_decode(L, LS, &sv, f->type);
                 lua_pop(L, 1);
-            }
-            else {
+            } else {
                 lua_pushstring(L, (char*)f->name);
                 lpbD_field(L, LS, s, f, tag);
                 lua_rawset(L, -3);
@@ -1639,8 +1636,8 @@ static int Lpb_option(lua_State *L) {
 
 LUALIB_API int luaopen_pb(lua_State *L) {
     luaL_Reg libs[] = {
-        { "pack",   Lbuf_pack     },
-        { "unpack", Lslice_unpack },
+        { "pack",     Lbuf_pack     },
+        { "unpack",   Lslice_unpack },
 #define ENTRY(name) { #name, Lpb_##name }
         ENTRY(clear),
         ENTRY(load),
@@ -1656,14 +1653,24 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(tohex),
         ENTRY(result),
         ENTRY(option),
+        ENTRY(state),
 #undef  ENTRY
         { NULL, NULL }
     };
+    luaL_Reg meta[] = {
+        { "__gc", Lpb_delete },
+        { "setdefault", Lpb_state }
+    };
+    if (luaL_newmetatable(L, PB_STATE)) {
+        luaL_setfuncs(L, meta, 0);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -2, "__index");
+    }
     luaL_newlib(L, libs);
     return 1;
 }
 
-/* cc: flags+='-O0 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
+/* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
  * maccc: flags+='-shared -undefined dynamic_lookup' output='pb.so'
  * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */
 

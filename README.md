@@ -181,32 +181,36 @@ in below functions, we have several types that has special means:
 
 all functions returns `nil, errmsg` when meet errors.
 
-| Function                       | Returns   | Description                                       |
-| ------------------------------ | --------- | ------------------------------------------------- |
-| `pb.clear()`                   | None      | clear all types                                   |
-| `pb.clear(type)`               | None      | delete specific type                              |
-| `pb.load(data)`                | true      | load a binary schema data into `pb` module        |
-| `pb.loadfile(string)`          | true      | same as `pb.load()`, but accept file name         |
-| `pb.encode(type, table)`       | string    | encode a message table into binary form           |
-| `pb.encode(type, table, b)`    | buffer    | encode a message table into binary form to buffer |
-| `pb.decode(type, data)`        | table     | decode a binary message into Lua table            |
-| `pb.decode(type, data, table)` | table     | decode a binary message into a given Lua table    |
-| `pb.pack(fmt, ...)`            | string    | same as `buffer.pack()` but return string         |
-| `pb.unpack(data, fmt, ...)`    | values... | same as `slice.unpack()` but accept data          |
-| `pb.types()`                   | iterator  | iterate all types in `pb` module                  |
-| `pb.type(type)`                | see below | return informations for specific type             |
-| `pb.fields(type)`              | iterator  | iterate all fields in a message                   |
-| `pb.field(type, string)`       | see below | return informations for specific field of type    |
-| `pb.enum(type, string)`        | number    | get the value of a enum by name                   |
-| `pb.enum(type, number)`        | string    | get the name of a enum by value                   |
-| `pb.defaults(type[, table])`   | table     | get the default table of type                     |
-| `pb.option(string)`            | string    | set options to decoder/encoder                    |
+| Function                       | Returns    | Description                                       |
+| ------------------------------ | ---------- | ------------------------------------------------- |
+| `pb.clear()`                   | None       | clear all types                                   |
+| `pb.clear(type)`               | None       | delete specific type                              |
+| `pb.load(data)`                | true       | load a binary schema data into `pb` module        |
+| `pb.loadfile(string)`          | true       | same as `pb.load()`, but accept file name         |
+| `pb.encode(type, table)`       | string     | encode a message table into binary form           |
+| `pb.encode(type, table, b)`    | buffer     | encode a message table into binary form to buffer |
+| `pb.decode(type, data)`        | table      | decode a binary message into Lua table            |
+| `pb.decode(type, data, table)` | table      | decode a binary message into a given Lua table    |
+| `pb.pack(fmt, ...)`            | string     | same as `buffer.pack()` but return string         |
+| `pb.unpack(data, fmt, ...)`    | values...  | same as `slice.unpack()` but accept data          |
+| `pb.types()`                   | iterator   | iterate all types in `pb` module                  |
+| `pb.type(type)`                | see below  | return informations for specific type             |
+| `pb.fields(type)`              | iterator   | iterate all fields in a message                   |
+| `pb.field(type, string)`       | see below  | return informations for specific field of type    |
+| `pb.enum(type, string)`        | number     | get the value of a enum by name                   |
+| `pb.enum(type, number)`        | string     | get the name of a enum by value                   |
+| `pb.defaults(type[, table])`   | table      | get the default table of type                     |
+| `pb.option(string)`            | string     | set options to decoder/encoder                    |
+| `pb.state()`                   | `pb.State` | retrieve current pb state                         |
+| `pb.state(newstate | nil)`     | `pb.State` | set new pb state and retrieve the old one         |
 
-You can use `pb.(type|field)[s]()` functions to retrieve type informations for loaded messages.  
+#### Type Information
+
+You can use `pb.(type|field)[s]()` functions to retrieve type information for loaded messages.  
 
 `pb.type()` returns multiple informations for specified type:
 
-- name : the full qualitier name of type, e.g. ".package.TypeName"
+- name : the full qualifier name of type, e.g. ".package.TypeName"
 - basename: the type name without package prefix, e.g. "TypeName"
 - "map" | "enum" | "message": whether the type is a map_entry type, enum type or message type.
 
@@ -251,6 +255,8 @@ print(pb.enum("Color", "Red")) --> 1
 print(pb.enum("Color", 2)) --> "Green"
 ```
 
+#### Default Values
+
 Using `pb.defaults()`, you could get a table with all default values from a message:
 
 ```lua
@@ -272,7 +278,7 @@ Using `pb.defaults()`, you could get a table with all default values from a mess
 
 ```
 
-
+#### Options
 
 You can set options to change the behavior or decoder/encoder.
 current these options are supported:
@@ -289,7 +295,23 @@ current these options are supported:
 
  Note: The string returned by `int64_as_string` or `int64_as_hexstring` will prefix a `'#'` character. Because Lua may convert string and number, prefix a '#' makes lua return the string as-is.
 
-all routines in all module can accept `'#'` prefix string/hexstring as arguments.
+all routines in all module can accept `'#'` prefix `string`/`hexstring` as arguments.
+
+#### Multiple State
+
+`pb` module support multiple state. A state is a database that contains all type information of registered messages. You can retrieve current state by `pb.state()`, or set new state by `pb.state(newstate)`.
+
+Use `pb.state(nil)` to discard current state, but not to set a new one (the following routines call that use the state will create a new default state automatedly). Use `pb.state()` to retrieve current state without setting a new one. e.g.
+
+```lua
+local old = pb.state(nil)
+-- if you use protoc.lua, call protoc.reload() here.
+assert(pb.load(...))
+-- do someting ...
+pb.state(old)
+```
+
+Notice that if you use `protoc.lua` module, it will register some message to state, so you should call `proto.reload()` after setting a new state.
 
 
 
