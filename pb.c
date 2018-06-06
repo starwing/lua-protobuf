@@ -1659,7 +1659,8 @@ LUALIB_API int luaopen_pb(lua_State *L) {
     };
     luaL_Reg meta[] = {
         { "__gc", Lpb_delete },
-        { "setdefault", Lpb_state }
+        { "setdefault", Lpb_state },
+        { NULL, NULL }
     };
     if (luaL_newmetatable(L, PB_STATE)) {
         luaL_setfuncs(L, meta, 0);

@@ -266,7 +266,7 @@ function Parser:parsefile(name)
    if info then return info end
    local errors = {}
    for _, path in ipairs(self.paths) do
-      local fn = path.."/"..name
+      local fn = path ~= "" and path.."/"..name or name
       local fh, err = io.open(fn)
       if fh then
          local content = fh:read "*a"
