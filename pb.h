@@ -1616,17 +1616,16 @@ static void pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Loader *L) {
 }
 
 PB_API int pb_load(pb_State *S, pb_Slice *s) {
+    volatile int ret = PB_ERROR;
     pbL_FileInfo *files = NULL;
     pb_Loader L;
-    int ret;
-    if ((ret = setjmp(L.jbuf)) < 0)
-        return PB_ERROR;
-    else if (ret == 0) {
+    if (!setjmp(L.jbuf)) {
         L.s = *s;
         L.is_proto3 = 0;
         pb_initbuffer(&L.b);
         pbL_FileDescriptorSet(&L, &files);
         pbL_loadFile(S, files, &L);
+        ret = PB_OK;
     }
     pbL_delFileInfo(files);
     pb_resetbuffer(&L.b);
