@@ -202,7 +202,7 @@ all functions returns `nil, errmsg` when meet errors.
 | `pb.defaults(type[, table])`   | table      | get the default table of type                     |
 | `pb.option(string)`            | string     | set options to decoder/encoder                    |
 | `pb.state()`                   | `pb.State` | retrieve current pb state                         |
-| `pb.state(newstate | nil)`     | `pb.State` | set new pb state and retrieve the old one         |
+| `pb.state(newstate \| nil)`     | `pb.State` | set new pb state and retrieve the old one         |
 
 #### Type Information
 
