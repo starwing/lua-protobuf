@@ -10,3 +10,7 @@
 *.dSYM
 *.out
 test*.lua
+lua*/
+test*
+*.natvis
+out*

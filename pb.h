@@ -676,11 +676,10 @@ PB_API size_t pb_resizebuffer(pb_Buffer *b, size_t len) {
     while (newsize < PB_MAX_SIZET/2 && newsize < len)
         newsize += newsize >> 1;
     if (newsize > b->size) {
-        char *newbuff = b->buff == b->init_buff ? NULL : b->buff;
-        if ((newbuff = (char*)realloc(newbuff, newsize)) == NULL)
-            return 0;
-        if (b->buff == b->init_buff)
-            memcpy(newbuff, b->buff, b->size);
+        char *buff = b->buff == b->init_buff ? NULL : b->buff;
+        char *newbuff = (char*)realloc(buff, newsize);
+        if (newbuff == NULL) return 0;
+        if (b->buff == b->init_buff) memcpy(newbuff, b->buff, b->size);
         b->buff     = newbuff;
         b->capacity = newsize;
     }
@@ -1204,7 +1203,7 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t nu
             f->default_value = NULL;
             return f;
         }
-        if (!(f = (pb_Field*)pb_poolalloc(&S->typepool))) return NULL;
+        if (!(f = (pb_Field*)pb_poolalloc(&S->fieldpool))) return NULL;
         memset(f, 0, sizeof(pb_Field));
         f->name   = fname;
         f->type   = t;
