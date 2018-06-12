@@ -1434,6 +1434,7 @@ static int Lpb_encode(lua_State *L) {
     pb_State *S = default_state(L);
     pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
     pb_Buffer buf, *b = test_buffer(L, 3);
+    int ret;
     luaL_checktype(L, 2, LUA_TTABLE);
     if (t == NULL) {
         lua_pushnil(L);
@@ -1446,12 +1447,13 @@ static int Lpb_encode(lua_State *L) {
     lua_pushlightuserdata(L, t);
     lua_pushvalue(L, 3);
     lua_pushvalue(L, 2);
-    if (lua_pcall(L, 4, 1, 0) != LUA_OK) {
+    ret = lua_pcall(L, 4, 1, 0);
+    if (b == &buf) pb_resetbuffer(&buf);
+    if (ret != LUA_OK) {
         lua_pushnil(L);
         lua_insert(L, -2);
         return 2;
     }
-    if (b == &buf) pb_resetbuffer(&buf);
     return 1;
 }
 
