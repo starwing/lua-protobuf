@@ -617,6 +617,7 @@ function _G.test_conv()
       assert(conv.decode_sint64(conv.encode_sint64("#0x1234567890ABCDEF")))
    end
 
+   eq(conv.encode_sint32('---1'), 1)
    fail("number/string expected, got boolean", function() conv.encode_sint64(true) end)
    fail("integer format error: '@xyz'", function() conv.encode_sint64('@xyz') end)
 end

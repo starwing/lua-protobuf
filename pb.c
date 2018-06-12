@@ -280,7 +280,7 @@ static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
     if (*isint) return v;
     if ((os = s = lua_tostring(L, idx)) == NULL) return 0;
     while (*s == '#' || *s == '+' || *s == '-')
-        ++s, neg = (*s == '-') ^ neg;
+        neg = (*s == '-') ^ neg, ++s;
     if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
         for (s += 2; *s != '\0'; ++s) {
             int n = lpb_hexchar(*s);
