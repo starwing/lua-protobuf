@@ -697,8 +697,9 @@ PB_API void* pb_prepbuffsize(pb_Buffer *b, size_t len) {
 
 PB_API size_t pb_addslice(pb_Buffer *b, pb_Slice s) {
     size_t len = pb_len(s);
-    void *p = pb_prepbuffsize(b, len);
-    memcpy(p, s.p, len);
+    void *buff = pb_prepbuffsize(b, len);
+    if (buff == NULL) return 0;
+    memcpy(buff, s.p, len);
     return pb_addsize(b, len);
 }
 
