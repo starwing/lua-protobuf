@@ -360,7 +360,11 @@ static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type) {
         v.u64 = lpb_tointegerx(L, idx, &ret);
         if (ret) pb_addfixed32(b, v.u32);
         break;
-    case PB_Tint32: case PB_Tuint32:
+    case PB_Tint32:
+        v.u64 = lpb_tointegerx(L, idx, &ret);
+        if (ret) pb_addvarint64(b, pb_expandsig((uint32_t)v.u64));
+        break;
+    case PB_Tuint32:
         v.u64 = lpb_tointegerx(L, idx, &ret);
         if (ret) pb_addvarint32(b, v.u32);
         break;
@@ -386,7 +390,7 @@ static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type) {
         break;
     case PB_Tbytes: case PB_Tstring:
         v.s->base = lpb_toslice(L, idx);
-        if ((ret = v.s->base.p != NULL)) pb_addbytes(b, v.s->base);
+        if ((ret = (v.s->base.p != NULL))) pb_addbytes(b, v.s->base);
         expected = LUA_TSTRING;
         break;
     default:
@@ -1373,11 +1377,11 @@ static void lpbE_map(lpb_Env *e, pb_Field *f) {
     lua_State *L = e->L;
     pb_Field *kf = pb_field(f->type, 1);
     pb_Field *vf = pb_field(f->type, 2);
-    size_t len;
     if (kf == NULL || vf == NULL) return;
     lpb_checktable(L, f);
     lua_pushnil(L);
     while (lua_next(L, -2)) {
+        size_t len;
         pb_addvarint32(e->b, pb_pair(f->number, PB_TBYTES));
         len = pb_bufflen(e->b);
         lpbE_field(e, vf, 1);

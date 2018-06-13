@@ -641,7 +641,7 @@ function _G.test_buffer()
    b:pack("b", true);       eq(b:tohex(-1), "01")
    b:pack("f", 0.125);      eq(b:tohex(-4), "00 00 00 3E")
    b:pack("F", 0.125);      eq(b:tohex(-8), "00 00 00 00 00 00 C0 3F")
-   b:pack("i", 4294967295); eq(b:tohex(-5), "FF FF FF FF 0F")
+   b:pack("i", 4294967295); eq(b:tohex(-10), "FF FF FF FF FF FF FF FF FF 01")
    b:pack("j", 4294967295); eq(b:tohex(-1), "01")
    b:pack("u", 4294967295); eq(b:tohex(-5), "FF FF FF FF 0F")
    b:pack("x", 4294967295); eq(b:tohex(-4), "FF FF FF FF")
@@ -692,6 +692,9 @@ function _G.test_buffer()
    eq(#b, 2)
    b:pack("#", len)
    eq(b:tohex(), "02 08 01")
+
+   b = buffer.new()
+   eq(b:pack("i", -1):tohex(), "FF FF FF FF FF FF FF FF FF 01")
 end
 
 function _G.test_slice()

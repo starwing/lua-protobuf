@@ -103,7 +103,7 @@ typedef enum pb_FieldType {
 
 /* conversions */
 
-PB_API uint64_t pb_expandsig     ( int32_t v);
+PB_API uint64_t pb_expandsig     (uint32_t v);
 PB_API uint32_t pb_encode_sint32 ( int32_t v);
 PB_API  int32_t pb_decode_sint32 (uint32_t v);
 PB_API uint64_t pb_encode_sint64 ( int64_t v);
@@ -335,19 +335,19 @@ PB_NS_BEGIN
 /* conversions */
 
 PB_API uint32_t pb_encode_sint32(int32_t value)
-{ return ((uint32_t)value << 1) ^ (value < 0 ? ~(uint32_t)0 : (uint32_t)0); }
+{ return ((uint32_t)value << 1) ^ -(value < 0); }
 
 PB_API int32_t pb_decode_sint32(uint32_t value)
 { return (value >> 1) ^ -(int32_t)(value & 1); }
 
 PB_API uint64_t pb_encode_sint64(int64_t value)
-{ return ((uint64_t)value << 1) ^ (value < 0 ? ~(uint64_t)0 : (uint64_t)0); }
+{ return ((uint64_t)value << 1) ^ -(value < 0); }
 
 PB_API int64_t pb_decode_sint64(uint64_t value)
 { return (value >> 1) ^ -(int64_t)(value & 1); }
 
-PB_API uint64_t pb_expandsig(int32_t value)
-{ return (int64_t)value; }
+PB_API uint64_t pb_expandsig(uint32_t value)
+{ uint64_t m = (uint64_t)1U << 31; return (value ^ m) - m; }
 
 PB_API uint32_t pb_encode_float(float value)
 { union { uint32_t u32; float f; } u; u.f = value; return u.u32; }
@@ -1033,8 +1033,8 @@ PB_API pb_Name *pb_usename(pb_Name *name) {
 }
 
 PB_API void pb_delname(pb_State *S, pb_Name *name) {
-    pb_NameEntry *ne = (pb_NameEntry*)name - 1;
     if (name != NULL) {
+        pb_NameEntry *ne = (pb_NameEntry*)name - 1;
         if (ne->refcount <= 1)
         { pbN_delname(S, ne); return; }
         --ne->refcount;
@@ -1497,7 +1497,7 @@ static void pbL_FileDescriptorSet(pb_Loader *L, pbL_FileInfo **pinfo) {
     while (pb_readvarint32(&L->s, &tag)) {
         switch (tag) {
         case pb_pair(1, PB_TBYTES): /* FileDescriptorProto file */
-            pbL_FileDescriptorProto(L, pbL_add(*pinfo)); break;
+            pbL_FileDescriptorProto(L, pbL_add(pinfo[0])); break;
         default: pb_skipvalue(&L->s, tag);
         }
     }
@@ -1567,8 +1567,8 @@ static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Loader *L, pb_Typ
     if (f->type_id >= 9 && f->type_id <= 12) f->packed = 0;
     f->scalar   = f->type == NULL;
     if (info->oneof_index != 0) {
-        pb_OneofEntry *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
-                info->oneof_index), *fe;
+        pb_OneofEntry *fe, *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
+                info->oneof_index);
         if (e != NULL) {
             fe = (pb_OneofEntry*)pb_settable(&t->oneof_index, (pb_Key)f);
             fe->name = pb_usename(e->name);
