@@ -392,7 +392,27 @@ function _G.test_default()
    eq(dt.bool1, false)
    eq(dt.bool2, false)
 
-   pb.option "no_default_metatable"
+   pb.option "use_default_values"
+   dt = assert(pb.decode("TestDefault", ""))
+   eq(getmetatable(dt), nil)
+   table_eq(dt, {
+            defaulted_int = 0,
+            defaulted_bool = false,
+            defaulted_str = "",
+            defaulted_num = 0.0,
+            color = 0,
+            bool1 = false,
+            bool2 = false
+         })
+   eq(dt.defaulted_int, 0)
+   eq(dt.defaulted_bool, false)
+   eq(dt.defaulted_str, "")
+   eq(dt.defaulted_num, 0.0)
+   eq(dt.color, 0)
+   eq(dt.bool1, false)
+   eq(dt.bool2, false)
+
+   pb.option "no_default_values"
 
    pb.option "enum_as_name"
    pb.clear "TestDefault"

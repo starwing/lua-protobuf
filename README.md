@@ -290,8 +290,9 @@ current these options are supported:
 | `int64_as_number`       | set value to integer when it fit int32, otherwise return a number **(default)** |
 | `int64_as_string`       | same as above, but when it not fit int32, return a string instead |
 | `int64_as_hexstring`    | same as above, but return a hexadigit string instead         |
-| `no_default_metatable`  | do not set metatable of decoded messages **(default)**       |
-| `use_default_metatable` | set default table as metatable of decoded messages           |
+| `no_default_values`     | do not default values for decoded message table **(default)** |
+| `use_default_values`    | set default values by copy values from default table before decode |
+| `use_default_metatable` | set default values by set default table as the metatable     |
 
  Note: The string returned by `int64_as_string` or `int64_as_hexstring` will prefix a `'#'` character. Because Lua may convert string and number, prefix a '#' makes lua return the string as-is.
 
