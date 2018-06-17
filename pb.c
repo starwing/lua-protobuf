@@ -395,7 +395,7 @@ static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type) {
         break;
     default:
         lua_pushfstring(L, "unknown type %s", pb_typename(type, "<unknown>"));
-        if (idx > 0) argerror(L, idx, lua_tostring(L, -1)); 
+        if (idx > 0) argerror(L, idx, lua_tostring(L, -1));
         lua_error(L);
     }
     return ret ? 0 : expected;
@@ -1255,7 +1255,7 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_prot
             lua_Integer li = (lua_Integer)strtol((char*)f->default_value, &end, 10);
             if ((char*)f->default_value == end) return 0;
             ret = 1, lpb_pushinteger(L, li, LS->int64_mode);
-        } else if (is_proto3) ret = 1, lua_pushnumber(L, 0.0);
+        } else if (is_proto3) ret = 1, lua_pushinteger(L, 0);
     }
     return ret;
 }
