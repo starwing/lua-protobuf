@@ -1025,12 +1025,12 @@ end
 
 function Parser:compile(s, name)
    local set = do_compile(self, self.parse, self, s, name)
-   return assert(pb.encode('.google.protobuf.FileDescriptorSet', set))
+   return pb.encode('.google.protobuf.FileDescriptorSet', set)
 end
 
 function Parser:compilefile(fn)
    local set = do_compile(self, self.parsefile, self, fn)
-   return assert(pb.encode('.google.protobuf.FileDescriptorSet', set))
+   return pb.encode('.google.protobuf.FileDescriptorSet', set)
 end
 
 function Parser:load(s, name)

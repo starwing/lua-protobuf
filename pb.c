@@ -117,7 +117,8 @@ typedef enum lpb_Int64Mode {
 } lpb_Int64Mode;
 
 typedef struct lpb_State {
-    pb_State base;
+    pb_State  base;
+    pb_Buffer buffer;
     int defs_index;
     lpb_Int64Mode int64_mode;
     unsigned enum_as_value : 1;
@@ -135,14 +136,11 @@ static void lpb_pushdeftable(lua_State *L, lpb_State *LS) {
 }
 
 static int Lpb_delete(lua_State *L) {
-    if (lua53_rawgetp(L, LUA_REGISTRYINDEX, state_name) == LUA_TUSERDATA) {
-        lpb_State *LS = (lpb_State*)lua_touserdata(L, -1);
-        if (LS != NULL) {
-            pb_free(&LS->base);
-            lua_pushnil(L);
-            lua_setfield(L, LUA_REGISTRYINDEX, PB_STATE);
-            luaL_unref(L, LUA_REGISTRYINDEX, LS->defs_index);
-        }
+    lpb_State *LS = (lpb_State*)luaL_testudata(L, 1, PB_STATE);
+    if (LS != NULL) {
+        pb_free(&LS->base);
+        pb_resetbuffer(&LS->buffer);
+        luaL_unref(L, LUA_REGISTRYINDEX, LS->defs_index);
     }
     return 0;
 }
@@ -158,6 +156,7 @@ static lpb_State *default_lstate(lua_State *L) {
         memset(LS, 0, sizeof(lpb_State));
         LS->defs_index = LUA_NOREF;
         pb_init(&LS->base);
+        pb_initbuffer(&LS->buffer);
         luaL_setmetatable(L, PB_STATE);
         lua_rawsetp(L, LUA_REGISTRYINDEX, state_name);
     }
@@ -165,14 +164,16 @@ static lpb_State *default_lstate(lua_State *L) {
 }
 
 static int Lpb_state(lua_State *L) {
+    int top = lua_gettop(L);
     default_lstate(L);
     lua_rawgetp(L, LUA_REGISTRYINDEX, state_name);
-    if (lua_isnil(L, 1)) {
-        lua_pushnil(L);
-        lua_rawsetp(L, LUA_REGISTRYINDEX, state_name);
-    } else if (!lua_isnoneornil(L, 1)) {
-        luaL_checkudata(L, 1, PB_STATE);
-        lua_pushvalue(L, 1);
+    if (top != 0) {
+        if (lua_isnil(L, 1))
+            lua_pushnil(L);
+        else {
+            luaL_checkudata(L, 1, PB_STATE);
+            lua_pushvalue(L, 1);
+        }
         lua_rawsetp(L, LUA_REGISTRYINDEX, state_name);
     }
     return 1;
@@ -1459,43 +1460,22 @@ static void lpb_encode(lpb_Env *e, pb_Type *t) {
     }
 }
 
-static int lpb_encode_helper(lua_State *L) {
-    pb_Buffer *b = (pb_Buffer*)lua_touserdata(L, 1);
-    pb_Type *t = (pb_Type*)lua_touserdata(L, 2);
-    pb_Buffer *r = test_buffer(L, 3);
-    lpb_Env e;
-    e.L = L, e.LS = default_lstate(L), e.b = b;
-    lpb_encode(&e, t);
-    if (r != b)
-        lua_pushlstring(L, b->buff, b->size);
-    else
-        lua_pop(L, 1);
-    return 1;
-}
-
 static int Lpb_encode(lua_State *L) {
-    pb_State *S = default_state(L);
-    pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
-    pb_Buffer buf, *b = test_buffer(L, 3);
-    int ret;
+    lpb_State *LS = default_lstate(L);
+    pb_Type *t = lpb_type(&LS->base, luaL_checkstring(L, 1));
+    lpb_Env e;
+    if (t == NULL)
+        argerror(L, 1, "type '%s' does not exists", lua_tostring(L, 1));
     luaL_checktype(L, 2, LUA_TTABLE);
-    if (t == NULL) {
-        lua_pushnil(L);
-        lua_pushfstring(L, "type '%s' does not exists", lua_tostring(L, 1));
-        return 2;
-    }
-    if (b == NULL) pb_initbuffer(&buf), b = &buf;
-    lua_pushcfunction(L, lpb_encode_helper);
-    lua_pushlightuserdata(L, b);
-    lua_pushlightuserdata(L, t);
-    lua_pushvalue(L, 3);
+    e.L = L, e.LS = LS, e.b = test_buffer(L, 3);
+    if (e.b == NULL) pb_resetbuffer(e.b = &LS->buffer);
     lua_pushvalue(L, 2);
-    ret = lua_pcall(L, 4, 1, 0);
-    if (b == &buf) pb_resetbuffer(&buf);
-    if (ret != LUA_OK) {
-        lua_pushnil(L);
-        lua_insert(L, -2);
-        return 2;
+    lpb_encode(&e, t);
+    if (e.b != &LS->buffer)
+        lua_settop(L, 3);
+    else {
+        lua_pushlstring(L, e.b->buff, e.b->size);
+        pb_resetbuffer(e.b);
     }
     return 1;
 }
@@ -1647,38 +1627,20 @@ static int lpb_decode(lpb_Env *e, pb_Type *t) {
     return 1;
 }
 
-static int lpb_decode_helper(lua_State *L) {
-    pb_Type *t = (pb_Type*)lua_touserdata(L, 2);
-    lpb_Env e;
-    e.L = L, e.LS = default_lstate(L), e.s = (lpb_SliceEx*)lua_touserdata(L, 1);
-    if (!lua_istable(L, 3)) {
-        lua_settop(L, 2);
-        lpb_pushtypetable(L, e.LS, t);
-    }
-    return lpb_decode(&e, t); 
-}
-
 static int Lpb_decode(lua_State *L) {
-    pb_State *S = default_state(L);
-    pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
-    lpb_SliceEx s;
-    if (t == NULL) {
-        lua_pushnil(L);
-        lua_pushfstring(L, "type '%s' does not exists", lua_tostring(L, 1));
-        return 2;
-    }
-    s = lpb_initext(lpb_checkslice(L, 2));
+    lpb_State *LS = default_lstate(L);
+    pb_Type *t = lpb_type(&LS->base, luaL_checkstring(L, 1));
+    lpb_SliceEx s = lpb_initext(lpb_checkslice(L, 2));
+    lpb_Env e;
+    if (t == NULL)
+        argerror(L, 1, "type '%s' does not exists", lua_tostring(L, 1));
     lua_settop(L, 3);
-    lua_pushcfunction(L, lpb_decode_helper);
-    lua_pushlightuserdata(L, &s);
-    lua_pushlightuserdata(L, t);
-    lua_pushvalue(L, 3);
-    if (lua_pcall(L, 3, 1, 0) != LUA_OK) {
-        lua_pushnil(L);
-        lua_insert(L, -2);
-        return 2;
+    if (!lua_istable(L, 3)) {
+        lua_pop(L, 1);
+        lpb_pushtypetable(L, LS, t);
     }
-    return 1;
+    e.L = L, e.LS = LS, e.s = &s;
+    return lpb_decode(&e, t); 
 }
 
 

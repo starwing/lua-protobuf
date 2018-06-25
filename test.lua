@@ -29,8 +29,8 @@ local function check_load(chunk, name)
 end
 
 local function check_msg(name, data, r)
-   local chunk2, _ = assert(pb.encode(name, data))
-   local data2 = assert(pb.decode(name, chunk2))
+   local chunk2, _ = pb.encode(name, data)
+   local data2 = pb.decode(name, chunk2)
    --print("msg: ", name, "<"..chunk2:gsub(".", function(s)
       --return ("%02X "):format(s:byte())
    --end)..">")
@@ -67,8 +67,8 @@ function _G.test_io.test()
    assert(os.remove "t.lua")
    fail("-not-exists-", function() assert(pbio.read "-not-exists-") end)
 
-   local chunk = assert(protoc.new():compile(pbio.read "address.proto",
-                                             "address.proto"))
+   local chunk = protoc.new():compile(pbio.read "address.proto",
+                                             "address.proto")
    assert(pbio.dump("address.pb", chunk))
    assert(pb.loadfile "address.pb")
    assert(pb.type "Person")
@@ -90,28 +90,23 @@ function _G.test_io.test()
    eq(pb.decode("Person", "\x75"), {})
    eq(pb.decode("Person", "\x75\1\1\1\1"), {})
 
-   fail("type 'Foo' does not exists", function() assert(pb.encode("Foo", {})) end)
-   fail("type 'Foo' does not exists", function() assert(pb.decode("Foo", "")) end)
+   fail("type 'Foo' does not exists", function() pb.encode("Foo", {}) end)
+   fail("type 'Foo' does not exists", function() pb.decode("Foo", "") end)
 
-   fail("string expected for field 'name', got boolean", function()
-      assert(pb.encode("Person", { name = true }))
-   end)
+   fail("string expected for field 'name', got boolean",
+        function() pb.encode("Person", { name = true }) end)
 
-   fail("type mismatch at offset 2, bytes expected for type string, got varint", function()
-      assert(pb.decode("Person", "\8\1"))
-   end)
+   fail("type mismatch at offset 2, bytes expected for type string, got varint",
+        function() pb.decode("Person", "\8\1") end)
 
-   fail("invalid varint value at offset 2", function()
-      assert(pb.decode("Person", "\16\255"))
-   end)
+   fail("invalid varint value at offset 2",
+        function() pb.decode("Person", "\16\255") end)
 
-   fail("invalid bytes length: 0 (at offset 2)", function()
-      assert(pb.decode("Person", "\10\255"))
-   end)
+   fail("invalid bytes length: 0 (at offset 2)",
+        function() pb.decode("Person", "\10\255") end)
 
-   fail("un-finished bytes (len 10 at offset 3)", function()
-      assert(pb.decode("Person", "\10\10"))
-   end)
+   fail("un-finished bytes (len 10 at offset 3)",
+        function() pb.decode("Person", "\10\10") end)
 
    local data = {
       name = "ilse",
@@ -127,6 +122,7 @@ function _G.test_io.test()
    protoc.reload()
 
    fail("-not-exists-", function() assert(pb.loadfile "-not-exists-") end)
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 end
@@ -180,6 +176,7 @@ function _G.test_depend.test()
    p.include_imports = true
    load_depend(p)
    check_msg("Depend2Msg", t)
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 end
@@ -235,10 +232,11 @@ function _G.test_extend()
    local t2 = { ext_name = "foo", id = 10 }
    check_msg("NestExtend", t2)
 
-   local data = assert(pb.decode("google.protobuf.FileDescriptorSet", chunk))
+   local data = pb.decode("google.protobuf.FileDescriptorSet", chunk)
    eq(data.file[1].enum_type[1].value[1].options.name, "first")
    eq(data.file[1].enum_type[1].value[2].options.name, "second")
    eq(data.file[1].enum_type[1].value[3].options.name, "third")
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_type()
@@ -292,6 +290,7 @@ function _G.test_type()
    check_msg("test_type", {r = 1})
    pb.clear "test_type"
    pb.clear "test2"
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_default()
@@ -382,7 +381,7 @@ function _G.test_default()
          })
 
    pb.option "use_default_metatable"
-   local dt = assert(pb.decode("TestDefault", ""))
+   local dt = pb.decode("TestDefault", "")
    eq(getmetatable(dt), pb.defaults "TestDefault")
    eq(dt.defaulted_int, 0)
    eq(dt.defaulted_bool, false)
@@ -393,7 +392,7 @@ function _G.test_default()
    eq(dt.bool2, false)
 
    pb.option "use_default_values"
-   dt = assert(pb.decode("TestDefault", ""))
+   dt = pb.decode("TestDefault", "")
    eq(getmetatable(dt), nil)
    table_eq(dt, {
             defaulted_int = 0,
@@ -417,6 +416,7 @@ function _G.test_default()
    pb.option "enum_as_name"
    pb.clear "TestDefault"
    pb.clear "TestNest"
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_enum()
@@ -452,15 +452,12 @@ function _G.test_enum()
    pb.option "enum_as_name"
    check_msg("TestEnum", data, { color = "Red" })
 
-   fail("invalid varint value at offset 2", function()
-      assert(pb.decode("TestEnum", "\8\255"))
-   end)
-   fail("number/string expected at field 'color', got boolean", function()
-      assert(pb.encode("TestEnum", { color = true }))
-   end)
-   fail("can not encode unknown enum 'foo' at field 'color'", function()
-      assert(pb.encode("TestEnum", { color = "foo" }))
-   end)
+   fail("invalid varint value at offset 2",
+        function() pb.decode("TestEnum", "\8\255") end)
+   fail("number/string expected at field 'color', got boolean",
+        function() pb.encode("TestEnum", { color = true }) end)
+   fail("can not encode unknown enum 'foo' at field 'color'",
+        function() pb.encode("TestEnum", { color = "foo" }) end)
 
    check_load [[
       message TestAlias {
@@ -476,6 +473,7 @@ function _G.test_enum()
    check_msg("TestAlias",
              { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "ONE" } },
              { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "FIRST" } })
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_packed()
@@ -488,9 +486,8 @@ function _G.test_packed()
       packs = { 1,2,3,4,-1,-2,3 }
    }
    check_msg(".TestPacked", data)
-   fail("table expected at field 'packs', got boolean", function()
-      assert(pb.encode("TestPacked", { packs = true }))
-   end)
+   fail("table expected at field 'packs', got boolean",
+        function() pb.encode("TestPacked", { packs = true }) end)
 
    pb.clear "TestPacked"
    eq(pb.type("TestPacked"), nil)
@@ -506,9 +503,7 @@ function _G.test_packed()
       {
           repeated int32 intList = 1;
       } ]]
-   local b = assert(pb.encode("MyMessage", {
-                              intList = { 1,2,3 }
-                           }))
+   local b = pb.encode("MyMessage", { intList = { 1,2,3 } })
    eq(pb.tohex(b), "0A 03 01 02 03")
 
    check_load [[
@@ -530,6 +525,7 @@ function _G.test_packed()
       "MessageB", { messageValue = { { intValue = 1 } } })), "0A 02 08 01")
    pb.clear "MessageA"
    pb.clear "MessageB"
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_map()
@@ -548,7 +544,7 @@ function _G.test_map()
 
    local data2 = { map = { one = 1, [1]=1 } }
    fail("string expected for field 'key', got number", function()
-      local chunk = assert(pb.encode("TestMap", data2))
+      local chunk = pb.encode("TestMap", data2)
       table_eq(pb.decode("TestMap", chunk), { map = {one = 1} })
    end)
    eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
@@ -559,6 +555,7 @@ function _G.test_map()
        map<string, int32> map = 1;
    } ]]
    check_msg("TestMap2", { map = { one = 1, two = 2, three = 3 } })
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_oneof()
@@ -582,6 +579,7 @@ function _G.test_oneof()
    eq(pb.type "TestOneof", ".TestOneof")
    pb.clear "TestOneof"
    eq(pb.type "TestOneof", nil)
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_conv()
@@ -640,6 +638,7 @@ function _G.test_conv()
    eq(conv.encode_sint32('---1'), 1)
    fail("number/string expected, got boolean", function() conv.encode_sint64(true) end)
    fail("integer format error: '@xyz'", function() conv.encode_sint64('@xyz') end)
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_buffer()
@@ -715,6 +714,7 @@ function _G.test_buffer()
 
    b = buffer.new()
    eq(b:pack("i", -1):tohex(), "FF FF FF FF FF FF FF FF FF 01")
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_slice()
@@ -790,12 +790,16 @@ function _G.test_slice()
 
 
    assert(tostring(s):match 'pb.Slice')
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_load()
    local old = pb.state(nil) -- discard previous one and save
+   assert(old.setdefault)
+   eq(pb.type ".google.protobuf.FileDescriptorSet", nil)
    eq({pb.load "\16\255\255\1\10\2\18\3"}, {false, 8})
    pb.state(nil) -- discard previous one
+   eq(pb.type ".google.protobuf.FileDescriptorSet", nil)
 
    local buf = buffer.new()
    local function v(n) return n*8 + 0 end
@@ -825,8 +829,8 @@ function _G.test_load()
             v(100), 0 -- unknown file options
             )
    eq(pb.load(buf:result()), true)
-   fail("unknown type <unknown>", function() assert(pb.encode("load_test", { test_unknown = 1 })) end)
-   fail("unknown type <unknown>", function() assert(pb.decode("load_test", "\8\1")) end)
+   fail("unknown type <unknown>", function() pb.encode("load_test", { test_unknown = 1 }) end)
+   fail("unknown type <unknown>", function() pb.decode("load_test", "\8\1") end)
 
    buf:reset()
    buf:pack("v(v(vsv(vsvvvv)))",
@@ -834,7 +838,7 @@ function _G.test_load()
             s(2), s(1), "test_unknown", v(3), 1, v(4), 1)
    eq(pb.load(buf:result()), true)
    fail("type mismatch at offset 2, <unknown> expected for type <unknown>, got varint",
-            function() assert(pb.decode("load_test", "\8\1")) end)
+            function() pb.decode("load_test", "\8\1") end)
 
    buf:reset()
    buf:pack("v(v(vsv(vsvvvv)))",
@@ -883,6 +887,7 @@ function _G.test_load()
    eq({pb.load(buf:result())}, { false, 8 })
 
    pb.state(old)
+   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 os.exit(lu.LuaUnit.run(), true)
