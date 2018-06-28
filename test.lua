@@ -312,6 +312,7 @@ function _G.test_default()
          optional TestDefaultColor color = 14 [default = RED];
          optional bool bool1 = 15 [default=false];
          optional bool bool2 = 16 [default=foo];
+         repeated int32 array = 17;
       } ]]
    check_msg("TestDefault", { foo = 1 })
    local function copy_no_meta(t)
@@ -368,6 +369,7 @@ function _G.test_default()
          bool bool1 = 15;
          bool bool2 = 16;
          TestNest nest = 17;
+         repeated int32 array = 18;
       } ]]
    pb.option "enum_as_value"
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
@@ -377,7 +379,7 @@ function _G.test_default()
             defaulted_num = 0.0,
             color = 0,
             bool1 = false,
-            bool2 = false
+            bool2 = false,
          })
 
    pb.option "use_default_metatable"
@@ -390,6 +392,7 @@ function _G.test_default()
    eq(dt.color, 0)
    eq(dt.bool1, false)
    eq(dt.bool2, false)
+   table_eq(dt.array, {})
 
    pb.option "use_default_values"
    dt = pb.decode("TestDefault", "")
@@ -401,7 +404,8 @@ function _G.test_default()
             defaulted_num = 0.0,
             color = 0,
             bool1 = false,
-            bool2 = false
+            bool2 = false,
+            array = {}
          })
    eq(dt.defaulted_int, 0)
    eq(dt.defaulted_bool, false)
@@ -410,6 +414,7 @@ function _G.test_default()
    eq(dt.color, 0)
    eq(dt.bool1, false)
    eq(dt.bool2, false)
+   table_eq(dt.array, {})
 
    pb.option "no_default_values"
 

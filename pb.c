@@ -1233,6 +1233,7 @@ static int Lpb_enum(lua_State *L) {
 static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_proto3) {
     int ret = 0;
     char *end;
+    if (is_proto3 && f->repeated) { lua_newtable(L); return 1; }
     switch (f->type_id) {
     case PB_Tbytes: case PB_Tstring:
         if (is_proto3 && f->default_value == NULL)
@@ -1488,27 +1489,27 @@ static int Lpb_encode(lua_State *L) {
 static int lpb_decode(lpb_Env *e, pb_Type *t);
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, pb_Type *t) {
-    switch (t ? LS->default_mode : 0) {
+    int mode = t ? LS->default_mode : 0;
+    pb_Field *f = NULL;
+    lua_newtable(L);
+    switch (mode) {
     case 1: /* copy values */
-        lua_newtable(L);
-        lpb_pushdefaults(L, LS, t);
-        lua_pushnil(L);
-        while (lua_next(L, -2)) {
-            lua_pushvalue(L, -2);
-            lua_insert(L, -2);
-            lua_rawset(L, -5);
+        while (pb_nextfield(t, &f)) {
+            if (lpb_pushdefault(L, LS, f, t->is_proto3))
+                lua_setfield(L, -2, (char*)f->name);
         }
-        lua_pop(L, 1);
-        lua_pushnil(L);
-        lua_setfield(L, -2, "__index");
         break;
     case 2: /* set metatable */
-        lua_newtable(L);
+        while (pb_nextfield(t, &f)) {
+            if (f->repeated) {
+                lua_newtable(L);
+                lua_setfield(L, -2, (char*)f->name);
+            }
+        }
         lpb_pushdefaults(L, LS, t);
         lua_setmetatable(L, -2);
         break;
     default: /* no default value */
-        lua_newtable(L);
         break;
     }
 }
@@ -1650,12 +1651,13 @@ static int Lpb_option(lua_State *L) {
 #define OPTS(X) \
     X(0, enum_as_name,          LS->enum_as_value = 0)             \
     X(1, enum_as_value,         LS->enum_as_value = 1)             \
-    X(2, int64_as_number,       LS->int64_mode    = LPB_NUMBER)    \
-    X(3, int64_as_string,       LS->int64_mode    = LPB_STRING)    \
-    X(4, int64_as_hexstring,    LS->int64_mode    = LPB_HEXSTRING) \
+    X(2, int64_as_number,       LS->int64_mode = LPB_NUMBER)       \
+    X(3, int64_as_string,       LS->int64_mode = LPB_STRING)       \
+    X(4, int64_as_hexstring,    LS->int64_mode = LPB_HEXSTRING)    \
     X(5, no_default_values,     LS->default_mode = 0)              \
     X(6, use_default_values,    LS->default_mode = 1)              \
-    X(7, use_default_metatable, LS->default_mode = 2)
+    X(7, use_default_metatable, LS->default_mode = 2)              \
+
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,
         OPTS(X)
