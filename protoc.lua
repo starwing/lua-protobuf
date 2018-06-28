@@ -737,8 +737,6 @@ local function make_context(self, lex)
 end
 
 function Parser:parse(src, name)
-   name = name or "<input>"
-
    local loaded = self.loaded[name]
    if loaded then
       if loaded == true then
@@ -747,7 +745,8 @@ function Parser:parse(src, name)
       return loaded
    end
 
-   local lex = Lexer.new(name or "<input>", src)
+   name = name or "<input>"
+   local lex = Lexer.new(name, src)
    local info = { name = lex.name }
    if name then self.loaded[name] = true end
    local ctx = make_context(self, lex)

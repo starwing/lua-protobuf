@@ -799,6 +799,17 @@ function _G.test_slice()
 end
 
 function _G.test_load()
+   do
+      local old = pb.state(nil)
+      protoc.reload()
+      local p = protoc.new()
+      assert(p:load [[ message Test1 { optional int32 t = 1; } ]])
+      assert(pb.type "Test1")
+      assert(p:load [[ message Test2 { optional int32 t = 2; } ]])
+      assert(pb.type "Test2")
+      pb.state(old)
+   end
+
    local old = pb.state(nil) -- discard previous one and save
    assert(old.setdefault)
    eq(pb.type ".google.protobuf.FileDescriptorSet", nil)
