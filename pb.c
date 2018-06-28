@@ -1,6 +1,9 @@
 #define PB_STATIC_API
 #include "pb.h"
 
+PB_NS_BEGIN
+
+
 #define LUA_LIB
 #include <lua.h>
 #include <lauxlib.h>
@@ -112,17 +115,16 @@ static int lua53_rawgetp(lua_State *L, int idx, const void *p)
 
 static const char state_name[] = PB_STATE;
 
-typedef enum lpb_Int64Mode {
-    LPB_NUMBER, LPB_STRING, LPB_HEXSTRING
-} lpb_Int64Mode;
+enum lpb_Int64Mode { LPB_NUMBER, LPB_STRING, LPB_HEXSTRING };
+enum lpb_DefMode   { LPB_NODEF, LPB_COPYDEF, LPB_METADEF };
 
 typedef struct lpb_State {
     pb_State  base;
     pb_Buffer buffer;
     int defs_index;
-    lpb_Int64Mode int64_mode;
     unsigned enum_as_value : 1;
-    unsigned default_mode  : 2; /* 0: no default, 1: copy values, 2: metatable */
+    unsigned default_mode  : 2; /* lpb_DefMode */
+    unsigned int64_mode    : 2; /* lpb_Int64Mode */
 } lpb_State;
 
 static void lpb_pushdeftable(lua_State *L, lpb_State *LS) {
@@ -152,7 +154,7 @@ static lpb_State *default_lstate(lua_State *L) {
         lua_pop(L, 1);
     } else {
         lua_pop(L, 1);
-        LS = lua_newuserdata(L, sizeof(lpb_State));
+        LS = (lpb_State*)lua_newuserdata(L, sizeof(lpb_State));
         memset(LS, 0, sizeof(lpb_State));
         LS->defs_index = LUA_NOREF;
         pb_init(&LS->base);
@@ -558,44 +560,44 @@ LUALIB_API int luaopen_pb_io(lua_State *L) {
 /* protobuf integer conversion */
 
 static int Lconv_encode_int32(lua_State *L) {
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
+    unsigned mode = default_lstate(L)->int64_mode;
     uint64_t v = pb_expandsig((int32_t)lpb_checkinteger(L, 1));
     lpb_pushinteger(L, v, mode);
     return 1;
 }
 
 static int Lconv_encode_uint32(lua_State *L) {
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
+    unsigned mode = default_lstate(L)->int64_mode;
     lpb_pushinteger(L, (uint32_t)lpb_checkinteger(L, 1), mode);
     return 1;
 }
 
 static int Lconv_encode_sint32(lua_State *L) {
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
+    unsigned mode = default_lstate(L)->int64_mode;
     lpb_pushinteger(L, pb_encode_sint32((int32_t)lpb_checkinteger(L, 1)), mode);
     return 1;
 }
 
 static int Lconv_decode_sint32(lua_State *L) {
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
+    unsigned mode = default_lstate(L)->int64_mode;
     lpb_pushinteger(L, pb_decode_sint32((uint32_t)lpb_checkinteger(L, 1)), mode);
     return 1;
 }
 
 static int Lconv_encode_sint64(lua_State *L) {
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
+    unsigned mode = default_lstate(L)->int64_mode;
     lpb_pushinteger(L, pb_encode_sint64(lpb_checkinteger(L, 1)), mode);
     return 1;
 }
 
 static int Lconv_decode_sint64(lua_State *L) {
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
+    unsigned mode = default_lstate(L)->int64_mode;
     lpb_pushinteger(L, pb_decode_sint64(lpb_checkinteger(L, 1)), mode);
     return 1;
 }
 
 static int Lconv_encode_float(lua_State *L) {
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
+    unsigned mode = default_lstate(L)->int64_mode;
     lpb_pushinteger(L, pb_encode_float((float)luaL_checknumber(L, 1)), mode);
     return 1;
 }
@@ -606,7 +608,7 @@ static int Lconv_decode_float(lua_State *L) {
 }
 
 static int Lconv_encode_double(lua_State *L) {
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
+    unsigned mode = default_lstate(L)->int64_mode;
     lpb_pushinteger(L, pb_encode_double(luaL_checknumber(L, 1)), mode);
     return 1;
 }
@@ -871,9 +873,8 @@ static void lpb_initslice(lua_State *L, int idx, lpb_Slice *s) {
 }
 
 static int lpb_unpackscalar(lua_State *L, int *pidx, int top, int fmt, lpb_SliceEx *s) {
-    lua_Integer i;
+    unsigned mode = default_lstate(L)->int64_mode;
     lpb_Value v;
-    lpb_Int64Mode mode = default_lstate(L)->int64_mode;
     switch (fmt) {
     case 'v':
         if (pb_readvarint64(&s->base, &v.u64) == 0)
@@ -897,8 +898,8 @@ static int lpb_unpackscalar(lua_State *L, int *pidx, int top, int fmt, lpb_Slice
         break;
     case 'c':
         luaL_argcheck(L, 1, *pidx <= top, "format argument exceed");
-        i = luaL_checkinteger(L, *pidx++);
-        if (pb_readslice(&s->base, (size_t)i, &v.s->base) == 0)
+        v.lint = luaL_checkinteger(L, *pidx++);
+        if (pb_readslice(&s->base, (size_t)v.lint, &v.s->base) == 0)
             luaL_error(L, "invalid sub string at offset %d", lpb_offset(s));
         lua_pushlstring(L, v.s->base.p, pb_len(v.s->base));
         break;
@@ -1493,13 +1494,13 @@ static void lpb_pushtypetable(lua_State *L, lpb_State *LS, pb_Type *t) {
     pb_Field *f = NULL;
     lua_newtable(L);
     switch (mode) {
-    case 1: /* copy values */
+    case LPB_COPYDEF:
         while (pb_nextfield(t, &f)) {
             if (lpb_pushdefault(L, LS, f, t->is_proto3))
                 lua_setfield(L, -2, (char*)f->name);
         }
         break;
-    case 2: /* set metatable */
+    case LPB_METADEF:
         while (pb_nextfield(t, &f)) {
             if (f->repeated) {
                 lua_newtable(L);
@@ -1654,9 +1655,9 @@ static int Lpb_option(lua_State *L) {
     X(2, int64_as_number,       LS->int64_mode = LPB_NUMBER)       \
     X(3, int64_as_string,       LS->int64_mode = LPB_STRING)       \
     X(4, int64_as_hexstring,    LS->int64_mode = LPB_HEXSTRING)    \
-    X(5, no_default_values,     LS->default_mode = 0)              \
-    X(6, use_default_values,    LS->default_mode = 1)              \
-    X(7, use_default_metatable, LS->default_mode = 2)              \
+    X(5, no_default_values,     LS->default_mode = LPB_NODEF)      \
+    X(6, use_default_values,    LS->default_mode = LPB_COPYDEF)    \
+    X(7, use_default_metatable, LS->default_mode = LPB_METADEF)    \
 
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,
@@ -1710,6 +1711,9 @@ LUALIB_API int luaopen_pb(lua_State *L) {
     luaL_newlib(L, libs);
     return 1;
 }
+
+
+PB_NS_END
 
 /* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
  * maccc: flags+='-shared -undefined dynamic_lookup' output='pb.so'
