@@ -116,7 +116,7 @@ static int lua53_rawgetp(lua_State *L, int idx, const void *p)
 static const char state_name[] = PB_STATE;
 
 enum lpb_Int64Mode { LPB_NUMBER, LPB_STRING, LPB_HEXSTRING };
-enum lpb_DefMode   { LPB_NODEF, LPB_COPYDEF, LPB_METADEF };
+enum lpb_DefMode   { LPB_DEFDEF, LPB_COPYDEF, LPB_METADEF, LPB_NODEF };
 
 typedef struct lpb_State {
     pb_State  base;
@@ -1494,10 +1494,10 @@ static int Lpb_encode(lua_State *L) {
 static int lpb_decode(lpb_Env *e, pb_Type *t);
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, pb_Type *t) {
-    int mode = t ? LS->default_mode : 0;
     pb_Field *f = NULL;
+    int mode = t ? LS->default_mode : LPB_NODEF;
     lua_newtable(L);
-    switch (t && t->is_proto3 && mode == LPB_NODEF ? LPB_COPYDEF : mode) {
+    switch (t && t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
         while (pb_nextfield(t, &f)) {
             if (lpb_pushdefault(L, LS, f, t->is_proto3))

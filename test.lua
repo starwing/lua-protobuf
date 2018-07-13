@@ -522,7 +522,10 @@ function _G.test_packed()
       {
           repeated MessageA messageValue = 1;
       } ]]
+   pb.option "use_default_values"
    check_msg("MessageB", { messageValue = { { intValue = 0 } } })
+   pb.option "no_default_values"
+   check_msg("MessageB", { messageValue = { {} } })
    check_msg("MessageB", { messageValue = { { intValue = 1 } } })
    eq(pb.tohex(pb.encode(
       "MessageB", { messageValue = { {} } })), "0A 00")
@@ -578,7 +581,10 @@ function _G.test_oneof()
    } ]]
 
    local data = { name = "foo" }
+   pb.option "use_default_values"
    check_msg("TestOneof", data, { name = "foo", value = 0 })
+   pb.option "no_default_values"
+   check_msg("TestOneof", data, { name = "foo" })
 
    data = { name = "foo", value = 5 }
    check_msg("TestOneof", data)
