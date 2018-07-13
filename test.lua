@@ -522,7 +522,7 @@ function _G.test_packed()
       {
           repeated MessageA messageValue = 1;
       } ]]
-   check_msg("MessageB", { messageValue = { {} } })
+   check_msg("MessageB", { messageValue = { { intValue = 0 } } })
    check_msg("MessageB", { messageValue = { { intValue = 1 } } })
    eq(pb.tohex(pb.encode(
       "MessageB", { messageValue = { {} } })), "0A 00")
@@ -536,9 +536,11 @@ end
 function _G.test_map()
    check_load [[
    syntax = "proto3";
+   message TestEmpty {}
    message TestMap {
        map<string, int32> map = 1;
        map<string, int32> packed_map = 2 [packed=true];
+       map<string, TestEmpty> msg_map = 3;
    } ]]
 
    local data = {
@@ -552,7 +554,9 @@ function _G.test_map()
       local chunk = pb.encode("TestMap", data2)
       table_eq(pb.decode("TestMap", chunk), { map = {one = 1} })
    end)
-   eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
+   --eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
+   eq(pb.decode("TestMap", "\10\0"), { map = { [""] = 0 } })
+   eq(pb.decode("TestMap", "\26\0"), { msg_map = {} })
 
    check_load [[
    syntax = "proto2";
@@ -574,7 +578,7 @@ function _G.test_oneof()
    } ]]
 
    local data = { name = "foo" }
-   check_msg("TestOneof", data)
+   check_msg("TestOneof", data, { name = "foo", value = 0 })
 
    data = { name = "foo", value = 5 }
    check_msg("TestOneof", data)

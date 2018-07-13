@@ -381,6 +381,8 @@ local function field(self, lex, ident)
    local name, type, type_name, map_entry
    if ident == "map" and lex:test "%<" then
       name, type, type_name, map_entry = map_info(lex)
+      self.locmap[map_entry.field[1]] = lex.pos
+      self.locmap[map_entry.field[2]] = lex.pos
       register_type(self, lex, type_name, types.message)
    else
       type, type_name = type_info(lex, ident)
@@ -535,6 +537,7 @@ function msg_body:oneof(lex, info)
          toplevel.option(self, lex, oneof)
       else
          local f, t = field(self, lex, ident, "no_label")
+         self.locmap[f] = lex.pos
          if t then ts[#ts+1] = t end
          f.oneof_index = index - 1
          fs[#fs+1] = f
@@ -853,7 +856,7 @@ local function check_message(self, lex, info)
    self.prefix[#self.prefix+1] = info.name
    local names, numbers = {}, {}
    for _, v in iter(info, 'field') do
-      lex.pos = self.locmap[v]
+      lex.pos = assert(self.locmap[v])
       check_dup(self, lex, 'field name', names, 'name', v)
       check_dup(self, lex, 'field number', numbers, 'number', v)
       check_field(self, lex, v)
@@ -862,7 +865,7 @@ local function check_message(self, lex, info)
       check_message(self, lex, v)
    end
    for _, v in iter(info, 'extension') do
-      lex.pos = self.locmap[v]
+      lex.pos = assert(self.locmap[v])
       check_field(self, lex, v)
    end
    self.prefix[#self.prefix] = nil
@@ -898,7 +901,7 @@ function Parser:resolve(lex, info)
       check_service(self, lex, v)
    end
    for _, v in iter(info, 'extension') do
-      lex.pos = self.locmap[v]
+      lex.pos = assert(self.locmap[v])
       check_field(self, lex, v)
    end
    self.prefix = nil

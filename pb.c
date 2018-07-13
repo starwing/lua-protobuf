@@ -1234,13 +1234,14 @@ static int Lpb_enum(lua_State *L) {
 static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_proto3) {
     int ret = 0;
     char *end;
+    if (f == NULL) return 0;
     if (is_proto3 && f->repeated) { lua_newtable(L); return 1; }
     switch (f->type_id) {
     case PB_Tbytes: case PB_Tstring:
-        if (is_proto3 && f->default_value == NULL)
-            ret = 1, lua_pushstring(L, "");
-        else
+        if (f->default_value)
             ret = 1, lua_pushstring(L, (char*)f->default_value);
+        else if (is_proto3)
+            ret = 1, lua_pushliteral(L, "");
         break;
     case PB_Tenum:
         if ((f = pb_fname(f->type, f->default_value)) != NULL) {
@@ -1370,6 +1371,7 @@ static void lpbE_field(lpb_Env *e, pb_Field *f, size_t *plen) {
     pb_Buffer *b = e->b;
     size_t len;
     int ltype;
+	if (plen) *plen = 0;
     switch (f->type_id) {
     case PB_Tenum:
         lpbE_enum(e, f);
@@ -1391,9 +1393,10 @@ static void lpbE_field(lpb_Env *e, pb_Field *f, size_t *plen) {
 }
 
 static void lpbE_tagfield(lpb_Env *e, pb_Field *f, size_t *plen) {
-    pb_addvarint32(e->b, pb_pair(f->number, pb_wtypebytype(f->type_id)));
+    size_t klen = pb_addvarint32(e->b,
+            pb_pair(f->number, pb_wtypebytype(f->type_id)));
     lpbE_field(e, f, plen);
-    if (plen && *plen != 0) ++*plen;
+    if (plen && *plen != 0) *plen += klen;
 }
 
 static void lpbE_map(lpb_Env *e, pb_Field *f) {
@@ -1404,12 +1407,14 @@ static void lpbE_map(lpb_Env *e, pb_Field *f) {
     lpb_checktable(L, f);
     lua_pushnil(L);
     while (lua_next(L, -2)) {
-        size_t len;
+        size_t len, ignoredlen;
         pb_addvarint32(e->b, pb_pair(f->number, PB_TBYTES));
         len = pb_bufflen(e->b);
-        lpbE_tagfield(e, vf, NULL);
+        lpbE_tagfield(e, vf, &ignoredlen);
+        e->b->size -= ignoredlen;
         lua_pop(L, 1);
-        lpbE_tagfield(e, kf, NULL);
+        lpbE_tagfield(e, kf, &ignoredlen);
+        e->b->size -= ignoredlen;
         lpb_addlength(L, e->b, len);
     }
 }
@@ -1452,10 +1457,9 @@ static void lpb_encode(lpb_Env *e, pb_Type *t) {
             else if (f->repeated)
                 lpbE_repeated(e, f);
             else if (!f->type || f->type->field_count != 0) {
-                size_t ignoredlen = 0;
+				size_t ignoredlen;
                 lpbE_tagfield(e, f, &ignoredlen);
-                if (t->is_proto3 && e->b->size >= ignoredlen)
-                    e->b->size -= ignoredlen;
+                if (t->is_proto3) e->b->size -= ignoredlen;
             }
         }
         lua_pop(L, 1);
@@ -1493,7 +1497,7 @@ static void lpb_pushtypetable(lua_State *L, lpb_State *LS, pb_Type *t) {
     int mode = t ? LS->default_mode : 0;
     pb_Field *f = NULL;
     lua_newtable(L);
-    switch (mode) {
+    switch (t && t->is_proto3 && mode == LPB_NODEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
         while (pb_nextfield(t, &f)) {
             if (lpb_pushdefault(L, LS, f, t->is_proto3))
@@ -1577,6 +1581,16 @@ static void lpbD_map(lpb_Env *e, pb_Field *f) {
             lpb_withinput(e, &p, lpbD_field(e, pb_field(f->type, n), tag));
             lua_replace(L, top+n);
         }
+    }
+    if ((mask & 1) == 0
+            && lpb_pushdefault(L, e->LS, pb_field(f->type, 1), 1)) {
+        lua_replace(L, top + 1);
+        mask |= 1;
+    }
+    if ((mask & 2) == 0
+            && lpb_pushdefault(L, e->LS, pb_field(f->type, 2), 1)) {
+        lua_replace(L, top + 2);
+        mask |= 2;
     }
     if (mask == 3) lua_rawset(L, -3);
     else           lua_pop(L, 2);

@@ -160,7 +160,7 @@ typedef struct pb_Buffer {
 
 #define pb_buffer(b)      ((b)->buff)
 #define pb_bufflen(b)     ((b)->size)
-#define pb_addsize(b, sz) ((b)->size += (sz))
+#define pb_addsize(b, sz) ((void)((b)->size += (sz)))
 #define pb_addchar(b, ch) \
     ((void)((b)->size < (b)->capacity || pb_prepbuffsize((b), 1)), \
      ((b)->buff[(b)->size++] = (ch)))
@@ -700,7 +700,8 @@ PB_API size_t pb_addslice(pb_Buffer *b, pb_Slice s) {
     void *buff = pb_prepbuffsize(b, len);
     if (buff == NULL) return 0;
     memcpy(buff, s.p, len);
-    return pb_addsize(b, len);
+	pb_addsize(b, len);
+	return len;
 }
 
 PB_API size_t pb_addlength(pb_Buffer *b, size_t len) {
@@ -726,14 +727,18 @@ PB_API size_t pb_addbytes(pb_Buffer *b, pb_Slice s) {
 
 PB_API size_t pb_addvarint32(pb_Buffer *b, uint32_t n) {
     char *buff = (char*)pb_prepbuffsize(b, 5);
+	size_t l;
     if (buff == NULL) return 0;
-    return pb_addsize(b, pb_write32(buff, n));
+	pb_addsize(b, l = pb_write32(buff, n));
+	return l;
 }
 
 PB_API size_t pb_addvarint64(pb_Buffer *b, uint64_t n) {
     char *buff = (char*)pb_prepbuffsize(b, 10);
+	size_t l;
     if (buff == NULL) return 0;
-    return pb_addsize(b, pb_write64(buff, n));
+	pb_addsize(b, l = pb_write64(buff, n));
+	return l;
 }
 
 PB_API size_t pb_addfixed32(pb_Buffer *b, uint32_t n) {
@@ -743,7 +748,8 @@ PB_API size_t pb_addfixed32(pb_Buffer *b, uint32_t n) {
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
     *ch   = n & 0xFF;
-    return pb_addsize(b, 4);
+	pb_addsize(b, 4);
+	return 4;
 }
 
 PB_API size_t pb_addfixed64(pb_Buffer *b, uint64_t n) {
@@ -757,7 +763,8 @@ PB_API size_t pb_addfixed64(pb_Buffer *b, uint64_t n) {
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
     *ch   = n & 0xFF;
-    return pb_addsize(b, 8);
+	pb_addsize(b, 8);
+	return 8;
 }
 
 
