@@ -1646,7 +1646,8 @@ static int lpb_decode(lpb_Env *e, pb_Type *t) {
 static int Lpb_decode(lua_State *L) {
     lpb_State *LS = default_lstate(L);
     pb_Type *t = lpb_type(&LS->base, luaL_checkstring(L, 1));
-    lpb_SliceEx s = lpb_initext(lpb_checkslice(L, 2));
+    lpb_SliceEx s = lua_isnoneornil(L, 2) ? lpb_initext(pb_lslice(NULL, 0))
+                                          : lpb_initext(lpb_checkslice(L, 2));
     lpb_Env e;
     if (t == NULL)
         argerror(L, 1, "type '%s' does not exists", lua_tostring(L, 1));

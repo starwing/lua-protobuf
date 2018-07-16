@@ -393,6 +393,7 @@ function _G.test_default()
    eq(dt.bool1, false)
    eq(dt.bool2, false)
    table_eq(dt.array, {})
+   table_eq(pb.decode "TestDefault", pb.decode("TestDefault", ""))
 
    pb.option "use_default_values"
    dt = pb.decode("TestDefault", "")
