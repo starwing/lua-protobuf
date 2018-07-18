@@ -161,10 +161,12 @@ function _G.test_depend.test()
    check_msg("Depend2Msg", t, { other = 2 })
 
    eq(protoc.new():loadfile "depend1.proto", true)
+   local chunk = pb.encode("Depend2Msg", t)
    check_msg("Depend2Msg", t)
 
    pb.clear "Depend1Msg"
    check_msg("Depend2Msg", t, { other = 2 })
+   table_eq(pb.decode("Depend2Msg", chunk), { other = 2 })
 
    eq(protoc.new():loadfile "depend1.proto", true)
    check_msg("Depend2Msg", t)
