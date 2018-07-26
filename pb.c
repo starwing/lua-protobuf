@@ -1177,8 +1177,7 @@ static int Lpb_typesiter(lua_State *L) {
     pb_Type *t = lpb_type(S, lua_tostring(L, 2));
     if ((t == NULL && !lua_isnoneornil(L, 2)))
         return 0;
-    while (pb_nexttype(S, &t) && t->field_count == 0)
-        continue;
+    pb_nexttype(S, &t);
     return lpb_pushtype(L, t);
 }
 

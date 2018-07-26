@@ -486,6 +486,7 @@ end
 
 function _G.test_packed()
    check_load [[
+   message Empty {}
    message TestPacked {
       repeated int64 packs = 1 [packed=true];
    } ]]
@@ -497,10 +498,21 @@ function _G.test_packed()
    fail("table expected at field 'packs', got boolean",
         function() pb.encode("TestPacked", { packs = true }) end)
 
+   local hasEmpty
+   for _, name in pb.types() do
+      if name == "Empty" then
+         hasEmpty = true
+         break
+      end
+   end
+   assert(hasEmpty)
+
    pb.clear "TestPacked"
+   pb.clear "Empty"
    eq(pb.type("TestPacked"), nil)
    for _, name in pb.types() do
       assert(name ~= "TestPacked", name)
+      assert(name ~= "Empty", name)
    end
    eq(pb.types()(nil, "not-exists"), nil)
 

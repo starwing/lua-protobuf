@@ -305,10 +305,11 @@ struct pb_Type {
     pb_Table    field_tags;
     pb_Table    field_names;
     pb_Table    oneof_index;
-    unsigned    field_count : 29;
+    unsigned    field_count : 28;
     unsigned    is_enum   : 1;
     unsigned    is_map    : 1;
     unsigned    is_proto3 : 1;
+    unsigned    is_dead   : 1;
 };
 
 
@@ -1093,7 +1094,7 @@ PB_API pb_Type *pb_type(pb_State *S, pb_Name *tname) {
     pb_TypeEntry *te = NULL;
     if (S != NULL && tname != NULL)
         te = (pb_TypeEntry*)pb_gettable(&S->types, (pb_Key)tname);
-    return te ? te->value : NULL;
+    return te && !te->value->is_dead ? te->value : NULL;
 }
 
 PB_API pb_Field *pb_fname(pb_Type *t, pb_Name *name) {
@@ -1115,7 +1116,7 @@ PB_API int pb_nexttype(pb_State *S, pb_Type **ptype) {
         if (*ptype != NULL)
             e = (pb_TypeEntry*)pb_gettable(&S->types, (pb_Key)(*ptype)->name);
         while (pb_nextentry(&S->types, (pb_Entry**)&e))
-            if ((*ptype = e->value) != NULL)
+            if ((*ptype = e->value) != NULL && !(*ptype)->is_dead)
                 return 1;
     }
     *ptype = NULL;
@@ -1164,7 +1165,10 @@ PB_API pb_Type *pb_newtype(pb_State *S, pb_Name *tname) {
                 &S->types, (pb_Key)tname);
         pb_Type *t;
         if (te == NULL) return NULL;
-        if ((t = te->value) != NULL) return t;
+        if ((t = te->value) != NULL) {
+            t->is_dead = 0;
+            return t;
+        }
         if (!(t = (pb_Type*)pb_poolalloc(&S->typepool))) return NULL;
         pbT_inittype(t);
         t->name = tname;
@@ -1194,6 +1198,7 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     pb_freetable(&t->field_names);
     pb_freetable(&t->oneof_index);
     t->field_count = 0;
+    t->is_dead = 1;
     /*pb_delname(S, t->name); */
     /*pb_poolfree(&S->typepool, t); */
 }
@@ -1575,11 +1580,12 @@ static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Loader *L, pb_Typ
     f->scalar   = f->type == NULL;
     if (info->oneof_index != 0) {
         pb_OneofEntry *fe, *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
-                info->oneof_index);
+                info->oneof_index), saved;
         if (e != NULL) {
+            saved = *e;
             fe = (pb_OneofEntry*)pb_settable(&t->oneof_index, (pb_Key)f);
-            fe->name = pb_usename(e->name);
-            fe->index = e->index;
+            fe->name = pb_usename(saved.name);
+            fe->index = saved.index;
         }
     }
 }
