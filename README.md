@@ -100,6 +100,11 @@ print(require "serpent".block(data2))
 
 ```
 
+## Use case
+
+[![零境交错](https://img.tapimg.com/market/images/e59627dc9039ff22ba7d000b5c9fe7f6.jpg?imageView2/2/h/560/q/40/format/jpg/interlace/1/ignore-error/1)](http://djwk.qq.com)
+
+
 
 ## Usage
 
