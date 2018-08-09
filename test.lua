@@ -373,7 +373,18 @@ function _G.test_default()
          TestNest nest = 17;
          repeated int32 array = 18;
       } ]]
+
+   table_eq(copy_no_meta(pb.defaults "TestDefault"), {
+            defaulted_int = 0,
+            defaulted_bool = false,
+            defaulted_str = "",
+            defaulted_num = 0.0,
+            color = "RED",
+            bool1 = false,
+            bool2 = false,
+         })
    pb.option "enum_as_value"
+   pb.defaults("TestDefault", "clear")
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
             defaulted_int = 0,
             defaulted_bool = false,

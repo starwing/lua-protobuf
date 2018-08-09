@@ -1231,6 +1231,7 @@ static int Lpb_enum(lua_State *L) {
 }
 
 static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_proto3) {
+	pb_Type *type = f->type;
     int ret = 0;
     char *end;
     if (f == NULL) return 0;
@@ -1243,12 +1244,17 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_prot
             ret = 1, lua_pushliteral(L, "");
         break;
     case PB_Tenum:
-        if ((f = pb_fname(f->type, f->default_value)) != NULL) {
-            if (!LS->enum_as_value)
-                ret = 1, lua_pushstring(L, (char*)f->name);
-            else
+        if ((f = pb_fname(type, f->default_value)) != NULL) {
+            if (LS->enum_as_value)
                 ret = 1, lpb_pushinteger(L, f->number, LS->int64_mode);
-        } else if (is_proto3) ret = 1, lua_pushinteger(L, 0);
+            else
+                ret = 1, lua_pushstring(L, (char*)f->name);
+        } else if (is_proto3) {
+            if ((f = pb_field(type, 0)) == NULL || LS->enum_as_value)
+                ret = 1, lua_pushinteger(L, 0);
+            else
+                ret = 1, lua_pushstring(L, (char*)f->name);
+        }
         break;
     case PB_Tmessage:
         return 0;
@@ -1534,6 +1540,13 @@ static void lpbD_field(lpb_Env *e, pb_Field *f, uint32_t tag) {
     pb_Field *ev = NULL;
     uint64_t u64;
 
+    if (!f->packed && pb_wtypebytype(f->type_id) != (int)pb_gettype(tag))
+        luaL_error(L, "type mismatch at offset %d, %s expected for type %s, got %s",
+                lpb_offset(s),
+                pb_wtypename(pb_wtypebytype(f->type_id), NULL),
+                pb_typename(f->type_id, NULL),
+                pb_wtypename(pb_gettype(tag), NULL));
+
     switch (f->type_id) {
     case PB_Tenum:
         if (pb_readvarint64(&s->base, &u64) == 0)
@@ -1555,12 +1568,6 @@ static void lpbD_field(lpb_Env *e, pb_Field *f, uint32_t tag) {
         break;
 
     default:
-        if (!f->packed && pb_wtypebytype(f->type_id) != (int)pb_gettype(tag))
-            luaL_error(L, "type mismatch at offset %d, %s expected for type %s, got %s",
-                    lpb_offset(s),
-                    pb_wtypename(pb_wtypebytype(f->type_id), NULL),
-                    pb_typename(f->type_id, NULL),
-                    pb_wtypename(pb_gettype(tag), NULL));
         lpb_readtype(L, e->LS, f->type_id, s);
     }
 }
