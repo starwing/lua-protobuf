@@ -925,7 +925,7 @@ static int lpb_unpackloc(lua_State *L, int *pidx, int top, int fmt, lpb_SliceEx 
         else
             li = lpb_offset(s) + luaL_checkinteger(L, *pidx++);
         if (li == 0) li = 1;
-        if (li > (lua_Integer)len) li = len + 1;
+        if (li > (lua_Integer)len) li = (lua_Integer)len + 1;
         s->base.p = s->head + li - 1;
         break;
 
@@ -1002,9 +1002,9 @@ static int Lslice_level(lua_State *L) {
             se = &s->curr;
         else
             se = &s->buff[level];
-        lua_pushinteger(L, se->base.p   - s->buff[0].head + 1);
-        lua_pushinteger(L, se->head     - s->buff[0].head + 1);
-        lua_pushinteger(L, se->base.end - s->buff[0].head);
+        lua_pushinteger(L, (lua_Integer)(se->base.p   - s->buff[0].head) + 1);
+        lua_pushinteger(L, (lua_Integer)(se->head     - s->buff[0].head) + 1);
+        lua_pushinteger(L, (lua_Integer)(se->base.end - s->buff[0].head));
         return 3;
     }
     lua_pushinteger(L, s->used);
@@ -1618,7 +1618,7 @@ static void lpbD_repeated(lpb_Env *e, pb_Field *f, uint32_t tag) {
         }
     } else {
         lpbD_field(e, f, tag);
-        lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
+        lua_rawseti(L, -2, (lua_Integer)lua_rawlen(L, -2) + 1);
     }
     lua_pop(L, 1);
 }

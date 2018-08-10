@@ -1262,8 +1262,6 @@ typedef struct pbL_FileInfo      pbL_FileInfo;
 #define pbL_add(A)    (pbL_grow(L, (void**)&(A), sizeof(*(A))), &(A)[pbL_rawh(A)[1]++])
 #define pbL_delete(A) ((A) ? (void)free(pbL_rawh(A)) : (void)0)
 
-static void pbL_DescriptorProto (pb_Loader *L, pbL_TypeInfo *info);
-
 struct pb_Loader {
     jmp_buf   jbuf;
     pb_Slice  s;
@@ -1313,25 +1311,14 @@ struct pbL_FileInfo {
     pbL_FieldInfo *extension;
 };
 
-static void pbL_grow(pb_Loader *L, void **pp, size_t obj_size) {
-    enum { SIZE, COUNT, FIELDS };
-    size_t *h = *pp ? pbL_rawh(*pp) : NULL;
-    if (h == NULL || h[SIZE] <= h[COUNT]) {
-        size_t newsize = (h ? h[SIZE] : 1) * 2;
-        size_t used = (h ? h[COUNT] : 0);
-        size_t *nh = (size_t*)realloc(h, sizeof(size_t)*2 + newsize*obj_size);
-        if (nh == NULL) longjmp(L->jbuf, PB_ENOMEM);
-        nh[SIZE]  = newsize;
-        nh[COUNT] = used;
-        *pp = nh + FIELDS;
-        memset((char*)*pp + used*obj_size, 0, (newsize - used)*obj_size);
-    }
-}
+static void pbL_readbytes(pb_Loader *L, pb_Slice *pv)
+{ if (pb_readbytes(&L->s, pv) == 0) longjmp(L->jbuf, 1); }
 
-static void pbL_readbytes(pb_Loader *L, pb_Slice *pv) {
-    if (pb_readbytes(&L->s, pv) == 0)
-        longjmp(L->jbuf, 1);
-}
+static void pbL_beginmsg(pb_Loader *L, pb_Slice *pv)
+{ pb_Slice v; pbL_readbytes(L, &v); *pv = L->s, L->s = v; }
+
+static void pbL_endmsg(pb_Loader *L, pb_Slice *pv)
+{ L->s = *pv; }
 
 static void pbL_readint32(pb_Loader *L, int32_t *pv) {
     uint32_t v;
@@ -1340,14 +1327,19 @@ static void pbL_readint32(pb_Loader *L, int32_t *pv) {
     *pv = (int32_t)v;
 }
 
-static void pbL_beginmsg(pb_Loader *L, pb_Slice *pv) {
-    pb_Slice v;
-    pbL_readbytes(L, &v);
-    *pv = L->s, L->s = v;
-}
-
-static void pbL_endmsg(pb_Loader *L, pb_Slice *pv) {
-    L->s = *pv;
+static void pbL_grow(pb_Loader *L, void **pp, size_t obj_size) {
+    enum { SIZE, COUNT, FIELDS };
+    size_t *h = *pp ? pbL_rawh(*pp) : NULL;
+    if (h == NULL || h[SIZE] <= h[COUNT]) {
+        size_t used = (h ? h[COUNT] : 0);
+		size_t size = (h ? h[SIZE] : 2), newsize = size + (size >> 1);
+		size_t *nh  = (size_t*)realloc(h, sizeof(size_t)*FIELDS + newsize*obj_size);
+        if (nh == NULL || newsize < size) longjmp(L->jbuf, PB_ENOMEM);
+        nh[SIZE]  = newsize;
+        nh[COUNT] = used;
+        *pp = nh + FIELDS;
+        memset((char*)*pp + used*obj_size, 0, (newsize - used)*obj_size);
+    }
 }
 
 static void pbL_FieldOptions(pb_Loader *L, pbL_FieldInfo *info) {
