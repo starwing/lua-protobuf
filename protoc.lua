@@ -391,7 +391,7 @@ local function field(self, lex, ident)
    local info = {
       name      = name;
       number    = lex:expected "=":integer();
-      label     = labels.optional;
+      label     = ident == "map" and labels.repeated or labels.optional;
       type      = type;
       type_name = type_name;
    }
