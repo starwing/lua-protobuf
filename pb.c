@@ -1671,9 +1671,10 @@ static int Lpb_option(lua_State *L) {
     X(2, int64_as_number,       LS->int64_mode = LPB_NUMBER)       \
     X(3, int64_as_string,       LS->int64_mode = LPB_STRING)       \
     X(4, int64_as_hexstring,    LS->int64_mode = LPB_HEXSTRING)    \
-    X(5, no_default_values,     LS->default_mode = LPB_NODEF)      \
-    X(6, use_default_values,    LS->default_mode = LPB_COPYDEF)    \
-    X(7, use_default_metatable, LS->default_mode = LPB_METADEF)    \
+    X(5, auto_default_values,   LS->default_mode = LPB_DEFDEF)     \
+    X(6, no_default_values,     LS->default_mode = LPB_NODEF)      \
+    X(7, use_default_values,    LS->default_mode = LPB_COPYDEF)    \
+    X(8, use_default_metatable, LS->default_mode = LPB_METADEF)    \
 
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,

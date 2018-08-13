@@ -435,6 +435,7 @@ function _G.test_default()
    pb.option "enum_as_name"
    pb.clear "TestDefault"
    pb.clear "TestNest"
+   pb.option "auto_default_values"
    assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
@@ -559,6 +560,7 @@ function _G.test_packed()
       "MessageB", { messageValue = { { intValue = 1 } } })), "0A 02 08 01")
    pb.clear "MessageA"
    pb.clear "MessageB"
+   pb.option "auto_default_values"
    assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
@@ -572,20 +574,37 @@ function _G.test_map()
        map<string, TestEmpty> msg_map = 3;
    } ]]
 
-   local data = {
-      map = { one = 1, two = 2, three = 3 };
-      packed_map = { one = 1, two = 2, three = 3 }
-   }
-   check_msg(".TestMap", data)
+   check_msg("TestMap", { map = {}, packed_map = {}, msg_map = {} })
+
+   check_msg(".TestMap", {
+             map = { one = 1, two = 2, three = 3 };
+             packed_map = { one = 1, two = 2, three = 3 }
+          }, {
+             map = { one = 1, two = 2, three = 3 };
+             packed_map = { one = 1, two = 2, three = 3 };
+             msg_map = {}
+          })
 
    local data2 = { map = { one = 1, [1]=1 } }
    fail("string expected for field 'key', got number", function()
       local chunk = pb.encode("TestMap", data2)
-      table_eq(pb.decode("TestMap", chunk), { map = {one = 1} })
+      table_eq(pb.decode("TestMap", chunk), {
+               map = {one = 1},
+               packed_map = {},
+               msg_map = {},
+            })
    end)
    --eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
-   eq(pb.decode("TestMap", "\10\0"), { map = { [""] = 0 } })
-   eq(pb.decode("TestMap", "\26\0"), { msg_map = {} })
+   eq(pb.decode("TestMap", "\10\0"), {
+      map = { [""] = 0 },
+      packed_map = {},
+      msg_map = {}
+   })
+   eq(pb.decode("TestMap", "\26\0"), {
+      map = {},
+      packed_map = {},
+      msg_map = {}
+   })
 
    check_load [[
    syntax = "proto2";
@@ -593,7 +612,6 @@ function _G.test_map()
        map<string, int32> map = 1;
    } ]]
    check_msg("TestMap2", { map = { one = 1, two = 2, three = 3 } })
-   assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_oneof()
@@ -620,6 +638,7 @@ function _G.test_oneof()
    eq(pb.type "TestOneof", ".TestOneof")
    pb.clear "TestOneof"
    eq(pb.type "TestOneof", nil)
+   pb.option "auto_default_values"
    assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
