@@ -310,7 +310,7 @@ static uint64_t lpb_checkinteger(lua_State *L, int idx) {
 }
 
 static void lpb_pushinteger(lua_State *L, int64_t n, int mode) {
-    if (mode != LPB_NUMBER) {
+    if (mode != LPB_NUMBER && (n < INT_MIN || n > INT_MAX)) {
         char buff[32], *p = buff + sizeof(buff) - 1;
         int neg = n < 0;
         uint64_t un = neg ? ~(uint64_t)n + 1 : (uint64_t)n;
@@ -1415,11 +1415,13 @@ static void lpbE_map(lpb_Env *e, pb_Field *f) {
         size_t len, ignoredlen;
         pb_addvarint32(e->b, pb_pair(f->number, PB_TBYTES));
         len = pb_bufflen(e->b);
+        lua_pushvalue(L, -2);
+        lpbE_tagfield(e, kf, &ignoredlen);
+        e->b->size -= ignoredlen;
+        lua_pop(L, 1);
         lpbE_tagfield(e, vf, &ignoredlen);
         e->b->size -= ignoredlen;
         lua_pop(L, 1);
-        lpbE_tagfield(e, kf, &ignoredlen);
-        e->b->size -= ignoredlen;
         lpb_addlength(L, e->b, len);
     }
 }
