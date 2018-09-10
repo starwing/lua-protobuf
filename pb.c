@@ -814,7 +814,7 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
 
 /* protobuf decode routine */
 
-#define LPB_INITSTACKLEN 16
+#define LPB_INITSTACKLEN 2
 
 typedef struct lpb_Slice {
     lpb_SliceEx  curr;
@@ -824,12 +824,14 @@ typedef struct lpb_Slice {
     lpb_SliceEx  init_buff[LPB_INITSTACKLEN];
 } lpb_Slice;
 
-static void lpb_resetslice(lua_State *L, lpb_Slice *s) {
-    if (s->buff != s->init_buff)
-        free(s->buff);
-    memset(s, 0, sizeof(lpb_Slice));
-    s->buff = s->init_buff;
-    s->size = LPB_INITSTACKLEN;
+static void lpb_resetslice(lua_State *L, lpb_Slice *s, size_t size) {
+    if (size == sizeof(lpb_Slice)) {
+        if (s->buff != s->init_buff)
+            free(s->buff);
+        memset(s, 0, sizeof(lpb_Slice));
+        s->buff = s->init_buff;
+        s->size = LPB_INITSTACKLEN;
+    }
     lua_pushnil(L);
     lua_rawsetp(L, LUA_REGISTRYINDEX, s);
 }
@@ -859,14 +861,16 @@ static void lpb_enterview(lua_State *L, lpb_Slice *s, lpb_SliceEx view) {
     s->curr = view;
 }
 
-static void lpb_initslice(lua_State *L, int idx, lpb_Slice *s) {
-    memset(s, 0, sizeof(lpb_Slice));
-    s->buff = s->init_buff;
-    s->size = LPB_INITSTACKLEN;
+static void lpb_initslice(lua_State *L, int idx, lpb_Slice *s, size_t size) {
+    if (size == sizeof(lpb_Slice)) {
+        memset(s, 0, sizeof(lpb_Slice));
+        s->buff = s->init_buff;
+        s->size = LPB_INITSTACKLEN;
+    }
     if (!lua_isnoneornil(L, idx)) {
         lpb_SliceEx base, view = lpb_checkview(L, idx, &base);
         s->curr = base;
-        lpb_enterview(L, s, view);
+        if (size == sizeof(lpb_Slice)) lpb_enterview(L, s, view);
         lua_pushvalue(L, idx);
         lua_rawsetp(L, LUA_REGISTRYINDEX, s);
     }
@@ -956,7 +960,7 @@ static int Lslice_new(lua_State *L) {
     lpb_Slice *s;
     lua_settop(L, 3);
     s = (lpb_Slice*)lua_newuserdata(L, sizeof(lpb_Slice));
-    lpb_initslice(L, 1, s);
+    lpb_initslice(L, 1, s, sizeof(lpb_Slice));
     luaL_setmetatable(L, PB_SLICE);
     return 1;
 }
@@ -965,22 +969,24 @@ static int Lslice_libcall(lua_State *L) {
     lpb_Slice *s;
     lua_settop(L, 4);
     s = (lpb_Slice*)lua_newuserdata(L, sizeof(lpb_Slice));
-    lpb_initslice(L, 2, s);
+    lpb_initslice(L, 2, s, sizeof(lpb_Slice));
     luaL_setmetatable(L, PB_SLICE);
     return 1;
 }
 
 static int Lslice_reset(lua_State *L) {
     lpb_Slice *s = (lpb_Slice*)check_slice(L, 1);
-    lpb_resetslice(L, s);
+    size_t size = lua_rawlen(L, 1);
+    lpb_resetslice(L, s, size);
     if (!lua_isnoneornil(L, 2))
-        lpb_initslice(L, 2, s);
+        lpb_initslice(L, 2, s, size);
     return_self(L);
 }
 
 static int Lslice_tostring(lua_State *L) {
     lpb_Slice *s = (lpb_Slice*)check_slice(L, 1);
-    lua_pushfstring(L, "pb.Slice: %p", s);
+    lua_pushfstring(L, "pb.Slice: %p%s", s,
+            lua_rawlen(L, 1) == sizeof(lpb_Slice) ? "" : " (raw)");
     return 1;
 }
 
@@ -991,8 +997,22 @@ static int Lslice_len(lua_State *L) {
     return 2;
 }
 
+static int Lslice_unpack(lua_State *L) {
+    lpb_SliceEx view, *s = test_slice(L, 1);
+    const char *fmt = luaL_checkstring(L, 2);
+    if (s == NULL) view = lpb_initext(lpb_checkslice(L, 1)), s = &view;
+    return lpb_unpackfmt(L, 3, fmt, s);
+}
+
+static lpb_Slice *check_lslice(lua_State *L, int idx) {
+    lpb_Slice *s = (lpb_Slice*)check_slice(L, idx);
+    luaL_argcheck(L, idx, lua_rawlen(L, 1) != sizeof(lpb_Slice),
+            "unsupport operation for raw mode slice");
+    return s;
+}
+
 static int Lslice_level(lua_State *L) {
-    lpb_Slice *s = (lpb_Slice*)check_slice(L, 1);
+    lpb_Slice *s = check_lslice(L, 1);
     if (!lua_isnoneornil(L, 2)) {
         lpb_SliceEx *se;
         lua_Integer level = posrelat(luaL_checkinteger(L, 2), s->used);
@@ -1012,7 +1032,7 @@ static int Lslice_level(lua_State *L) {
 }
 
 static int Lslice_enter(lua_State *L) {
-    lpb_Slice *s = (lpb_Slice*)check_slice(L, 1);
+    lpb_Slice *s = check_lslice(L, 1);
     lpb_SliceEx view;
     if (lua_isnoneornil(L, 2)) {
         if (pb_readbytes(&s->curr.base, &view.base) == 0)
@@ -1032,7 +1052,7 @@ static int Lslice_enter(lua_State *L) {
 }
 
 static int Lslice_leave(lua_State *L) {
-    lpb_Slice *s = (lpb_Slice*)check_slice(L, 1);
+    lpb_Slice *s = check_lslice(L, 1);
     lua_Integer count = posrelat(luaL_optinteger(L, 2, 1), s->used);
     if (count > (lua_Integer)s->used)
         argerror(L, 2, "level (%d) exceed max level %d",
@@ -1047,13 +1067,6 @@ static int Lslice_leave(lua_State *L) {
     lua_settop(L, 1);
     lua_pushinteger(L, s->used);
     return 2;
-}
-
-static int Lslice_unpack(lua_State *L) {
-    lpb_SliceEx view, *s = test_slice(L, 1);
-    const char *fmt = luaL_checkstring(L, 2);
-    if (s == NULL) view = lpb_initext(lpb_checkslice(L, 1)), s = &view;
-    return lpb_unpackfmt(L, 3, fmt, s);
 }
 
 LUALIB_API int luaopen_pb_slice(lua_State *L) {
