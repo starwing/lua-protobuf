@@ -1218,7 +1218,7 @@ static int Lpb_fields(lua_State *L) {
 static int Lpb_type(lua_State *L) {
     pb_State *S = default_state(L);
     pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
-    if (t == NULL || t->field_count == 0)
+    if (t == NULL)
         return 0;
     return lpb_pushtype(L, t);
 }
