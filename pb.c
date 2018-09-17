@@ -1218,7 +1218,7 @@ static int Lpb_fields(lua_State *L) {
 static int Lpb_type(lua_State *L) {
     pb_State *S = default_state(L);
     pb_Type *t = lpb_type(S, luaL_checkstring(L, 1));
-    if (t == NULL)
+    if (t == NULL || t->is_dead)
         return 0;
     return lpb_pushtype(L, t);
 }
@@ -1672,7 +1672,7 @@ static int Lpb_decode(lua_State *L) {
         lpb_pushtypetable(L, LS, t);
     }
     e.L = L, e.LS = LS, e.s = &s;
-    return lpb_decode(&e, t); 
+    return lpb_decode(&e, t);
 }
 
 
@@ -1749,4 +1749,3 @@ PB_NS_END
 /* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
  * maccc: flags+='-shared -undefined dynamic_lookup' output='pb.so'
  * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */
-
