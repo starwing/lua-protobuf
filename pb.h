@@ -217,6 +217,8 @@ PB_API pb_Type  *pb_type   (pb_State *S, pb_Name *tname);
 PB_API pb_Field *pb_fname  (pb_Type *t,  pb_Name *tname);
 PB_API pb_Field *pb_field  (pb_Type *t,  int32_t number);
 
+PB_API pb_Name *pb_oneofname (pb_Type *t, int oneof_index);
+
 PB_API int pb_nexttype  (pb_State *S, pb_Type **ptype);
 PB_API int pb_nextfield (pb_Type *t, pb_Field **pfield);
 
@@ -293,10 +295,11 @@ struct pb_Field {
     pb_Type *type;
     pb_Name *default_value;
     int32_t  number;
-    unsigned type_id  : 29; /* PB_T* enum */
-    unsigned repeated : 1;
-    unsigned packed   : 1;
-    unsigned scalar   : 1;
+    unsigned oneof_idx : 24;
+    unsigned type_id   : 5; /* PB_T* enum */
+    unsigned repeated  : 1;
+    unsigned packed    : 1;
+    unsigned scalar    : 1;
 };
 
 struct pb_Type {
@@ -1110,6 +1113,12 @@ PB_API pb_Field *pb_field(pb_Type *t, int32_t number) {
     return fe ? fe->value : NULL;
 }
 
+PB_API pb_Name *pb_oneofname(pb_Type *t, int idx) {
+    pb_OneofEntry *oe = NULL;
+    if (t != NULL) oe = (pb_OneofEntry*)pb_gettable(&t->oneof_index, idx);
+    return oe ? oe->name : NULL;
+}
+
 PB_API int pb_nexttype(pb_State *S, pb_Type **ptype) {
     pb_TypeEntry *e = NULL;
     if (S != NULL) {
@@ -1564,22 +1573,13 @@ static void pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Loader *L, pb_Typ
     if (!(f = pb_newfield(S, t, pb_newname(S, info->name), info->number)))
         return;
     f->default_value = pb_newname(S, info->default_value);
-    f->type     = ft;
-    f->type_id  = info->type;
-    f->repeated = info->label == 3; /* repeated */
-    f->packed   = info->packed >= 0 ? info->packed : L->is_proto3;
+    f->type      = ft;
+    f->oneof_idx = info->oneof_index;
+    f->type_id   = info->type;
+    f->repeated  = info->label == 3; /* repeated */
+    f->packed    = info->packed >= 0 ? info->packed : L->is_proto3;
     if (f->type_id >= 9 && f->type_id <= 12) f->packed = 0;
-    f->scalar   = f->type == NULL;
-    if (info->oneof_index != 0) {
-        pb_OneofEntry *fe, *e = (pb_OneofEntry*)pb_gettable(&t->oneof_index,
-                info->oneof_index), saved;
-        if (e != NULL) {
-            saved = *e;
-            fe = (pb_OneofEntry*)pb_settable(&t->oneof_index, (pb_Key)f);
-            fe->name = pb_usename(saved.name);
-            fe->index = saved.index;
-        }
-    }
+    f->scalar = (f->type == NULL);
 }
 
 static void pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Loader *L) {

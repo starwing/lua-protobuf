@@ -617,6 +617,29 @@ end
 function _G.test_oneof()
    check_load [[
    syntax = "proto3";
+   message TO_M1 {
+   }
+   message TO_M2 {
+   }
+   message TO_M3 {
+       int32 value = 1;
+   }
+   message TestOneof { 
+       oneof body_oneof {
+           TO_M1 m1 = 100;
+           TO_M2 m2 = 200;
+           TO_M3 m3 = 300;
+       }
+   } ]]
+   check_msg("TestOneof", {})
+   check_msg("TestOneof", { m1 = {} })
+   check_msg("TestOneof", { m2 = {} })
+   check_msg("TestOneof", { m3 = { value = 0 } })
+   check_msg("TestOneof", { m3 = { value = 10 } })
+   pb.clear "TestOneof"
+
+   check_load [[
+   syntax = "proto3";
    message TestOneof {
        oneof test_oneof {
          string name = 4;

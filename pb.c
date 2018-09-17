@@ -1167,7 +1167,6 @@ static int lpb_pushtype(lua_State *L, pb_Type *t) {
 }
 
 static int lpb_pushfield(lua_State *L, pb_Type *t, pb_Field *f) {
-    pb_OneofEntry *e;
     if (f == NULL) return 0;
     lua_pushstring(L, (char*)f->name);
     lua_pushinteger(L, f->number);
@@ -1176,10 +1175,9 @@ static int lpb_pushfield(lua_State *L, pb_Type *t, pb_Field *f) {
     lua_pushstring(L, (char*)f->default_value);
     lua_pushstring(L, f->packed ? "packed" :
             f->repeated ? "repeated" : "optional");
-    e = (pb_OneofEntry*)pb_gettable(&t->oneof_index, (pb_Key)f);
-    if (e) {
-        lua_pushstring(L, (const char*)e->name);
-        lua_pushinteger(L, e->index-1);
+    if (f->oneof_idx > 0) {
+        lua_pushstring(L, (const char*)pb_oneofname(t, f->oneof_idx));
+        lua_pushinteger(L, f->oneof_idx-1);
         return 7;
     }
     return 5;
@@ -1244,7 +1242,7 @@ static int Lpb_enum(lua_State *L) {
 }
 
 static int lpb_pushdefault(lua_State *L, lpb_State *LS, pb_Field *f, int is_proto3) {
-	pb_Type *type = f->type;
+    pb_Type *type = f->type;
     int ret = 0;
     char *end;
     if (f == NULL) return 0;
@@ -1389,7 +1387,7 @@ static void lpbE_field(lpb_Env *e, pb_Field *f, size_t *plen) {
     pb_Buffer *b = e->b;
     size_t len;
     int ltype;
-	if (plen) *plen = 0;
+    if (plen) *plen = 0;
     switch (f->type_id) {
     case PB_Tenum:
         lpbE_enum(e, f);
@@ -1476,8 +1474,8 @@ static void lpb_encode(lpb_Env *e, pb_Type *t) {
                 lpbE_map(e, f);
             else if (f->repeated)
                 lpbE_repeated(e, f);
-            else if (!f->type || f->type->field_count != 0) {
-				size_t ignoredlen;
+            else if (!f->type || (f->type->field_count != 0 || f->oneof_idx > 0)) {
+                size_t ignoredlen;
                 lpbE_tagfield(e, f, &ignoredlen);
                 if (t->is_proto3) e->b->size -= ignoredlen;
             }
@@ -1574,7 +1572,8 @@ static void lpbD_field(lpb_Env *e, pb_Field *f, uint32_t tag) {
 
     case PB_Tmessage:
         lpb_readbytes(L, s, &sv);
-        if (f->type == NULL || f->type->field_count == 0)
+        if (f->type == NULL
+                || (f->type->field_count == 0 && f->oneof_idx == 0))
             lua_pushnil(L);
         else {
             lpb_pushtypetable(L, e->LS, f->type);
@@ -1650,11 +1649,11 @@ static int lpb_decode(lpb_Env *e, pb_Type *t) {
             lpbD_map(e, f);
         else if (f->repeated)
             lpbD_repeated(e, f, tag);
-		else {
-			lua_pushstring(L, (char*)f->name);
-			lpbD_field(e, f, tag);
-			lua_rawset(L, -3);
-		}
+        else {
+            lua_pushstring(L, (char*)f->name);
+            lpbD_field(e, f, tag);
+            lua_rawset(L, -3);
+        }
     }
     return 1;
 }
