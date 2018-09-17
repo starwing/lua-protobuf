@@ -506,7 +506,7 @@ PB_API size_t pb_readbytes(pb_Slice *s, pb_Slice *pv) {
 
 PB_API size_t pb_readgroup(pb_Slice *s, uint32_t tag, pb_Slice *pv) {
     const char *p = s->p;
-    uint32_t newtag;
+    uint32_t newtag = 0;
     size_t count;
     assert(pb_gettype(tag) == PB_TGSTART);
     while ((count = pb_readvarint32(s, &newtag)) != 0) {
