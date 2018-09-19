@@ -172,7 +172,7 @@ function Lexer:number(opt)
    if not ns then
       return self:opterror(opt, 'floating-point number expected')
    end
-   local es, pos2 = self("([eE][+-]?[0-9]+)%s*()", pos)
+   local es, pos2 = self("(^[eE][+-]?[0-9]+)%s*()", pos)
    if d1 == "." and d2 == "." then
       return self:error "malformed floating-point number"
    end
