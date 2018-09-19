@@ -216,12 +216,15 @@ static lua_Integer rangerelat(lua_State *L, int idx, lua_Integer r[2], size_t le
     return r[0] <= r[1] ? r[1] - r[0] + 1 : 0;
 }
 
-static int argerror(lua_State *L, int idx, const char *fmt, ...) {
-    va_list l;
-    va_start(l, fmt);
-    lua_pushvfstring(L, fmt, l);
-    va_end(l);
-    return luaL_argerror(L, idx, lua_tostring(L, -1));
+static int argcheck(lua_State *L, int cond, int idx, const char *fmt, ...) {
+    if (!cond) {
+        va_list l;
+        va_start(l, fmt);
+        lua_pushvfstring(L, fmt, l);
+        va_end(l);
+        return luaL_argerror(L, idx, lua_tostring(L, -1));
+    }
+    return 1;
 }
 
 static pb_Slice lpb_toslice(lua_State *L, int idx) {
@@ -412,7 +415,7 @@ static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type, size_t *pl
         break;
     default:
         lua_pushfstring(L, "unknown type %s", pb_typename(type, "<unknown>"));
-        if (idx > 0) argerror(L, idx, lua_tostring(L, -1));
+        if (idx > 0) argcheck(L, 0, idx, lua_tostring(L, -1));
         lua_error(L);
     }
     if (plen) *plen = len;
@@ -666,7 +669,7 @@ static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char **pfmt, i
     const char *fmt = *pfmt;
     int type, ltype;
     size_t len;
-    luaL_argcheck(L, 1, level <= 100, "format level overflow");
+    argcheck(L, level <= 100, 1, "format level overflow");
     for (; *fmt != '\0'; ++fmt) {
         switch (*fmt) {
         case 'v': pb_addvarint64(b, (uint64_t)lpb_checkinteger(L, idx++)); break;
@@ -687,12 +690,13 @@ static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char **pfmt, i
             return idx;
         case '\0':
         default:
-            if ((type = lpb_typefmt(fmt)) < 0)
-                argerror(L, 1, "invalid formater: '%c'", *fmt);
-            if ((ltype = lpb_addtype(L, b, idx, type, NULL)) != 0)
-                argerror(L, idx, "%s expected for type '%s', got %s",
-                        lua_typename(L, ltype), pb_typename(type, "<unknown>"),
-                        luaL_typename(L, idx));
+            argcheck(L, (type = lpb_typefmt(fmt)) >= 0,
+                    1, "invalid formater: '%c'", *fmt);
+            ltype = lpb_addtype(L, b, idx, type, NULL);
+            argcheck(L, ltype == 0,
+                    idx, "%s expected for type '%s', got %s",
+                    lua_typename(L, ltype), pb_typename(type, "<unknown>"),
+                    luaL_typename(L, idx));
             ++idx;
         }
     }
@@ -901,7 +905,7 @@ static int lpb_unpackscalar(lua_State *L, int *pidx, int top, int fmt, lpb_Slice
         lua_pushlstring(L, v.s->base.p, pb_len(v.s->base));
         break;
     case 'c':
-        luaL_argcheck(L, 1, *pidx <= top, "format argument exceed");
+        argcheck(L, *pidx <= top, 1, "format argument exceed");
         v.lint = luaL_checkinteger(L, *pidx++);
         if (pb_readslice(&s->base, (size_t)v.lint, &v.s->base) == 0)
             luaL_error(L, "invalid sub string at offset %d", lpb_offset(s));
@@ -923,7 +927,7 @@ static int lpb_unpackloc(lua_State *L, int *pidx, int top, int fmt, lpb_SliceEx 
         break;
 
     case '*': case '+':
-        luaL_argcheck(L, 1, *pidx <= top, "format argument exceed");
+        argcheck(L, *pidx <= top, 1, "format argument exceed");
         if (fmt == '*')
             li = posrelat(luaL_checkinteger(L, *pidx++), len);
         else
@@ -947,8 +951,8 @@ static int lpb_unpackfmt(lua_State *L, int idx, const char *fmt, lpb_SliceEx *s)
         if (s->base.p >= s->base.end) { lua_pushnil(L); return rets + 1; }
         luaL_checkstack(L, 1, "too many values");
         if (!lpb_unpackscalar(L, &idx, top, *fmt, s)) {
-            if ((type = lpb_typefmt(fmt)) < 0)
-                argerror(L, 1, "invalid formater: '%c'", *fmt);
+            argcheck(L, (type = lpb_typefmt(fmt)) >= 0,
+                    1, "invalid formater: '%c'", *fmt);
             lpb_readtype(L, default_lstate(L), type, s);
         }
         ++rets;
@@ -1006,8 +1010,8 @@ static int Lslice_unpack(lua_State *L) {
 
 static lpb_Slice *check_lslice(lua_State *L, int idx) {
     lpb_Slice *s = (lpb_Slice*)check_slice(L, idx);
-    luaL_argcheck(L, idx, lua_rawlen(L, 1) != sizeof(lpb_Slice),
-            "unsupport operation for raw mode slice");
+    argcheck(L, lua_rawlen(L, 1) == sizeof(lpb_Slice),
+            idx, "unsupport operation for raw mode slice");
     return s;
 }
 
@@ -1035,9 +1039,8 @@ static int Lslice_enter(lua_State *L) {
     lpb_Slice *s = check_lslice(L, 1);
     lpb_SliceEx view;
     if (lua_isnoneornil(L, 2)) {
-        if (pb_readbytes(&s->curr.base, &view.base) == 0)
-            return argerror(L, 1, "bytes wireformat expected at offset %d",
-                    lpb_offset(&s->curr));
+        argcheck(L, pb_readbytes(&s->curr.base, &view.base) != 0,
+            1, "bytes wireformat expected at offset %d", lpb_offset(&s->curr));
         view.head = view.base.p;
         lpb_enterview(L, s, view);
     } else {
@@ -1055,7 +1058,7 @@ static int Lslice_leave(lua_State *L) {
     lpb_Slice *s = check_lslice(L, 1);
     lua_Integer count = posrelat(luaL_optinteger(L, 2, 1), s->used);
     if (count > (lua_Integer)s->used)
-        argerror(L, 2, "level (%d) exceed max level %d",
+        argcheck(L, 0, 2, "level (%d) exceed max level %d",
                 (int)count, (int)s->used);
     else if (count == (lua_Integer)s->used) {
         s->curr = s->buff[0];
@@ -1359,9 +1362,9 @@ typedef struct lpb_Env {
 static void lpb_encode (lpb_Env *e, pb_Type *t);
 
 static void lpb_checktable(lua_State *L, pb_Field *f) {
-    if (!lua_istable(L, -1))
-        argerror(L, 2, "table expected at field '%s', got %s",
-                (char*)f->name, luaL_typename(L, -1));
+    argcheck(L, lua_istable(L, -1),
+            2, "table expected at field '%s', got %s",
+            (char*)f->name, luaL_typename(L, -1));
 }
 
 static void lpbE_enum(lpb_Env *e, pb_Field *f) {
@@ -1375,10 +1378,10 @@ static void lpbE_enum(lpb_Env *e, pb_Field *f) {
                     pb_name(&e->LS->base, lua_tostring(L, -1)))) != NULL)
         pb_addvarint32(b, ev->number);
     else if (type != LUA_TSTRING)
-        argerror(L, 2, "number/string expected at field '%s', got %s",
+        argcheck(L, 0, 2, "number/string expected at field '%s', got %s",
                 (char*)f->name, luaL_typename(L, -1));
     else
-        argerror(L, 2, "can not encode unknown enum '%s' at field '%s'",
+        argcheck(L, 0, 2, "can not encode unknown enum '%s' at field '%s'",
                 lua_tostring(L, -1), (char*)f->name);
 }
 
@@ -1401,10 +1404,11 @@ static void lpbE_field(lpb_Env *e, pb_Field *f, size_t *plen) {
         break;
 
     default:
-        if ((ltype = lpb_addtype(L, b, -1, f->type_id, plen)) != 0)
-            argerror(L, 2, "%s expected for field '%s', got %s",
-                    lua_typename(L, ltype),
-                    (char*)f->name, luaL_typename(L, -1));
+        ltype = lpb_addtype(L, b, -1, f->type_id, plen);
+        argcheck(L, ltype == 0,
+                2, "%s expected for field '%s', got %s",
+                lua_typename(L, ltype),
+                (char*)f->name, luaL_typename(L, -1));
     }
 }
 
@@ -1488,8 +1492,7 @@ static int Lpb_encode(lua_State *L) {
     lpb_State *LS = default_lstate(L);
     pb_Type *t = lpb_type(&LS->base, luaL_checkstring(L, 1));
     lpb_Env e;
-    if (t == NULL)
-        argerror(L, 1, "type '%s' does not exists", lua_tostring(L, 1));
+    argcheck(L, t!=NULL, 1, "type '%s' does not exists", lua_tostring(L, 1));
     luaL_checktype(L, 2, LUA_TTABLE);
     e.L = L, e.LS = LS, e.b = test_buffer(L, 3);
     if (e.b == NULL) pb_resetbuffer(e.b = &LS->buffer);
@@ -1663,8 +1666,7 @@ static int Lpb_decode(lua_State *L) {
     lpb_SliceEx s = lua_isnoneornil(L, 2) ? lpb_initext(pb_lslice(NULL, 0))
                                           : lpb_initext(lpb_checkslice(L, 2));
     lpb_Env e;
-    if (t == NULL)
-        argerror(L, 1, "type '%s' does not exists", lua_tostring(L, 1));
+    argcheck(L, t!=NULL, 1, "type '%s' does not exists", lua_tostring(L, 1));
     lua_settop(L, 3);
     if (!lua_istable(L, 3)) {
         lua_pop(L, 1);
