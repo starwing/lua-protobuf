@@ -158,7 +158,7 @@ function _G.test_depend.test()
 
    load_depend(protoc.new())
    local t = { dep1 = { id = 1, name = "foo" }, other = 2 }
-   check_msg("Depend2Msg", t, { other = 2 })
+   check_msg("Depend2Msg", t, { dep1 = {}, other = 2 })
 
    eq(protoc.new():loadfile "depend1.proto", true)
    local chunk = pb.encode("Depend2Msg", t)

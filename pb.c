@@ -1474,7 +1474,7 @@ static void lpb_encode(lpb_Env *e, pb_Type *t) {
                 lpbE_map(e, f);
             else if (f->repeated)
                 lpbE_repeated(e, f);
-            else if (!f->type || (f->type->field_count != 0 || f->oneof_idx > 0)) {
+            else if (!f->type || !f->type->is_dead) {
                 size_t ignoredlen;
                 lpbE_tagfield(e, f, &ignoredlen);
                 if (t->is_proto3) e->b->size -= ignoredlen;
@@ -1572,8 +1572,7 @@ static void lpbD_field(lpb_Env *e, pb_Field *f, uint32_t tag) {
 
     case PB_Tmessage:
         lpb_readbytes(L, s, &sv);
-        if (f->type == NULL
-                || (f->type->field_count == 0 && f->oneof_idx == 0))
+        if (f->type == NULL || f->type->is_dead)
             lua_pushnil(L);
         else {
             lpb_pushtypetable(L, e->LS, f->type);
