@@ -1481,7 +1481,8 @@ static void lpb_encode(lpb_Env *e, pb_Type *t) {
             else if (!f->type || !f->type->is_dead) {
                 size_t ignoredlen;
                 lpbE_tagfield(e, f, &ignoredlen);
-                if (t->is_proto3) e->b->size -= ignoredlen;
+                if (t->is_proto3 && !f->oneof_idx)
+                    e->b->size -= ignoredlen;
             }
         }
         lua_pop(L, 1);
@@ -1520,10 +1521,9 @@ static void lpb_pushtypetable(lua_State *L, lpb_State *LS, pb_Type *t) {
     lua_newtable(L);
     switch (t && t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
-        while (pb_nextfield(t, &f)) {
-            if (lpb_pushdefault(L, LS, f, t->is_proto3))
+        while (pb_nextfield(t, &f))
+            if (!f->oneof_idx && lpb_pushdefault(L, LS, f, t->is_proto3))
                 lua_setfield(L, -2, (char*)f->name);
-        }
         break;
     case LPB_METADEF:
         while (pb_nextfield(t, &f)) {
@@ -1748,5 +1748,5 @@ LUALIB_API int luaopen_pb(lua_State *L) {
 PB_NS_END
 
 /* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
- * maccc: flags+='-shared -undefined dynamic_lookup' output='pb.so'
+ * maccc: flags+='-v -shared -undefined dynamic_lookup' output='pb.so'
  * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */

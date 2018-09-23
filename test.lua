@@ -641,17 +641,36 @@ function _G.test_oneof()
    check_load [[
    syntax = "proto3";
    message TestOneof {
+      oneof body {
+         uint32 foo = 1;
+         string bar = 2;
+      }
+   }
+   message Outter {
+      TestOneof msg = 1;
+   }
+   ]]
+   check_msg("TestOneof", { foo = 0 })
+   check_msg("TestOneof", { bar = "" })
+   check_msg("TestOneof", { foo = 0, bar = "" })
+   check_msg("Outter", { msg = { foo = 0 }})
+   check_msg("Outter", { msg = { bar = "" }})
+   check_msg("Outter", { msg = { foo = 0, bar = "" }})
+   pb.clear "TestOneof"
+   pb.clear "Outter"
+
+   check_load [[
+   syntax = "proto3";
+   message TestOneof {
        oneof test_oneof {
          string name = 4;
          int32  value = 5;
        }
    } ]]
 
-   local data = { name = "foo" }
-   pb.option "use_default_values"
-   check_msg("TestOneof", data, { name = "foo", value = 0 })
-   pb.option "no_default_values"
-   check_msg("TestOneof", data, { name = "foo" })
+   check_msg("TestOneof", { name = "foo" })
+   check_msg("TestOneof", { value = 0 })
+   check_msg("TestOneof", { name = "foo", value = 0 })
 
    data = { name = "foo", value = 5 }
    check_msg("TestOneof", data)
