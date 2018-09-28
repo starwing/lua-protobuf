@@ -61,7 +61,7 @@ end
 function _G.test_io.test()
    local code = "assert(io.write(require 'pb.io'.read()))"
    assert(pbio.dump("t.lua", code))
-   local fh = assert(io.popen("lua t.lua < t.lua", "r"))
+   local fh = assert(io.popen(arg[-1].." t.lua < t.lua", "r"))
    eq(fh:read "*a", code)
    fh:close()
    assert(os.remove "t.lua")
@@ -672,7 +672,7 @@ function _G.test_oneof()
    check_msg("TestOneof", { value = 0 })
    check_msg("TestOneof", { name = "foo", value = 0 })
 
-   data = { name = "foo", value = 5 }
+   local data = { name = "foo", value = 5 }
    check_msg("TestOneof", data)
    eq(pb.field("TestOneof", "name"), "name")
    pb.clear("TestOneof", "name")
@@ -801,6 +801,11 @@ function _G.test_buffer()
    eq(#b, 6)
 
    fail("integer format error: 'foo'", function() pb.pack("v", "foo") end)
+   if _VERSION == "Lua 5.3" then
+      fail("integer format error", function() pb.pack("v", 1e308) end)
+   else
+      fail("number has no integer representation", function() pb.pack("v", 1e308) end)
+   end
 
    b = buffer.new()
    fail("encode bytes fail", function() b:pack("#", 10) end)
@@ -1013,6 +1018,11 @@ function _G.test_load()
    assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
-os.exit(lu.LuaUnit.run(), true)
+if _VERSION == "Lua 5.1" and not _G.jit then
+   lu.LuaUnit.run()
+else
+   os.exit(lu.LuaUnit.run(), true)
+end
+
 -- unixcc: run='rm *.gcda; lua test.lua; gcov pb.c'
 -- win32cc: run='del *.gcda & lua test.lua & gcov pb.c'
