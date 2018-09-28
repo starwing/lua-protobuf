@@ -281,7 +281,7 @@ static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
 #if LUA_VERSION_NUM >= 503
     uint64_t v = (uint64_t)lua_tointegerx(L, idx, isint);
 #else
-    uint64_t v = (uint64_t)lua_tonumberx(L, idx, isint);
+    uint64_t v = (uint64_t)(int64_t)lua_tonumberx(L, idx, isint);
 #endif
     if (*isint) return v;
     if ((os = s = lua_tostring(L, idx)) == NULL) return 0;
