@@ -952,6 +952,16 @@ function _G.test_load()
    eq(pb.load(buf:result()), true)
    fail("type mismatch at offset 2, <unknown> expected for type <unknown>, got varint",
             function() pb.decode("load_test", "\8\1") end)
+   fail("type mismatch at offset 2, <unknown> expected for type <unknown>, got 64bit",
+            function() pb.decode("load_test", "\9\1") end)
+   fail("type mismatch at offset 2, <unknown> expected for type <unknown>, got bytes",
+            function() pb.decode("load_test", "\10\1") end)
+   fail("type mismatch at offset 2, <unknown> expected for type <unknown>, got gstart",
+            function() pb.decode("load_test", "\11\1") end)
+   fail("type mismatch at offset 2, <unknown> expected for type <unknown>, got gend",
+            function() pb.decode("load_test", "\12\1") end)
+   fail("type mismatch at offset 2, <unknown> expected for type <unknown>, got 32bit",
+            function() pb.decode("load_test", "\13\1") end)
 
    buf:reset()
    buf:pack("v(v(vsv(vsvvvv)))",
