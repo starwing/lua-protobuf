@@ -280,10 +280,16 @@ static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
     const char *s, *os;
 #if LUA_VERSION_NUM >= 503
     uint64_t v = (uint64_t)lua_tointegerx(L, idx, isint);
-#else
-    uint64_t v = (uint64_t)lua_tonumberx(L, idx, isint);
-#endif
     if (*isint) return v;
+#else
+    uint64_t v = 0;
+    lua_Number nv = lua_tonumberx(L, idx, isint);
+    if (*isint) {
+        if (nv < (lua_Number)INT64_MIN || nv > (lua_Number)INT64_MAX)
+            luaL_error(L, "number has no integer representation");
+        return (uint64_t)(int64_t)nv;
+    }
+#endif
     if ((os = s = lua_tostring(L, idx)) == NULL) return 0;
     while (*s == '#' || *s == '+' || *s == '-')
         neg = (*s == '-') ^ neg, ++s;
@@ -693,8 +699,7 @@ static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char **pfmt, i
             argcheck(L, (type = lpb_typefmt(fmt)) >= 0,
                     1, "invalid formater: '%c'", *fmt);
             ltype = lpb_addtype(L, b, idx, type, NULL);
-            argcheck(L, ltype == 0,
-                    idx, "%s expected for type '%s', got %s",
+            argcheck(L, ltype == 0, idx, "%s expected for type '%s', got %s",
                     lua_typename(L, ltype), pb_typename(type, "<unknown>"),
                     luaL_typename(L, idx));
             ++idx;

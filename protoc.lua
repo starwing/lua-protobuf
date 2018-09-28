@@ -389,11 +389,11 @@ local function field(self, lex, ident)
       name = lex:ident()
    end
    local info = {
-      name      = name;
-      number    = lex:expected "=":integer();
-      label     = ident == "map" and labels.repeated or labels.optional;
-      type      = type;
-      type_name = type_name;
+      name      = name,
+      number    = lex:expected "=":integer(),
+      label     = ident == "map" and labels.repeated or labels.optional,
+      type      = type,
+      type_name = type_name
    }
    local options = inline_option(lex)
    if options then
