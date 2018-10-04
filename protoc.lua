@@ -399,6 +399,9 @@ local function field(self, lex, ident)
    if options then
       info.default_value, options.default = tostring(options.default), nil
       info.json_name, options.json_name = options.json_name, nil
+      if options.packed and options.packed == "false" then
+         options.packed = false
+      end
    end
    info.options = options
    if info.number <= 0 then

@@ -259,7 +259,7 @@ static void lpb_readbytes(lua_State *L, lpb_SliceEx *s, lpb_SliceEx *pv) {
     if (pb_readslice(&s->base, (size_t)len, &pv->base) == 0 && len != 0)
         luaL_error(L, "un-finished bytes (len %d at offset %d)",
                 (int)len, lpb_offset(s));
-    pv->head = pv->base.p;
+    pv->head = s->head;
 }
 
 static int lpb_hexchar(char ch) {
