@@ -368,6 +368,13 @@ local function inline_option(lex, info)
       while true do
          local name  = lex:option_name()
          local value = lex:expected '=' :constant()
+         if name == "packed" then
+            if value == "false" then
+               value = false
+            else
+               value = true
+            end
+         end
          info[name] = value
          if lex:test "%]" then
             return info
