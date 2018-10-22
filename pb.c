@@ -275,6 +275,35 @@ static int lpb_hexchar(char ch) {
     return -1;
 }
 
+#ifdef luaL_newlib /* LuaJIT >= 2.1 */
+
+#include <lj_ctype.h>
+#include <lj_obj.h>
+
+static uint64_t lpb_ljcdata_toint(lua_State *L, int idx, int *isint) {
+	if (idx < 0)
+		idx = lua_gettop(L) + idx + 1;
+	GCcdata *cd = cdataV(L->base + idx - 1);
+	uint64_t v = 0;
+	switch (cd->ctypeid) {
+	case CTID_CCHAR:
+	case CTID_INT8: v = *(int8_t *)((void *)cdataptr(cd)); break;
+	case CTID_INT16: v = *(int16_t *)((void *)cdataptr(cd)); break;
+	case CTID_INT32: v = *(int32_t *)((void *)cdataptr(cd)); break;
+	case CTID_INT64: v = *(int64_t *)((void *)cdataptr(cd)); break;
+	case CTID_UINT8: v = *(uint8_t *)((void *)cdataptr(cd)); break;
+	case CTID_UINT16: v = *(uint16_t *)((void *)cdataptr(cd)); break;
+	case CTID_UINT32: v = *(uint32_t *)((void *)cdataptr(cd)); break;
+	case CTID_UINT64: v = *(uint64_t *)((void *)cdataptr(cd)); break;
+	default:
+		*isint = 0;
+		return 0;
+	}
+	*isint = 1;
+	return v;
+}
+#endif /* LuaJIT >= 2.1 */
+
 static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
     int neg = 0;
     const char *s, *os;
@@ -283,6 +312,12 @@ static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
     if (*isint) return v;
 #else
     uint64_t v = 0;
+#ifdef luaL_newlib /* LuaJIT >= 2.1 */
+    if (lua_type(L, idx) == LUA_TCDATA) {
+	    v = lpb_ljcdata_toint(L, idx, isint);
+	    if (*isint) return v;
+    }
+#endif /* LuaJIT >= 2.1 */
     lua_Number nv = lua_tonumberx(L, idx, isint);
     if (*isint) {
         if (nv < (lua_Number)INT64_MIN || nv > (lua_Number)INT64_MAX)
