@@ -47,7 +47,8 @@ typedef unsigned int       uint32_t;
 typedef signed   int        int32_t;
 typedef unsigned long long uint64_t;
 typedef signed   long long  int64_t;
-
+#define INT64_MIN LLONG_MIN
+#define INT64_MAX LLONG_MAX
 #elif defined(__SCO__) || defined(__USLC__) || defined(__MINGW32__)
 # include <stdint.h>
 #else
