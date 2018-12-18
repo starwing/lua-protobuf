@@ -38,7 +38,7 @@
 # define PB_API extern
 #endif
 
-#if defined(_MSC_VER) || defined(__UNIXOS2__) || defined(__SOL64__)
+#if defined(__UNIXOS2__) || defined(__SOL64__)
 typedef unsigned char      uint8_t;
 typedef signed   char       int8_t;
 typedef unsigned short     uint16_t;
@@ -48,7 +48,7 @@ typedef signed   int        int32_t;
 typedef unsigned long long uint64_t;
 typedef signed   long long  int64_t;
 
-#elif defined(__SCO__) || defined(__USLC__) || defined(__MINGW32__)
+#elif defined(__SCO__) || defined(__USLC__) || defined(__MINGW32__) || defined(_MSC_VER)
 # include <stdint.h>
 #else
 # include <inttypes.h>
