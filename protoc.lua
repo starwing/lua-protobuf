@@ -243,13 +243,13 @@ end
 local Parser = meta "Parser" do
 Parser.typemap = {}
 Parser.loaded  = {}
-Parser.paths   = { "." }
+Parser.paths   = { "", "." }
 
 function Parser.new()
    local self = {}
    self.typemap = {}
    self.loaded  = {}
-   self.paths   = { "." }
+   self.paths   = { "", "." }
    return setmetatable(self, Parser)
 end
 

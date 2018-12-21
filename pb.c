@@ -1555,6 +1555,17 @@ static void lpb_fetchtable(lpb_Env *e, pb_Field *f, pb_Type *t) {
     }
 }
 
+static int lpbD_mismatch(lua_State *L, pb_Field *f, lpb_SliceEx *s, uint32_t tag) {
+    return luaL_error(L,
+            "type mismatch for field '%s' at offset %d, "
+            "%s expected for type %s, got %s",
+            (char*)f->name,
+            lpb_offset(s),
+            pb_wtypename(pb_wtypebytype(f->type_id), NULL),
+            pb_typename(f->type_id, NULL),
+            pb_wtypename(pb_gettype(tag), NULL));
+}
+
 static void lpbD_field(lpb_Env *e, pb_Field *f, uint32_t tag) {
     lua_State *L = e->L;
     lpb_SliceEx sv, *s = e->s;
@@ -1562,11 +1573,7 @@ static void lpbD_field(lpb_Env *e, pb_Field *f, uint32_t tag) {
     uint64_t u64;
 
     if (!f->packed && pb_wtypebytype(f->type_id) != (int)pb_gettype(tag))
-        luaL_error(L, "type mismatch at offset %d, %s expected for type %s, got %s",
-                lpb_offset(s),
-                pb_wtypename(pb_wtypebytype(f->type_id), NULL),
-                pb_typename(f->type_id, NULL),
-                pb_wtypename(pb_gettype(tag), NULL));
+        lpbD_mismatch(L, f, s, tag);
 
     switch (f->type_id) {
     case PB_Tenum:
