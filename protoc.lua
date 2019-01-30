@@ -752,9 +752,9 @@ function Parser:parse(src, name)
    end
 
    name = name or "<input>"
+   self.loaded[name] = true
    local lex = Lexer.new(name, src)
    local info = { name = lex.name }
-   if name then self.loaded[name] = true end
    local ctx = make_context(self, lex)
 
    local syntax = lex:keyword('syntax', 'opt')
@@ -774,7 +774,7 @@ function Parser:parse(src, name)
       end
       lex:line_end "opt"
    end
-   if name then self.loaded[name] = info end
+   self.loaded[name] = name ~= "<input>" and info or nil
    return ctx:resolve(lex, info)
 end
 
