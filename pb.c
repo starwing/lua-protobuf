@@ -1181,8 +1181,8 @@ static int lpb_pushfield(lua_State *L, pb_Type *t, pb_Field *f) {
     lua_pushstring(L, f->type ? (char*)f->type->name :
             pb_typename(f->type_id, "<unknown>"));
     lua_pushstring(L, (char*)f->default_value);
-    lua_pushstring(L, f->packed ? "packed" :
-            f->repeated ? "repeated" : "optional");
+    lua_pushstring(L, f->repeated ? f->packed ? "packed" : "repeated"
+                                  : "optional");
     if (f->oneof_idx > 0) {
         lua_pushstring(L, (const char*)pb_oneofname(t, f->oneof_idx));
         lua_pushinteger(L, f->oneof_idx-1);

@@ -374,6 +374,8 @@ function _G.test_default()
          repeated int32 array = 18;
       } ]]
 
+   local _, _, _, _, rep = pb.field("TestDefault", "foo")
+   eq(rep, "optional")
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
             defaulted_int = 0,
             defaulted_bool = false,
