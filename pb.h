@@ -1190,28 +1190,30 @@ PB_API pb_Type *pb_newtype(pb_State *S, pb_Name *tname) {
 }
 
 PB_API void pb_deltype(pb_State *S, pb_Type *t) {
-    pb_FieldEntry *nf = NULL;
-    pb_OneofEntry *ne = NULL;
-    while (pb_nextentry(&t->field_names, (pb_Entry**)&nf)) {
-        if (nf->value != NULL) {
-            pb_FieldEntry *of = (pb_FieldEntry*)pb_gettable(
-                    &t->field_tags, nf->value->number);
-            if (of && of->value == nf->value)
-                of->entry.key = 0, of->value = NULL;
-            pbT_freefield(S, nf->value);
+    if (S && t) {
+        pb_FieldEntry *nf = NULL;
+        pb_OneofEntry *ne = NULL;
+        while (pb_nextentry(&t->field_names, (pb_Entry**)&nf)) {
+            if (nf->value != NULL) {
+                pb_FieldEntry *of = (pb_FieldEntry*)pb_gettable(
+                        &t->field_tags, nf->value->number);
+                if (of && of->value == nf->value)
+                    of->entry.key = 0, of->value = NULL;
+                pbT_freefield(S, nf->value);
+            }
         }
+        while (pb_nextentry(&t->field_tags, (pb_Entry**)&nf))
+            if (nf->value != NULL) pbT_freefield(S, nf->value);
+        while (pb_nextentry(&t->oneof_index, (pb_Entry**)&ne))
+            pb_delname(S, ne->name);
+        pb_freetable(&t->field_tags);
+        pb_freetable(&t->field_names);
+        pb_freetable(&t->oneof_index);
+        t->field_count = 0;
+        t->is_dead = 1;
+        /*pb_delname(S, t->name); */
+        /*pb_poolfree(&S->typepool, t); */
     }
-    while (pb_nextentry(&t->field_tags, (pb_Entry**)&nf))
-        if (nf->value != NULL) pbT_freefield(S, nf->value);
-    while (pb_nextentry(&t->oneof_index, (pb_Entry**)&ne))
-        pb_delname(S, ne->name);
-    pb_freetable(&t->field_tags);
-    pb_freetable(&t->field_names);
-    pb_freetable(&t->oneof_index);
-    t->field_count = 0;
-    t->is_dead = 1;
-    /*pb_delname(S, t->name); */
-    /*pb_poolfree(&S->typepool, t); */
 }
 
 PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t number) {

@@ -242,6 +242,7 @@ function _G.test_extend()
 end
 
 function _G.test_type()
+   pb.clear "not-exists"
    check_load [[
    message TestTypes {
       optional double   dv    = 1;
