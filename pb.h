@@ -821,7 +821,7 @@ PB_API void pb_poolfree(pb_Pool *pool, void *obj)
 #define pbT_index(a, b)  ((pb_Entry*)((char*)(a) + (b)))
 
 PB_API void pb_inittable(pb_Table *t, size_t entrysize)
-{ memset(t, 0, sizeof(pb_Table)), t->entry_size = entrysize; }
+{ memset(t, 0, sizeof(pb_Table)), t->entry_size = (unsigned)entrysize; }
 
 PB_API void pb_freetable(pb_Table *t)
 { free(t->hash); pb_inittable(t, t->entry_size); }
@@ -1595,7 +1595,7 @@ static void pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Loader *L) {
     for (i = 0, count = pbL_count(info->oneof_decl); i < count; ++i) {
         pb_OneofEntry *e = (pb_OneofEntry*)pb_settable(&t->oneof_index, i+1);
         e->name = pb_newname(S, info->oneof_decl[i]);
-        e->index = i+1;
+        e->index = (int)i+1;
     }
     for (i = 0, count = pbL_count(info->field); i < count; ++i)
         pbL_loadField(S, &info->field[i], L, t);

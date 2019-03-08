@@ -1637,7 +1637,7 @@ static void lpbD_repeated(lpb_Env *e, pb_Field *f, uint32_t tag) {
     lua_State *L = e->L;
     lpb_fetchtable(e, f, NULL);
     if (f->packed && pb_gettype(tag) == PB_TBYTES) {
-        int len = lua_rawlen(L, -1);
+        int len = (int)lua_rawlen(L, -1);
         lpb_SliceEx p, *s = e->s;
         lpb_readbytes(L, s, &p);
         while (p.base.p < p.base.end) {
