@@ -1077,6 +1077,13 @@ static int Lslice_leave(lua_State *L) {
     return 2;
 }
 
+LUALIB_API int lpb_newslice(lua_State *L, const char *s, size_t len) {
+    lpb_SliceEx *S = (lpb_SliceEx*)lua_newuserdata(L, sizeof(lpb_SliceEx));
+    *S = lpb_initext(pb_lslice(s, len));
+    luaL_setmetatable(L, PB_SLICE);
+    return 1;
+}
+
 LUALIB_API int luaopen_pb_slice(lua_State *L) {
     luaL_Reg libs[] = {
         { "__tostring", Lslice_tostring },
@@ -1672,11 +1679,9 @@ static int lpb_decode(lpb_Env *e, pb_Type *t) {
     return 1;
 }
 
-static int Lpb_decode(lua_State *L) {
+static int lpb_decode_ex(lua_State *L, lpb_SliceEx s) {
     lpb_State *LS = default_lstate(L);
     pb_Type *t = lpb_type(&LS->base, luaL_checkstring(L, 1));
-    lpb_SliceEx s = lua_isnoneornil(L, 2) ? lpb_initext(pb_lslice(NULL, 0))
-                                          : lpb_initext(lpb_checkslice(L, 2));
     lpb_Env e;
     argcheck(L, t!=NULL, 1, "type '%s' does not exists", lua_tostring(L, 1));
     lua_settop(L, 3);
@@ -1688,6 +1693,11 @@ static int Lpb_decode(lua_State *L) {
     return lpb_decode(&e, t);
 }
 
+static int Lpb_decode(lua_State *L) {
+    lpb_SliceEx s = lua_isnoneornil(L, 2) ? lpb_initext(pb_lslice(NULL, 0))
+                                          : lpb_initext(lpb_checkslice(L, 2));
+    return lpb_decode_ex(L, s);
+}
 
 /* pb module interface */
 
@@ -1753,6 +1763,18 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         lua_setfield(L, -2, "__index");
     }
     luaL_newlib(L, libs);
+    return 1;
+}
+
+static int Lpb_decode_unsafe(lua_State *L) {
+    return lpb_decode_ex(L,
+            lpb_initext(pb_lslice(
+                    (const char*)lua_touserdata(L, 2),
+                    (size_t)luaL_checkinteger(L, 3))));
+}
+
+LUALIB_API int luaopen_pb_decode_unsafe(lua_State *L) {
+    lua_pushcfunction(L, Lpb_decode_unsafe);
     return 1;
 }
 
