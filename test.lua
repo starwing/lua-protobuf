@@ -1026,11 +1026,67 @@ function _G.test_load()
    assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
+function _G.test_hook()
+   local old = pb.state(nil)
+   protoc.reload()
+   check_load [[
+      message Phone {
+         optional string name        = 1;
+         optional int64  phonenumber = 2;
+      }
+      message Person {
+         optional string name     = 1;
+         optional int32  age      = 2;
+         optional string address  = 3;
+         repeated Phone  contacts = 4;
+      } ]]
+   pb.option "enable_hooks"
+   assert(pb.hooks "Phone" == nil)
+   fail("function expected, got boolean",
+        function() pb.hooks("Phone", true) end)
+   local function make_hook(name, func)
+      local fetch = pb.hooks(name)
+      local function helper(t)
+         return func(name, t)
+      end
+      local old = pb.hooks(name, helper)
+      assert(fetch == old)
+      assert(pb.hooks(name) == helper)
+   end
+   local s = {}
+   make_hook("Person", function(name, t)
+      s[#s+1] = ("(%s|%s)"):format(name, t.name)
+   end)
+   make_hook("Phone", function(name, t)
+      s[#s+1] = ("(%s|%s|%s)"):format(name, t.name, t.phonenumber)
+   end)
+   local data = {
+      name = "ilse",
+      age  = 18,
+      contacts = {
+         { name = "alice", phonenumber = 12312341234 },
+         { name = "bob",   phonenumber = 45645674567 }
+      }
+   }
+   pb.decode("Person", pb.encode("Person", data))
+   s = table.concat(s)
+   assert(s == "(Phone|alice|12312341234)(Phone|bob|45645674567)(Person|ilse)")
+   pb.state(old)
+end
+
+function _G.test_unsafe()
+   local unsafe = require "pb.unsafe"
+   assert(type(unsafe.decode) == "function")
+   fail("userdata expected, got boolean",
+      function() unsafe.decode(true, 1)
+   end)
+end
+
 if _VERSION == "Lua 5.1" and not _G.jit then
    lu.LuaUnit.run()
 else
    os.exit(lu.LuaUnit.run(), true)
 end
 
--- unixcc: run='rm *.gcda; lua test.lua; gcov pb.c'
+-- unixcc: run='rm -f *.gcda; lua test.lua; gcov pb.c'
 -- win32cc: run='del *.gcda & lua test.lua & gcov pb.c'
