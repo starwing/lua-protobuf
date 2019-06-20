@@ -210,7 +210,7 @@ all functions raise a Lua error when meets errors.
 | `pb.enum(type, string)`        | number          | get the value of a enum by name                   |
 | `pb.enum(type, number)`        | string          | get the name of a enum by value                   |
 | `pb.defaults(type[, table])`   | table           | get the default table of type                     |
-| `pb.hooks(type[, function])`   | function        | get or set hook functions                         |
+| `pb.hook(type[, function])`    | function        | get or set hook functions                         |
 | `pb.option(string)`            | string          | set options to decoder/encoder                    |
 | `pb.state()`                   | `pb.State`      | retrieve current pb state                         |
 | `pb.state(newstate \| nil)`    | `pb.State`      | set new pb state and retrieve the old one         |
@@ -295,7 +295,7 @@ Using `pb.defaults()` to get a table with all default values from a message. thi
 
 #### Hooks
 
-If set `pb.option "enable_hooks"`, the hook function will enabled. you could use `pb.hooks()` to set or get a hook function. call it with type name directly get current setted hook. call it with two arguments to set a hook. and call it with `nil` as the second argument to remove the hook. in all case, the original one will returned.
+If set `pb.option "enable_hooks"`, the hook function will enabled. you could use `pb.hook()` to set or get a hook function. call it with type name directly get current setted hook. call it with two arguments to set a hook. and call it with `nil` as the second argument to remove the hook. in all case, the original one will be returned.
 
 After the hook function setted and hook enabled, the function will be called *after* a message get decoded. So you could get all values in the table passed to hook function. That's the only argument of hook.
 

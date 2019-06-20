@@ -1048,19 +1048,19 @@ function _G.test_hook()
          repeated Phone  contacts = 4;
       } ]]
    pb.option "enable_hooks"
-   assert(pb.hooks "Phone" == nil)
+   assert(pb.hook "Phone" == nil)
    fail("function expected, got boolean",
-        function() pb.hooks("Phone", true) end)
+        function() pb.hook("Phone", true) end)
    fail("type not found",
-      function() pb.hooks "-invalid-type-" end)
+      function() pb.hook "-invalid-type-" end)
    local function make_hook(name, func)
-      local fetch = pb.hooks(name)
+      local fetch = pb.hook(name)
       local function helper(t)
          return func(name, t)
       end
-      local old = pb.hooks(name, helper)
+      local old = pb.hook(name, helper)
       assert(fetch == old)
-      assert(pb.hooks(name) == helper)
+      assert(pb.hook(name) == helper)
    end
    local s = {}
    make_hook("Person", function(name, t)

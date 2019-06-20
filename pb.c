@@ -1358,7 +1358,7 @@ static int Lpb_defaults(lua_State *L) {
     return 1;
 }
 
-static int Lpb_hooks(lua_State *L) {
+static int Lpb_hook(lua_State *L) {
     lpb_State *LS = default_lstate(L);
     pb_Type *t = lpb_type(&LS->base, luaL_checkstring(L, 1));
     int type = lua_type(L, 2);
@@ -1783,7 +1783,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(field),
         ENTRY(enum),
         ENTRY(defaults),
-        ENTRY(hooks),
+        ENTRY(hook),
         ENTRY(tohex),
         ENTRY(result),
         ENTRY(option),
