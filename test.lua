@@ -1065,12 +1065,16 @@ function _G.test_hook()
    local s = {}
    make_hook("Person", function(name, t)
       s[#s+1] = ("(%s|%s)"):format(name, t.name)
+      t.hooked = true
    end)
    make_hook("Phone", function(name, t)
       s[#s+1] = ("(%s|%s|%s)"):format(name, t.name, t.phonenumber)
+      t.hooked = true
+      return t
    end)
    make_hook("Type", function(name, t)
       s[#s+1] = ("(%s|%s)"):format(name, t)
+      return { type = name, value = t }
    end)
    local data = {
       name = "ilse",
@@ -1080,11 +1084,16 @@ function _G.test_hook()
          { name = "bob",   type = "WORK", phonenumber = 45645674567 }
       }
    }
-   pb.decode("Person", pb.encode("Person", data))
+   local res = pb.decode("Person", pb.encode("Person", data))
    s = table.concat(s)
    assert(s == "(Type|HOME)(Phone|alice|12312341234)"..
       "(Type|WORK)(Phone|bob|45645674567)"..
       "(Person|ilse)")
+   assert(res.hooked)
+   assert(res.contacts[1].hooked)
+   assert(res.contacts[2].hooked)
+   assert(type(res.contacts[1].type) == "table")
+   assert(type(res.contacts[2].type) == "table")
    pb.state(old)
 end
 

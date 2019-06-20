@@ -1565,7 +1565,10 @@ static void lpb_usehooks(lua_State *L, lpb_State *LS, pb_Type *t) {
     if (lua53_rawgetp(L, -1, t) != LUA_TNIL) {
         lua_pushvalue(L, -3);
         lua_call(L, 1, 1);
-        if (!lua_isnil(L, -1)) lua_replace(L, -3);
+        if (!lua_isnil(L, -1)) {
+            lua_pushvalue(L, -1);
+            lua_replace(L, -4);
+        }
     }
     lua_pop(L, 2);
 }
