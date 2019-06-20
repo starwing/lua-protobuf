@@ -350,6 +350,8 @@ function _G.test_default()
          })
    pb.clear "TestDefault"
    pb.clear "TestDefaultColor"
+   fail("type not found",
+      function() pb.defaults "-invalid-type-" end)
 
    check_load [[
       syntax = "proto3";
@@ -1044,6 +1046,8 @@ function _G.test_hook()
    assert(pb.hooks "Phone" == nil)
    fail("function expected, got boolean",
         function() pb.hooks("Phone", true) end)
+   fail("type not found",
+      function() pb.hooks "-invalid-type-" end)
    local function make_hook(name, func)
       local fetch = pb.hooks(name)
       local function helper(t)
