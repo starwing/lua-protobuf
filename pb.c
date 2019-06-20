@@ -1630,6 +1630,7 @@ static void lpbD_field(lpb_Env *e, pb_Field *f, uint32_t tag) {
             ev = pb_field(f->type, (int32_t)u64);
         if (ev) lua_pushstring(L, (char*)ev->name);
         else lpb_pushinteger(L, (lua_Integer)u64, default_lstate(L)->int64_mode);
+        if (e->LS->use_hooks) lpb_usehooks(L, e->LS, f->type);
         break;
 
     case PB_Tmessage:

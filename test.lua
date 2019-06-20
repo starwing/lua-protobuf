@@ -1032,9 +1032,14 @@ function _G.test_hook()
    local old = pb.state(nil)
    protoc.reload()
    check_load [[
+      enum Type {
+         HOME = 1;
+         WORK = 2;
+      }
       message Phone {
          optional string name        = 1;
          optional int64  phonenumber = 2;
+         optional Type   type        = 3;
       }
       message Person {
          optional string name     = 1;
@@ -1064,17 +1069,22 @@ function _G.test_hook()
    make_hook("Phone", function(name, t)
       s[#s+1] = ("(%s|%s|%s)"):format(name, t.name, t.phonenumber)
    end)
+   make_hook("Type", function(name, t)
+      s[#s+1] = ("(%s|%s)"):format(name, t)
+   end)
    local data = {
       name = "ilse",
       age  = 18,
       contacts = {
-         { name = "alice", phonenumber = 12312341234 },
-         { name = "bob",   phonenumber = 45645674567 }
+         { name = "alice", type = "HOME", phonenumber = 12312341234 },
+         { name = "bob",   type = "WORK", phonenumber = 45645674567 }
       }
    }
    pb.decode("Person", pb.encode("Person", data))
    s = table.concat(s)
-   assert(s == "(Phone|alice|12312341234)(Phone|bob|45645674567)(Person|ilse)")
+   assert(s == "(Type|HOME)(Phone|alice|12312341234)"..
+      "(Type|WORK)(Phone|bob|45645674567)"..
+      "(Person|ilse)")
    pb.state(old)
 end
 
