@@ -1101,7 +1101,7 @@ function _G.test_unsafe()
    local unsafe = require "pb.unsafe"
    assert(type(unsafe.decode) == "function")
    fail("userdata expected, got boolean",
-      function() unsafe.decode(true, 1)
+      function() unsafe.decode("", true, 1)
    end)
 end
 
