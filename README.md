@@ -113,21 +113,17 @@ print(require "serpent".block(data2))
 
 ### `protoc` Module
 
-| Function                | Returns       | Descriptions                                         |
-| ----------------------- | ------------- | ---------------------------------------------------- |
-| `protoc.new()`          | Proroc object | create a new compiler instance                       |
-| `protoc.reload()`       | true          | reload all google standard messages into `pb` module |
-| `p:parse(string)`       | table         | transform schema to `DescriptorProto` table          |
-| `p:parsefile(string)`   | table         | like `p:parse()`, but accept filename                |
-| `p:compile(string)`     | string        | transform schema to binary *.pb format data          |
-| `p:compilefile(string)` | string        | like `p:compile()`, but accept filename              |
-| `p:load(string)`        | true          | load schema into `pb` module                         |
-| `p:loadfile(string)`    | true          | like `pb:loadfile()`, but accept filename            |
-| `p.loaded`              | table         | contains all parsed `DescriptorProto` table          |
-| `p.paths`               | table         | a table contains import search directories           |
-| `p.unknown_module`      | see below     | handle schema import error                           |
-| `p.unknown_type`        | see below     | handle unknown type in schema                        |
-| `p.include_imports`     | bool          | auto load imported proto                             |
+| Function            | Returns       | Descriptions                                         |
+| ------------------- | ------------- | ---------------------------------------------------- |
+| `protoc.new()`      | Proroc object | create a new compiler instance                       |
+| `protoc.reload()`   | true          | reload all google standard messages into `pb` module |
+| `p:parse(string)`   | table         | transform schema to `DescriptorProto` table          |
+| `p:compile(string)` | string        | transform schema to binary *.pb format data          |
+| `p:load(string)`    | true          | load schema into `pb` module                         |
+| `p.loaded`          | table         | contains all parsed `DescriptorProto` table          |
+| `p.unknown_module`  | see below     | handle schema import error                           |
+| `p.unknown_type`    | see below     | handle unknown type in schema                        |
+| `p.include_imports` | bool          | auto load imported proto                             |
 
 To parse a text schema file, create a compiler instance first:
 
@@ -196,7 +192,6 @@ all functions raise a Lua error when meets errors.
 | `pb.clear()`                   | None            | clear all types                                   |
 | `pb.clear(type)`               | None            | delete specific type                              |
 | `pb.load(data)`                | boolean,integer | load a binary schema data into `pb` module        |
-| `pb.loadfile(string)`          | boolean,integer | same as `pb.load()`, but accept file name         |
 | `pb.encode(type, table)`       | string          | encode a message table into binary form           |
 | `pb.encode(type, table, b)`    | buffer          | encode a message table into binary form to buffer |
 | `pb.decode(type, data)`        | table           | decode a binary message into Lua table            |
@@ -215,9 +210,9 @@ all functions raise a Lua error when meets errors.
 | `pb.state()`                   | `pb.State`      | retrieve current pb state                         |
 | `pb.state(newstate \| nil)`    | `pb.State`      | set new pb state and retrieve the old one         |
 
-#### Scheme file loading
+#### Schema loading
 
-`pb.load()` accepts the schema binary data directly, and `pb.loadfile()` reads data from file. they returns a boolean indicates the result of loading, success or failure, and a offset reading in schema so far that is useful to figure out the reason of failure.
+`pb.load()` accepts the schema binary data and returns a boolean indicates the result of loading, success or failure, and a offset reading in schema so far that is useful to figure out the reason of failure.
 
 #### Type Information
 
