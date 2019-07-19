@@ -4,6 +4,8 @@
 
 中文使用说明：https://zhuanlan.zhihu.com/p/26014103
 
+Urho3d集成说明：https://note.youdao.com/ynoteshare1/index.html?id=20d06649fab669371140256abd7a362b&type=note
+
 QQ群：485016061 [![lua-protobuf1交流群](https://pub.idqqimg.com/wpa/images/group.png)](https://shang.qq.com/wpa/qunwpa?idkey=d7e2973604a723c4f77d0a837df39be26e15be2c2ec29d5ebfdb64f94e74e6ae)
 
 This project offers a C module for Lua manipulating Google's protobuf protocol, both for version 2 and 3 syntax and semantics. It splits to the lower-level and the high-level parts for different goals.
