@@ -187,28 +187,29 @@ in below table of functions, we have several types that have special means:
 
 all functions raise a Lua error when meets errors.
 
-| Function                       | Returns         | Description                                       |
-| ------------------------------ | --------------- | ------------------------------------------------- |
-| `pb.clear()`                   | None            | clear all types                                   |
-| `pb.clear(type)`               | None            | delete specific type                              |
-| `pb.load(data)`                | boolean,integer | load a binary schema data into `pb` module        |
-| `pb.encode(type, table)`       | string          | encode a message table into binary form           |
-| `pb.encode(type, table, b)`    | buffer          | encode a message table into binary form to buffer |
-| `pb.decode(type, data)`        | table           | decode a binary message into Lua table            |
-| `pb.decode(type, data, table)` | table           | decode a binary message into a given Lua table    |
-| `pb.pack(fmt, ...)`            | string          | same as `buffer.pack()` but return string         |
-| `pb.unpack(data, fmt, ...)`    | values...       | same as `slice.unpack()` but accept data          |
-| `pb.types()`                   | iterator        | iterate all types in `pb` module                  |
-| `pb.type(type)`                | see below       | return informations for specific type             |
-| `pb.fields(type)`              | iterator        | iterate all fields in a message                   |
-| `pb.field(type, string)`       | see below       | return informations for specific field of type    |
-| `pb.enum(type, string)`        | number          | get the value of a enum by name                   |
-| `pb.enum(type, number)`        | string          | get the name of a enum by value                   |
-| `pb.defaults(type[, table])`   | table           | get the default table of type                     |
-| `pb.hook(type[, function])`    | function        | get or set hook functions                         |
-| `pb.option(string)`            | string          | set options to decoder/encoder                    |
-| `pb.state()`                   | `pb.State`      | retrieve current pb state                         |
-| `pb.state(newstate \| nil)`    | `pb.State`      | set new pb state and retrieve the old one         |
+| Function                       | Returns         | Description                                             |
+| ------------------------------ | --------------- | ------------------------------------------------------- |
+| `pb.clear()`                   | None            | clear all types                                         |
+| `pb.clear(type)`               | None            | delete specific type                                    |
+| `pb.load(data)`                | boolean,integer | load a binary schema data into `pb` module              |
+| `pb.encode(type, table)`       | string          | encode a message table into binary form                 |
+| `pb.encode(type, table, b)`    | buffer          | encode a message table into binary form to buffer       |
+| `pb.decode(type, data)`        | table           | decode a binary message into Lua table                  |
+| `pb.decode(type, data, table)` | table           | decode a binary message into a given Lua table          |
+| `pb.pack(fmt, ...)`            | string          | same as `buffer.pack()` but return string               |
+| `pb.unpack(data, fmt, ...)`    | values...       | same as `slice.unpack()` but accept data                |
+| `pb.types()`                   | iterator        | iterate all types in `pb` module                        |
+| `pb.type(type)`                | see below       | return informations for specific type                   |
+| `pb.fields(type)`              | iterator        | iterate all fields in a message                         |
+| `pb.field(type, string)`       | see below       | return informations for specific field of type          |
+| `pb.typefmt(type)`             | String          | transform type name of field into pack/unpack formatter |
+| `pb.enum(type, string)`        | number          | get the value of a enum by name                         |
+| `pb.enum(type, number)`        | string          | get the name of a enum by value                         |
+| `pb.defaults(type[, table])`   | table           | get the default table of type                           |
+| `pb.hook(type[, function])`    | function        | get or set hook functions                               |
+| `pb.option(string)`            | string          | set options to decoder/encoder                          |
+| `pb.state()`                   | `pb.State`      | retrieve current pb state                               |
+| `pb.state(newstate \| nil)`    | `pb.State`      | set new pb state and retrieve the old one               |
 
 #### Schema loading
 
@@ -382,7 +383,7 @@ Slice object parse binary protobuf data in a low-level way.  Use `slice.new()` t
 
 A slice object has a stack itself.  calling `s:enter(i, j)` saves current position and enters next level with the optional offset `i` and `j` just as `slice.new()`.  calling `s:leave()` restore the prior view.  `s:level()` returns the current level, and `s:level(n)` returns the current position, the start and the end position information of the `n`th level.  calling `s:enter()` without parameter will read a length delimited type value from the slice and enter the view in reading value.  Using `#a` to get the count of bytes remains in current view.
 
-To read values from slice, use `slice.unpack()`, it use a format string to control how to read into a slice as below table (same format character are also used in `buffer.pack()`):
+To read values from slice, use `slice.unpack()`, it use a format string to control how to read into a slice as below table (same format character are also used in `buffer.pack()`). Notice that you can use `pb.typefmt()` to convert between format and protobuf type names (returned from `pb.field()`).
 
 | Format | Description                                                  |
 | ------ | ------------------------------------------------------------ |

@@ -663,21 +663,11 @@ LUALIB_API int luaopen_pb_conv(lua_State *L) {
 
 /* protobuf encode routine */
 
-static int lpb_typefmt(const char *fmt) {
-    switch (*fmt) {
-    case 'b': return PB_Tbool;
-    case 'f': return PB_Tfloat;
-    case 'F': return PB_Tdouble;
-    case 'i': return PB_Tint32;
-    case 'j': return PB_Tsint32;
-    case 'u': return PB_Tuint32;
-    case 'x': return PB_Tfixed32;
-    case 'y': return PB_Tsfixed32;
-    case 'I': return PB_Tint64;
-    case 'J': return PB_Tsint64;
-    case 'U': return PB_Tuint64;
-    case 'X': return PB_Tfixed64;
-    case 'Y': return PB_Tsfixed64;
+static int lpb_typefmt(int fmt) {
+    switch (fmt) {
+#define X(name, type, fmt) case fmt: return PB_T##name;
+        PB_TYPES(X)
+#undef  X
     }
     return -1;
 }
@@ -707,7 +697,7 @@ static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char **pfmt, i
             return idx;
         case '\0':
         default:
-            argcheck(L, (type = lpb_typefmt(fmt)) >= 0,
+            argcheck(L, (type = lpb_typefmt(*fmt)) >= 0,
                     1, "invalid formater: '%c'", *fmt);
             ltype = lpb_addtype(L, b, idx, type, NULL);
             argcheck(L, ltype == 0, idx, "%s expected for type '%s', got %s",
@@ -967,7 +957,7 @@ static int lpb_unpackfmt(lua_State *L, int idx, const char *fmt, lpb_SliceEx *s)
         if (s->base.p >= s->base.end) { lua_pushnil(L); return rets + 1; }
         luaL_checkstack(L, 1, "too many values");
         if (!lpb_unpackscalar(L, &idx, top, *fmt, s)) {
-            argcheck(L, (type = lpb_typefmt(fmt)) >= 0,
+            argcheck(L, (type = lpb_typefmt(*fmt)) >= 0,
                     1, "invalid formater: '%c'", *fmt);
             lpb_readtype(L, default_lstate(L), type, s);
         }
@@ -1394,6 +1384,33 @@ static int Lpb_clear(lua_State *L) {
     return 0;
 }
 
+static int Lpb_typefmt(lua_State *L) {
+    size_t len;
+    const char *s = luaL_checklstring(L, 1, &len);
+    const char *r = NULL;
+    char buf[2] = {0};
+    int type;
+    if (len == 1)
+        r = pb_typename(lpb_typefmt(*s), "!");
+    else if (lpb_type(default_state(L), s))
+        r = "message";
+    else if ((type = pb_typebyname(s, PB_Tmessage)) != PB_Tmessage) {
+        switch (type) {
+#define X(name, type, fmt) case PB_T##name: buf[0] = fmt, r = buf; break;
+            PB_TYPES(X)
+#undef  X
+        }
+    } else if ((type = pb_wtypebyname(s, PB_Tmessage)) != PB_Tmessage) {
+        switch (type) {
+#define X(id, name, fmt) case PB_T##id: buf[0] = fmt, r = buf; break;
+            PB_WIRETYPES(X)
+#undef  X
+        }
+    }
+    lua_pushstring(L, r ? r : "!");
+    return 1;
+}
+
 
 /* protobuf encode */
 
@@ -1784,6 +1801,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(fields),
         ENTRY(type),
         ENTRY(field),
+        ENTRY(typefmt),
         ENTRY(enum),
         ENTRY(defaults),
         ENTRY(hook),

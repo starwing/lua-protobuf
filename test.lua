@@ -905,6 +905,97 @@ function _G.test_slice()
    assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
+function _G.test_typefmt()
+   -- load schema from text
+   assert(protoc:load [[
+      message Phone {
+      optional string name        = 1;
+      optional int64  phonenumber = 2;
+      }
+      message Person {
+      optional string name     = 1;
+      optional int32  age      = 2;
+      optional string address  = 3;
+      repeated Phone  contacts = 4;
+      } ]])
+
+   -- lua table data
+   local data = {
+      name = "ilse",
+      age  = 18,
+      contacts = {
+         { name = "alice", phonenumber = 12312341234 },
+         { name = "bob",   phonenumber = 45645674567 }
+      }
+   }
+
+   local bytes = assert(pb.encode("Person", data))
+   local s = require "pb.slice".new(bytes)
+   local function decode(type, s, data)
+      while #s > 0 do
+         local offset, tag = s:unpack"@v"
+         local name, _, pbtype = pb.field(type, math.floor(tag / 8))
+         local fmt = pb.typefmt(pbtype)
+         if fmt == "message" then
+            s:enter()
+            if data[name][1] then
+               decode(pbtype, s, data[name][1])
+               table.remove(data[name], 1)
+            end
+            s:leave()
+         else
+            assert(data[name] == s:unpack(fmt))
+         end
+      end
+   end
+   decode("Person", s, data)
+
+   assert(pb.typefmt'F' == "double"  )
+   assert(pb.typefmt'f' == "float"   )
+   assert(pb.typefmt'I' == "int64"   )
+   assert(pb.typefmt'U' == "uint64"  )
+   assert(pb.typefmt'i' == "int32"   )
+   assert(pb.typefmt'X' == "fixed64" )
+   assert(pb.typefmt'x' == "fixed32" )
+   assert(pb.typefmt'b' == "bool"    )
+   assert(pb.typefmt't' == "string"  )
+   assert(pb.typefmt'g' == "group"   )
+   assert(pb.typefmt'S' == "message" )
+   assert(pb.typefmt's' == "bytes"   )
+   assert(pb.typefmt'u' == "uint32"  )
+   assert(pb.typefmt'v' == "enum"    )
+   assert(pb.typefmt'y' == "sfixed32")
+   assert(pb.typefmt'Y' == "sfixed64")
+   assert(pb.typefmt'j' == "sint32"  )
+   assert(pb.typefmt'J' == "sint64"  )
+
+   assert(pb.typefmt"varint"   == 'v')
+   assert(pb.typefmt"64bit"    == 'q')
+   assert(pb.typefmt"bytes"    == 's')
+   assert(pb.typefmt"gstart"   == '!')
+   assert(pb.typefmt"gend"     == '!')
+   assert(pb.typefmt"32bit"    == 'd')
+   assert(pb.typefmt"double"   == 'F')
+   assert(pb.typefmt"float"    == 'f')
+   assert(pb.typefmt"int64"    == 'I')
+   assert(pb.typefmt"uint64"   == 'U')
+   assert(pb.typefmt"int32"    == 'i')
+   assert(pb.typefmt"fixed64"  == 'X')
+   assert(pb.typefmt"fixed32"  == 'x')
+   assert(pb.typefmt"bool"     == 'b')
+   assert(pb.typefmt"string"   == 't')
+   assert(pb.typefmt"group"    == 'g')
+   assert(pb.typefmt"bytes"    == 's')
+   assert(pb.typefmt"uint32"   == 'u')
+   assert(pb.typefmt"enum"     == 'v')
+   assert(pb.typefmt"sfixed32" == 'y')
+   assert(pb.typefmt"sfixed64" == 'Y')
+   assert(pb.typefmt"sint32"   == 'j')
+   assert(pb.typefmt"sint64"   == 'J')
+
+   assert(pb.typefmt "whatever" == '!')
+end
+
 function _G.test_load()
    do
       local old = pb.state(nil)

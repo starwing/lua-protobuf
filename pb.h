@@ -73,30 +73,31 @@ PB_NS_BEGIN
 
 /* types */
 
-#define PB_WIRETYPES(X) /* X(name, index) */\
-    X(VARINT, "varint", 0) X(64BIT,  "64bit", 1) X(BYTES, "bytes", 2)  \
-    X(GSTART, "gstart", 3) X(GEND,   "gend",  4) X(32BIT, "32bit", 5)  \
+#define PB_WIRETYPES(X)   /* X(id,    name,    fmt) */\
+    X(VARINT, "varint", 'v') X(64BIT, "64bit", 'q') X(BYTES, "bytes", 's') \
+    X(GSTART, "gstart", '!') X(GEND,  "gend",  '!') X(32BIT, "32bit", 'd') \
 
-#define PB_TYPES(X)           /* X(name, type, index) */\
-    X(double,   double,   1)  X(float,    float,    2)  \
-    X(int64,    int64_t,  3)  X(uint64,   uint64_t, 4)  \
-    X(int32,    int32_t,  5)  X(fixed64,  uint64_t, 6)  \
-    X(fixed32,  uint32_t, 7)  X(bool,     int,      8)  \
-    X(string,   pb_Slice, 9)  X(group,    pb_Slice, 10) \
-    X(message,  pb_Slice, 11) X(bytes,    pb_Slice, 12) \
-    X(uint32,   uint32_t, 13) X(enum,     int32_t,  14) \
-    X(sfixed32, int32_t,  15) X(sfixed64, int64_t,  16) \
-    X(sint32,   int32_t,  17) X(sint64,   int64_t,  18) \
+#define PB_TYPES(X)          /* X(name,     type,     fmt) */\
+    X(double,   double,   'F')  X(float,    float,    'f') \
+    X(int64,    int64_t,  'I')  X(uint64,   uint64_t, 'U') \
+    X(int32,    int32_t,  'i')  X(fixed64,  uint64_t, 'X') \
+    X(fixed32,  uint32_t, 'x')  X(bool,     int,      'b') \
+    X(string,   pb_Slice, 't')  X(group,    pb_Slice, 'g') \
+    X(message,  pb_Slice, 'S')  X(bytes,    pb_Slice, 's') \
+    X(uint32,   uint32_t, 'u')  X(enum,     int32_t,  'v') \
+    X(sfixed32, int32_t,  'y')  X(sfixed64, int64_t,  'Y') \
+    X(sint32,   int32_t,  'j')  X(sint64,   int64_t,  'J') \
 
 typedef enum pb_WireType {
-#define X(name, s, index) PB_T##name,
+#define X(id, name, fmt) PB_T##id,
     PB_WIRETYPES(X)
 #undef  X
     PB_TWIRECOUNT
 } pb_WireType;
 
 typedef enum pb_FieldType {
-#define X(name, type, index) PB_T##name = index,
+    PB_TNONE,
+#define X(name, type, fmt) PB_T##name,
     PB_TYPES(X)
 #undef  X
     PB_TYPECOUNT
@@ -592,7 +593,7 @@ PB_API int pb_wtypebytype(int type) {
 
 PB_API const char *pb_wtypename(int wiretype, const char *def) {
     switch (wiretype) {
-#define X(id, name, v) case v: return name;
+#define X(id, name, fmt) case PB_T##id: return name;
         PB_WIRETYPES(X)
 #undef  X
     default: return def ? def : "<unknown>";
@@ -601,7 +602,7 @@ PB_API const char *pb_wtypename(int wiretype, const char *def) {
 
 PB_API const char *pb_typename(int type, const char *def) {
     switch (type) {
-#define X(name, t, v) case v: return #name;
+#define X(name, type, fmt) case PB_T##name: return #name;
         PB_TYPES(X)
 #undef  X
     default: return def ? def : "<unknown>";
@@ -610,7 +611,7 @@ PB_API const char *pb_typename(int type, const char *def) {
 
 PB_API int pb_typebyname(const char *name, int def) {
     static struct entry { const char *name; int value; } names[] = {
-#define X(name, t, v) { #name, v },
+#define X(name, type, fmt) { #name, PB_T##name },
         PB_TYPES(X)
 #undef  X
         { NULL, 0 }
@@ -624,7 +625,7 @@ PB_API int pb_typebyname(const char *name, int def) {
 
 PB_API int pb_wtypebyname(const char *name, int def) {
     static struct entry { const char *name; int value; } names[] = {
-#define X(id, name, v) { name, v },
+#define X(id, name, fmt) { name, PB_T##id },
         PB_WIRETYPES(X)
 #undef  X
         { NULL, 0 }
@@ -695,8 +696,7 @@ PB_API size_t pb_resizebuffer(pb_Buffer *b, size_t len) {
 PB_API void* pb_prepbuffsize(pb_Buffer *b, size_t len) {
     if (b->size + len > b->capacity) {
         size_t oldsize = b->size;
-        if (pb_resizebuffer(b, oldsize + len) == 0)
-            return NULL;
+        if (pb_resizebuffer(b, oldsize + len) == 0) return NULL;
     }
     return &b->buff[b->size];
 }
