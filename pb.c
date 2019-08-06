@@ -1391,15 +1391,16 @@ static int Lpb_typefmt(lua_State *L) {
     char buf[2] = {0};
     int type;
     if (len == 1)
-        r = pb_typename(lpb_typefmt(*s), "!");
+        r = pb_typename(type = lpb_typefmt(*s), "!");
     else if (lpb_type(default_state(L), s))
-        r = "message";
+        r = "message", type = PB_TBYTES;
     else if ((type = pb_typebyname(s, PB_Tmessage)) != PB_Tmessage) {
         switch (type) {
 #define X(name, type, fmt) case PB_T##name: buf[0] = fmt, r = buf; break;
             PB_TYPES(X)
 #undef  X
         }
+        type = pb_wtypebytype(type);
     } else if ((type = pb_wtypebyname(s, PB_Tmessage)) != PB_Tmessage) {
         switch (type) {
 #define X(id, name, fmt) case PB_T##id: buf[0] = fmt, r = buf; break;
@@ -1408,7 +1409,8 @@ static int Lpb_typefmt(lua_State *L) {
         }
     }
     lua_pushstring(L, r ? r : "!");
-    return 1;
+    lua_pushinteger(L, type);
+    return 2;
 }
 
 
