@@ -1,3 +1,15 @@
+local string = string
+local tonumber = tonumber
+local setmetatable = setmetatable
+local error = error
+local ipairs = ipairs
+local io = io
+local table = table
+local math = math
+local assert = assert
+local tostring = tostring
+local type = type
+local insert_tab = table.insert
 
 local function meta(name, t)
    t = t or {}
