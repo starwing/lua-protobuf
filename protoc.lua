@@ -321,14 +321,14 @@ local types = {
    group    = 10; message  = 11; enum     = 14;
 }
 
-local function register_type(self, lex, tname, type)
+local function register_type(self, lex, tname, typ)
    if not tname:match "%."then
       tname = self.prefix..tname
    end
    if self.typemap[tname] then
       return lex:error("type %s already defined", tname)
    end
-   self.typemap[tname] = type
+   self.typemap[tname] = typ
 end
 
 local function type_info(lex, tname)
@@ -390,21 +390,21 @@ local function inline_option(lex, info)
 end
 
 local function field(self, lex, ident)
-   local name, type, type_name, map_entry
+   local name, typ, type_name, map_entry
    if ident == "map" and lex:test "%<" then
-      name, type, type_name, map_entry = map_info(lex)
+      name, typ, type_name, map_entry = map_info(lex)
       self.locmap[map_entry.field[1]] = lex.pos
       self.locmap[map_entry.field[2]] = lex.pos
       register_type(self, lex, type_name, types.message)
    else
-      type, type_name = type_info(lex, ident)
+      typ, type_name = type_info(lex, ident)
       name = lex:ident()
    end
    local info = {
       name      = name,
       number    = lex:expected "=":integer(),
       label     = ident == "map" and labels.repeated or labels.optional,
-      type      = type,
+      type      = typ,
       type_name = type_name
    }
    local options = inline_option(lex)
@@ -566,7 +566,7 @@ end
 
 function toplevel:message(lex, info)
    local name = lex:ident 'message name'
-   local type = { name = name }
+   local typ = { name = name }
    register_type(self, lex, name, types.message)
    local prefix = self.prefix
    self.prefix = prefix..name.."."
@@ -575,7 +575,7 @@ function toplevel:message(lex, info)
       local ident, pos = lex:type_name()
       local body_parser = msg_body[ident]
       if body_parser then
-         body_parser(self, lex, type)
+         body_parser(self, lex, typ)
       else
          local fs = default(type, 'field')
          local f, t = label_field(self, lex, ident)
@@ -594,7 +594,7 @@ function toplevel:message(lex, info)
       info[#info+1] = type
    end
    self.prefix = prefix
-   return type
+   return typ
 end
 
 function toplevel:enum(lex, info)
@@ -800,12 +800,12 @@ local function iter(t, k)
    return empty
 end
 
-local function check_dup(self, lex, type, map, k, v)
+local function check_dup(self, lex, typ, map, k, v)
    local old = map[v[k]]
    if old then
       local ln, co = lex:pos2loc(self.locmap[old])
       lex:error("%s '%s' exists, previous at %d:%d",
-                type, v[k], ln, co)
+                typ, v[k], ln, co)
    end
    map[v[k]] = v
 end
