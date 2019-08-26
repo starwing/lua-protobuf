@@ -1824,6 +1824,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
     }
+    lua_pop(L, 1);
     luaL_newlib(L, libs);
     return 1;
 }
