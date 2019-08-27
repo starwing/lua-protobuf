@@ -1,3 +1,15 @@
+local string = string
+local tonumber = tonumber
+local setmetatable = setmetatable
+local error = error
+local ipairs = ipairs
+local io = io
+local table = table
+local math = math
+local assert = assert
+local tostring = tostring
+local type = type
+local insert_tab = table.insert
 
 local function meta(name, t)
    t = t or {}
@@ -258,7 +270,7 @@ function Parser:error(msg)
 end
 
 function Parser:addpath(path)
-   self.paths[#self.paths+1] = path
+   insert_tab(self.paths, path)
 end
 
 function Parser:parsefile(name)
@@ -274,7 +286,7 @@ function Parser:parsefile(name)
          fh:close()
          return info
       end
-      errors[#errors + 1] = err or fn..": ".."unknown error"
+      insert_tab(errors, err or fn..": ".."unknown error")
    end
    if self.import_fallback then
       info = self.import_fallback(name)
@@ -309,14 +321,14 @@ local types = {
    group    = 10; message  = 11; enum     = 14;
 }
 
-local function register_type(self, lex, tname, type)
+local function register_type(self, lex, tname, typ)
    if not tname:match "%."then
       tname = self.prefix..tname
    end
    if self.typemap[tname] then
       return lex:error("type %s already defined", tname)
    end
-   self.typemap[tname] = type
+   self.typemap[tname] = typ
 end
 
 local function type_info(lex, tname)
@@ -378,21 +390,21 @@ local function inline_option(lex, info)
 end
 
 local function field(self, lex, ident)
-   local name, type, type_name, map_entry
+   local name, typ, type_name, map_entry
    if ident == "map" and lex:test "%<" then
-      name, type, type_name, map_entry = map_info(lex)
+      name, typ, type_name, map_entry = map_info(lex)
       self.locmap[map_entry.field[1]] = lex.pos
       self.locmap[map_entry.field[2]] = lex.pos
       register_type(self, lex, type_name, types.message)
    else
-      type, type_name = type_info(lex, ident)
+      typ, type_name = type_info(lex, ident)
       name = lex:ident()
    end
    local info = {
       name      = name,
       number    = lex:expected "=":integer(),
       label     = ident == "map" and labels.repeated or labels.optional,
-      type      = type,
+      type      = typ,
       type_name = type_name
    }
    local options = inline_option(lex)
@@ -453,10 +465,10 @@ function toplevel:import(lex, info)
    dep[index+1] = name
    if mode == "public" then
       local it = default(info, 'public_dependency')
-      it[#it+1] = index
+      insert_tab(it, index)
    else
       local it = default(info, 'weak_dependency')
-      it[#it+1] = index
+      insert_tab(it, index)
    end
 end
 
@@ -464,13 +476,13 @@ local msg_body = {} do
 
 function msg_body:message(lex, info)
    local nested_type = default(info, 'nested_type')
-   nested_type[#nested_type+1] = toplevel.message(self, lex)
+   insert_tab(nested_type, toplevel.message(self, lex))
    return self
 end
 
 function msg_body:enum(lex, info)
    local nested_type = default(info, 'enum_type')
-   nested_type[#nested_type+1] = toplevel.enum(self, lex)
+   insert_tab(nested_type, toplevel.enum(self, lex))
    return self
 end
 
@@ -479,10 +491,10 @@ function msg_body:extend(lex, info)
    local nested_type = default(info, 'nested_type')
    local ft, mt = toplevel.extend(self, lex, {})
    for _, v in ipairs(ft) do
-      extension[#extension+1] = v
+      insert_tab(extension, v)
    end
    for _, v in ipairs(mt) do
-      nested_type[#nested_type+1] = v
+      insert_tab(nested_type, v)
    end
    return self
 end
@@ -496,7 +508,7 @@ function msg_body:extensions(lex, info)
       if not lex:keyword('max', 'opt') then
          stop = lex:integer "field number range end or 'max'"
       end
-      rt[#rt+1] = { start = start, ['end'] = stop }
+      insert_tab(rt, { start = start, ['end'] = stop })
    until not lex:test ','
    lex:line_end()
    return self
@@ -506,7 +518,7 @@ function msg_body:reserved(lex, info)
    if lex:test '%a' then
       local rt = default(info, 'reserved_name')
       repeat
-         rt[#rt+1] = lex:ident 'field name'
+         insert_tab(rt, lex:ident 'field name')
       until not lex:test ','
    else
       local rt = default(info, 'reserved_range')
@@ -516,9 +528,9 @@ function msg_body:reserved(lex, info)
                                     or 'field number range')
          if lex:keyword('to', 'opt') then
             local stop = lex:integer 'field number range end'
-            rt[#rt+1] = { start = start, ['end'] = stop }
+            insert_tab(rt, { start = start, ['end'] = stop })
          else
-            rt[#rt+1] = { start = start, ['end'] = start }
+            insert_tab(rt, { start = start, ['end'] = start })
          end
          first = false
       until not lex:test ','
@@ -541,9 +553,9 @@ function msg_body:oneof(lex, info)
       else
          local f, t = field(self, lex, ident, "no_label")
          self.locmap[f] = lex.pos
-         if t then ts[#ts+1] = t end
+         if t then insert_tab(ts, t) end
          f.oneof_index = index - 1
-         fs[#fs+1] = f
+         insert_tab(fs, f)
       end
       lex:line_end 'opt'
    end
@@ -554,7 +566,7 @@ end
 
 function toplevel:message(lex, info)
    local name = lex:ident 'message name'
-   local type = { name = name }
+   local typ = { name = name }
    register_type(self, lex, name, types.message)
    local prefix = self.prefix
    self.prefix = prefix..name.."."
@@ -563,15 +575,15 @@ function toplevel:message(lex, info)
       local ident, pos = lex:type_name()
       local body_parser = msg_body[ident]
       if body_parser then
-         body_parser(self, lex, type)
+         body_parser(self, lex, typ)
       else
-         local fs = default(type, 'field')
+         local fs = default(typ, 'field')
          local f, t = label_field(self, lex, ident)
          self.locmap[f] = pos
-         fs[#fs+1] = f
+         insert_tab(fs, f)
          if t then
-            local ts = default(type, 'nested_type')
-            ts[#ts+1] = t
+            local ts = default(typ, 'nested_type')
+            insert_tab(ts, t)
          end
       end
       lex:line_end 'opt'
@@ -579,10 +591,10 @@ function toplevel:message(lex, info)
    lex:line_end 'opt'
    if info then
       info = default(info, 'message_type')
-      info[#info+1] = type
+      insert_tab(info, typ)
    end
    self.prefix = prefix
-   return type
+   return typ
 end
 
 function toplevel:enum(lex, info)
@@ -598,18 +610,18 @@ function toplevel:enum(lex, info)
          local values  = default(enum, 'value')
          local number  = lex:expected '=' :integer()
          lex:line_end()
-         values[#values+1] = {
+         insert_tab(values, {
             name    = ident,
             number  = number,
             options = inline_option(lex)
-         }
+         })
       end
       lex:line_end 'opt'
    end
    lex:line_end 'opt'
    if info then
       info = default(info, 'enum_type')
-      info[#info+1] = enum
+      insert_tab(info, enum)
    end
    return enum
 end
@@ -634,8 +646,8 @@ function toplevel:extend(lex, info)
       local f, t = label_field(self, lex, ident)
       self.locmap[f] = pos
       f.extendee = name
-      ft[#ft+1] = f
-      mt[#mt+1] = t
+      insert_tab(ft, f)
+      insert_tab(mt, t)
       lex:line_end 'opt'
    end
    return ft, mt
@@ -668,7 +680,7 @@ function svr_body:rpc(lex, info)
    end
    lex:line_end "opt"
    local t = default(info, "method")
-   t[#t+1] = rpc
+   insert_tab(t, rpc)
 end
 
 function svr_body.stream(_, lex)
@@ -694,7 +706,7 @@ function toplevel:service(lex, info)
    lex:line_end 'opt'
    if info then
       info = default(info, 'service')
-      info[#info+1] = svr
+      insert_tab(info, svr)
    end
    return svr
 end
@@ -788,12 +800,12 @@ local function iter(t, k)
    return empty
 end
 
-local function check_dup(self, lex, type, map, k, v)
+local function check_dup(self, lex, typ, map, k, v)
    local old = map[v[k]]
    if old then
       local ln, co = lex:pos2loc(self.locmap[old])
       lex:error("%s '%s' exists, previous at %d:%d",
-                type, v[k], ln, co)
+                typ, v[k], ln, co)
    end
    map[v[k]] = v
 end
@@ -856,7 +868,7 @@ local function check_enum(self, lex, info)
 end
 
 local function check_message(self, lex, info)
-   self.prefix[#self.prefix+1] = info.name
+   insert_tab(self.prefix, info.name)
    local names, numbers = {}, {}
    for _, v in iter(info, 'field') do
       lex.pos = assert(self.locmap[v])
@@ -1018,10 +1030,10 @@ local function do_compile(self, f, ...)
       local old = self.on_import
       local infos = {}
       function self.on_import(info)
-         infos[#infos+1] = info
+         insert_tab(infos, info)
       end
       local r = f(...)
-      infos[#infos+1] = r
+      insert_tab(infos, r)
       self.on_import = old
       return { file = infos }
    end
