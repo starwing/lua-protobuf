@@ -661,12 +661,12 @@ function svr_body:rpc(lex, info)
    self.locmap[rpc] = pos
    local _, tn
    lex:expected "%("
-   rpc.client_stream = lex:keyword("stream", "opt")
+   rpc.client_streaming = lex:keyword("stream", "opt")
    _, tn = type_info(lex, lex:type_name())
    if not tn then return lex:error "rpc input type must by message" end
    rpc.input_type = tn
    lex:expected "%)" :expected "returns" :expected "%("
-   rpc.server_stream = lex:keyword("stream", "opt")
+   rpc.server_streaming = lex:keyword("stream", "opt")
    _, tn = type_info(lex, lex:type_name())
    if not tn then return lex:error "rpc output type must by message" end
    rpc.output_type = tn
