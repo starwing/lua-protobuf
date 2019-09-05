@@ -789,6 +789,13 @@ function _G.test_buffer()
    assert(#b:reset() == 0)
    assert(tostring(b):match 'pb.Buffer')
 
+   b = buffer.new "foo"
+   assert(#b == 3)
+   b:delete()
+   assert(#b == 0)
+   b:pack("vvv", 1,2,3)
+   assert(#b == 3)
+
    b = buffer.new()
    eq(b:pack("(vvv)", 1,2,3):tohex(-4), "03 01 02 03")
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")

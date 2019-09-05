@@ -747,6 +747,12 @@ static int Lbuf_new(lua_State *L) {
     return 1;
 }
 
+static int Lbuf_delete(lua_State *L) {
+    pb_Buffer *buf = test_buffer(L, 1);
+    if (buf) pb_resetbuffer(buf);
+    return 0;
+}
+
 static int Lbuf_libcall(lua_State *L) {
     int i, top = lua_gettop(L);
     pb_Buffer *buf = (pb_Buffer*)lua_newuserdata(L, sizeof(pb_Buffer));
@@ -766,7 +772,7 @@ static int Lbuf_tostring(lua_State *L) {
 static int Lbuf_reset(lua_State *L) {
     pb_Buffer *buf = check_buffer(L, 1);
     int i, top = lua_gettop(L);
-    pb_resetbuffer(buf);
+    pb_bufflen(buf) = 0;
     for (i = 2; i <= top; ++i)
         pb_addslice(buf, lpb_checkslice(L, i));
     return_self(L);
@@ -798,8 +804,8 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
     luaL_Reg libs[] = {
         { "__tostring", Lbuf_tostring },
         { "__len",      Lbuf_len },
-        { "__gc",       Lbuf_reset },
-        { "delete",     Lbuf_reset },
+        { "__gc",       Lbuf_delete },
+        { "delete",     Lbuf_delete },
         { "tohex",      Lpb_tohex },
         { "result",     Lpb_result },
 #define ENTRY(name) { #name, Lbuf_##name }
@@ -1824,7 +1830,6 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
     }
-    lua_pop(L, 1);
     luaL_newlib(L, libs);
     return 1;
 }

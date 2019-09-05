@@ -475,7 +475,7 @@ All routines in `pb.buffer` module:
 | `b:delete()`        | none          | same as `b:reset()`, free it's content                       |
 | `tostring(b)`       | string        | returns the string repr of the object                        |
 | `#b`                | number        | returns the encoded count of bytes in buffer                 |
-| `b:reset()`         | self          | free buffer content, reset it to a empty buffer              |
+| `b:reset()`         | self          | reset to a empty buffer                                      |
 | `b:reset([...])`    | self          | resets the buffer and set its content as the concat of it's args |
 | `b:tohex([i[, j]])` | string        | return the string of hexadigit represent of the data, `i` and `j` are ranges in encoded data, includes. Omit it means the whole range |
 | `b:result([i[,j]])` | string        | return the raw data, `i` and `j` are ranges in encoded data, includes,. Omit it means the whole range |
