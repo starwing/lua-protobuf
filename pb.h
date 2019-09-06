@@ -258,8 +258,8 @@ PB_API pb_Entry *pb_settable (pb_Table *t, pb_Key key);
 PB_API int pb_nextentry (pb_Table *t, pb_Entry **pentry);
 
 struct pb_Table {
-    size_t    size;
-    size_t    lastfree;
+    unsigned  size;
+    unsigned  lastfree;
     unsigned  entry_size : sizeof(unsigned)*CHAR_BIT - 1;
     unsigned  has_zero   : 1;
     pb_Entry *hash;
@@ -273,11 +273,14 @@ struct pb_Entry {
 
 /* fields */
 
+#define PB_NAMECACHE_LSIZE (5)
+#define pb_NAMECACHE_SIZE  (1<<PB_NAMECACHE_LSIZE)
+
 typedef struct pb_NameEntry {
     struct pb_NameEntry *next;
-    unsigned       hash     : 32;
-    unsigned       length   : 16;
-    unsigned       refcount : 16;
+    unsigned hash     : 32;
+    unsigned length   : 16;
+    unsigned refcount : 16;
 } pb_NameEntry;
 
 typedef struct pb_NameTable {
@@ -286,9 +289,15 @@ typedef struct pb_NameTable {
     pb_NameEntry **hash;
 } pb_NameTable;
 
+typedef struct pb_NameCache {
+    const char *name;
+    unsigned    hash;
+} pb_NameCache;
+
 struct pb_State {
-    pb_Table     types;
+    pb_NameCache namecache[pb_NAMECACHE_SIZE];
     pb_NameTable nametable;
+    pb_Table     types;
     pb_Pool      typepool;
     pb_Pool      fieldpool;
 };
@@ -328,6 +337,7 @@ PB_NS_END
 #define pb_implemented
 
 #define PB_MAX_SIZET          ((size_t)~0 - 100)
+#define PB_MAX_HASHSIZE       ((unsigned)~0 - 100)
 #define PB_MIN_STRTABLE_SIZE  16
 #define PB_MIN_HASHTABLE_SIZE 8
 #define PB_HASHLIMIT          5
@@ -680,7 +690,7 @@ static int pb_write64(char *buff, uint64_t n) {
 
 PB_API size_t pb_resizebuffer(pb_Buffer *b, size_t len) {
     size_t newsize = PB_BUFFERSIZE;
-    while (newsize < PB_MAX_SIZET/2 && newsize < len)
+    while (newsize < PB_MAX_HASHSIZE/2 && newsize < len)
         newsize += newsize >> 1;
     if (newsize > b->size) {
         char *buff = b->buff == b->init_buff ? NULL : b->buff;
@@ -868,9 +878,9 @@ static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
 
 PB_API size_t pb_resizetable(pb_Table *t, size_t size) {
     pb_Table nt = *t;
-    size_t i, rawsize = t->size*t->entry_size;
-    size_t newsize = PB_MIN_HASHTABLE_SIZE;
-    while (newsize < PB_MAX_SIZET/t->entry_size && newsize < size)
+    unsigned i, rawsize = t->size*t->entry_size;
+    unsigned newsize = PB_MIN_HASHTABLE_SIZE;
+    while (newsize < PB_MAX_HASHSIZE/t->entry_size && newsize < size)
         newsize <<= 1;
     if (newsize < size) return 0;
     nt.size     = newsize;
@@ -960,7 +970,7 @@ static size_t pbN_resize(pb_State *S, size_t size) {
     pb_NameTable *nt = &S->nametable;
     pb_NameEntry **hash;
     size_t i, newsize = PB_MIN_STRTABLE_SIZE;
-    while (newsize < PB_MAX_SIZET/sizeof(pb_NameEntry*) && newsize < size)
+    while (newsize < PB_MAX_HASHSIZE/sizeof(pb_NameEntry*) && newsize < size)
         newsize <<= 1;
     if (newsize < size) return 0;
     hash = (pb_NameEntry**)malloc(newsize * sizeof(pb_NameEntry*));
@@ -1056,9 +1066,16 @@ PB_API void pb_delname(pb_State *S, pb_Name *name) {
 
 PB_API pb_Name *pb_name(pb_State *S, const char *name) {
     if (name != NULL) {
+        pb_NameEntry *entry;
         size_t size = strlen(name);
-        unsigned hash = pbN_calchash(name, size);
-        pb_NameEntry *entry = pbN_getname(S, name, size, hash);
+        size_t cidx = ((uintptr_t)name*2654435761U)&(pb_NAMECACHE_SIZE-1);
+        pb_NameCache *slot = &S->namecache[cidx];
+        if (slot->name == name
+                && (entry = pbN_getname(S, name, size, slot->hash)))
+            return (pb_Name*)(entry + 1);
+        slot->name = name;
+        slot->hash = pbN_calchash(name, size);
+        entry = pbN_getname(S, name, size, slot->hash);
         return entry ? (pb_Name*)(entry + 1) : NULL;
     }
     return NULL;
