@@ -195,7 +195,7 @@ PB_API void pb_free (pb_State *S);
 
 PB_API pb_Name *pb_newname (pb_State *S, pb_Slice    s);
 PB_API void     pb_delname (pb_State *S, pb_Name    *name);
-PB_API pb_Name *pb_name    (pb_State *S, const char *name);
+PB_API pb_Name *pb_name    (pb_State *S, pb_Slice    s);
 
 PB_API pb_Name *pb_usename (pb_Name *name);
 
@@ -943,6 +943,9 @@ PB_API int pb_nextentry(pb_Table *t, pb_Entry **pentry) {
 static void pbN_init(pb_State *S)
 { memset(&S->nametable, 0, sizeof(pb_NameTable)); }
 
+PB_API pb_Name *pb_usename(pb_Name *name)
+{ if (name != NULL) ++((pb_NameEntry*)name-1)->refcount; return name; }
+
 static void pbN_free(pb_State *S) {
     pb_NameTable *nt = &S->nametable;
     size_t i;
@@ -958,11 +961,12 @@ static void pbN_free(pb_State *S) {
     pbN_init(S);
 }
 
-static unsigned pbN_calchash(const char *s, size_t len) {
+static unsigned pbN_calchash(pb_Slice s) {
+    size_t len = pb_len(s);
     unsigned h = (unsigned)len;
     size_t step = (len >> PB_HASHLIMIT) + 1;
     for (; len >= step; len -= step)
-        h ^= ((h<<5) + (h>>2) + (unsigned char)(s[len - 1]));
+        h ^= ((h<<5) + (h>>2) + (unsigned char)(s.p[len - 1]));
     return h;
 }
 
@@ -991,9 +995,10 @@ static size_t pbN_resize(pb_State *S, size_t size) {
     return newsize;
 }
 
-static pb_NameEntry *pbN_newname(pb_State *S, const char *name, size_t len, unsigned hash) {
+static pb_NameEntry *pbN_newname(pb_State *S, pb_Slice s, unsigned hash) {
     pb_NameTable *nt = &S->nametable;
     pb_NameEntry **list, *newobj;
+    size_t len = pb_len(s);
     if (nt->count >= nt->size && !pbN_resize(S, nt->size * 2)) return NULL;
     list = &nt->hash[hash & (nt->size - 1)];
     newobj = (pb_NameEntry*)malloc(sizeof(pb_NameEntry) + len + 1);
@@ -1002,7 +1007,7 @@ static pb_NameEntry *pbN_newname(pb_State *S, const char *name, size_t len, unsi
     newobj->length = (unsigned)len;
     newobj->refcount = 1;
     newobj->hash = hash;
-    memcpy(newobj+1, name, len);
+    memcpy(newobj+1, s.p, len);
     ((char*)(newobj+1))[len] = '\0';
     *list = newobj;
     ++nt->count;
@@ -1024,35 +1029,41 @@ static void pbN_delname(pb_State *S, pb_NameEntry *name) {
     }
 }
 
-static pb_NameEntry *pbN_getname(pb_State *S, const char *name, size_t len, unsigned hash) {
+static pb_NameEntry *pbN_getname(pb_State *S, pb_Slice s, unsigned hash) {
     pb_NameTable *nt = &S->nametable;
+    size_t len = pb_len(s);
     if (nt->hash) {
         pb_NameEntry *entry = nt->hash[hash & (nt->size - 1)];
         for (; entry != NULL; entry = entry->next)
             if (entry->hash == hash && entry->length == len
-                    && memcmp(name, entry + 1, len) == 0)
+                    && memcmp(s.p, entry + 1, len) == 0)
                 return entry;
     }
     return NULL;
 }
 
+static pb_NameEntry *pbN_cache(pb_State *S, pb_Slice s, pb_NameCache **pslot) {
+    pb_NameEntry *entry = NULL;
+    size_t cidx = ((uintptr_t)s.p*2654435761U)&(pb_NAMECACHE_SIZE-1);
+    *pslot = &S->namecache[cidx];
+    if ((*pslot)->name == s.p)
+        entry = pbN_getname(S, s, (*pslot)->hash);
+    return entry;
+}
+
 PB_API pb_Name *pb_newname(pb_State *S, pb_Slice s) {
     if (s.p != NULL) {
-        size_t size = pb_len(s);
-        const char *name = s.p;
-        unsigned hash = pbN_calchash(name, size);
-        pb_NameEntry *entry = pbN_getname(S, name, size, hash);
+        pb_NameCache *slot;
+        pb_NameEntry *entry = pbN_cache(S, s, &slot);
+        if (entry) return (pb_Name*)(entry + 1);
+        slot->name = s.p;
+        slot->hash = pbN_calchash(s);
+        entry = pbN_getname(S, s, slot->hash);
         if (entry) return pb_usename((pb_Name*)(entry + 1));
-        entry = pbN_newname(S, name, size, hash);
+        entry = pbN_newname(S, s, slot->hash);
         return entry ? (pb_Name*)(entry + 1) : NULL;
     }
     return NULL;
-}
-
-PB_API pb_Name *pb_usename(pb_Name *name) {
-    if (name != NULL)
-        ++((pb_NameEntry*)name-1)->refcount;
-    return name;
 }
 
 PB_API void pb_delname(pb_State *S, pb_Name *name) {
@@ -1064,18 +1075,14 @@ PB_API void pb_delname(pb_State *S, pb_Name *name) {
     }
 }
 
-PB_API pb_Name *pb_name(pb_State *S, const char *name) {
-    if (name != NULL) {
-        pb_NameEntry *entry;
-        size_t size = strlen(name);
-        size_t cidx = ((uintptr_t)name*2654435761U)&(pb_NAMECACHE_SIZE-1);
-        pb_NameCache *slot = &S->namecache[cidx];
-        if (slot->name == name
-                && (entry = pbN_getname(S, name, size, slot->hash)))
-            return (pb_Name*)(entry + 1);
-        slot->name = name;
-        slot->hash = pbN_calchash(name, size);
-        entry = pbN_getname(S, name, size, slot->hash);
+PB_API pb_Name *pb_name(pb_State *S, pb_Slice s) {
+    if (s.p != NULL) {
+        pb_NameCache *slot;
+        pb_NameEntry *entry = pbN_cache(S, s, &slot);
+        if (entry) return (pb_Name*)(entry + 1);
+        slot->name = s.p;
+        slot->hash = pbN_calchash(s);
+        entry = pbN_getname(S, s, slot->hash);
         return entry ? (pb_Name*)(entry + 1) : NULL;
     }
     return NULL;
