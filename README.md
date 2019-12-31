@@ -74,7 +74,7 @@ cl /O2 /LD /Fepb.dll /I Lua53\include /DLUA_BUILD_AS_DLL pb.c Lua53\lib\lua53.li
 local pb = require "pb"
 local protoc = require "protoc"
 
--- load schema from text
+-- load schema from text (just for demo, use protoc.new() in real world)
 assert(protoc:load [[
    message Phone {
       optional string name        = 1;
@@ -172,7 +172,7 @@ After setting options, use `load()` or `compile()` or `parse()` function to get 
 
 `pb` module has high-level routines to manipulate protobuf messages.
 
-in below table of functions, we have several types that have special means:
+In below table of functions, we have several types that have special means:
 
 - `type`: a string that indicates the protobuf message type, `".Foo"` means the type in a proto definition that has not `package` statement declared.  `"foo.Foo"` means the type in a proto definition that declared `package foo;`
 
@@ -186,8 +186,7 @@ in below table of functions, we have several types that have special means:
   end
   ```
 
-
-all functions raise a Lua error when meets errors.
+**NOTICE**: Only `pb.load()` returns error on failure, *do check* the result it returns. Other routines raise a error when failure for convenience.
 
 | Function                       | Returns         | Description                                             |
 | ------------------------------ | --------------- | ------------------------------------------------------- |
@@ -383,7 +382,21 @@ All these functions return a true value when success, and return `nil, errmsg` w
 
 Slice object parse binary protobuf data in a low-level way.  Use `slice.new()` to create a slice object, with the optional offset `i` and `j` to access a subpart of the original data (named a *view*).
 
-A slice object has a stack itself.  calling `s:enter(i, j)` saves current position and enters next level with the optional offset `i` and `j` just as `slice.new()`.  calling `s:leave()` restore the prior view.  `s:level()` returns the current level, and `s:level(n)` returns the current position, the start and the end position information of the `n`th level.  calling `s:enter()` without parameter will read a length delimited type value from the slice and enter the view in reading value.  Using `#a` to get the count of bytes remains in current view.
+As protobuf usually nest sub message with in a range of slice, a slice object has a stack itself to support this.  Calling `s:enter(i, j)` saves current position and enters next level with the optional offset `i` and `j` just as `slice.new()`.  calling `s:leave()` restore the prior view.  `s:level()` returns the current level, and `s:level(n)` returns the current position, the start and the end position information of the `n`th level.  calling `s:enter()` without parameter will read a length delimited type value from the slice and enter the view in reading value.  Using `#a` to get the count of bytes remains in current view.
+
+```lua
+local s = slice.new("<data here>")
+local tag = s:unpack "v"
+if tag%8 == 2 then -- tag has a type of string/bytes? maybe it's a sub-message.
+  s:enter() -- read following bytes value, and enter the view of bytes value.
+  -- do something with bytes value, e.g. reads a lot of fixed32 integers from bytes.
+  local t = {}
+  while #s > 0 do
+    t[#t+1] = s:unpack "d"
+  end
+  s:leave() -- after done, leave bytes value and ready to read next value.
+end
+```
 
 To read values from slice, use `slice.unpack()`, it use a format string to control how to read into a slice as below table (same format character are also used in `buffer.pack()`). Notice that you can use `pb.typefmt()` to convert between format and protobuf type names (returned from `pb.field()`).
 
