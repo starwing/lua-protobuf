@@ -1329,10 +1329,9 @@ static void lpb_pushdefaults(lua_State *L, lpb_State *LS, pb_Type *t) {
         pb_Field *f = NULL;
         lua_pop(L, 1);
         lua_newtable(L);
-        while (pb_nextfield(t, &f)) {
+        while (pb_nextfield(t, &f))
             if (!f->repeated && lpb_pushdefault(L, LS, f, t->is_proto3))
                 lua_setfield(L, -2, (char*)f->name);
-        }
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
         lua_pushvalue(L, -1);

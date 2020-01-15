@@ -848,8 +848,7 @@ static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
     if (key == 0) {
         mp = t->hash;
         t->has_zero = 1;
-    }
-    else if ((mp = pbT_hash(t, key))->key != 0) {
+    } else if ((mp = pbT_hash(t, key))->key != 0) {
         while (t->lastfree > t->entry_size) {
             pb_Entry *cur = pbT_index(t->hash, t->lastfree -= t->entry_size);
             if (cur->key == 0 && cur->next == 0) { f = cur; break; }
@@ -862,8 +861,7 @@ static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
             othern->next = pbT_offset(f, othern);
             memcpy(f, mp, t->entry_size);
             if (mp->next != 0) f->next += pbT_offset(mp, f), mp->next = 0;
-        }
-        else {
+        } else {
             if (mp->next != 0) f->next = pbT_offset(mp, f) + mp->next;
             else assert(f->next == 0);
             mp->next = pbT_offset(f, mp);
