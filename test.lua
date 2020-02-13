@@ -1104,19 +1104,19 @@ function _G.test_load()
    buf:pack("v(v(vsv(vvvv)))",
             s(1), s(4), s(1), "load_test",
             s(2), v(3), 1, v(4), 1)
-   eq(pb.load(buf:result()), true)
+   eq(pb.load(buf:result()), false)
 
    buf:reset()
    buf:pack("v(v(vsv(vvvvvv)))",
             s(1), s(4), s(1), "load_test",
             s(2), v(3), 1, v(4), 1, v(5), 11)
-   eq(pb.load(buf:result()), true)
+   eq(pb.load(buf:result()), false)
 
    buf:reset()
    buf:pack("v(v(vsv(vvvv)))",
             s(1), s(4), s(1), "load_test",
             s(6), v(3), 1, v(4), 1)
-   eq(pb.load(buf:result()), true)
+   eq(pb.load(buf:result()), false)
 
    buf:reset()
    buf:pack("v(v(v(vx)))", s(1), s(4), s(6), v(3), -1)

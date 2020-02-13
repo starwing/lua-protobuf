@@ -1,6 +1,10 @@
 #ifdef _MSC_VER
 # define _CRT_SECURE_NO_WARNINGS
 # define _CRT_NONSTDC_NO_WARNINGS
+# pragma warning(disable: 4244) /* int -> char */
+# pragma warning(disable: 4706) /* = in if condition */
+# pragma warning(disable: 4709) /* comma in array index */
+# pragma warning(disable: 4127) /* const in if condition */
 #endif
 
 #define PB_STATIC_API
@@ -847,8 +851,7 @@ typedef struct lpb_Slice {
 
 static void lpb_resetslice(lua_State *L, lpb_Slice *s, size_t size) {
     if (size == sizeof(lpb_Slice)) {
-        if (s->buff != s->init_buff)
-            free(s->buff);
+        if (s->buff != s->init_buff) free(s->buff);
         memset(s, 0, sizeof(lpb_Slice));
         s->buff = s->init_buff;
         s->size = LPB_INITSTACKLEN;
@@ -1136,7 +1139,8 @@ static pb_Type *lpb_type(pb_State *S, pb_Slice s) {
     else {
         pb_Buffer b;
         pb_initbuffer(&b);
-        pb_addchar(&b, '.');
+        *pb_prepbuffsize(&b, 1) = '.';
+        pb_addsize(&b, 1);
         pb_addslice(&b, s);
         t = pb_type(S, pb_name(S, pb_result(&b)));
         pb_resetbuffer(&b);
@@ -1170,7 +1174,7 @@ static int Lpb_loadfile(lua_State *L) {
         return luaL_fileresult(L, 0, filename);
     pb_initbuffer(&b);
     do {
-        void *d = pb_prepbuffsize(&b, BUFSIZ);
+        char *d = pb_prepbuffsize(&b, BUFSIZ);
         if (d == NULL) { fclose(fp); return luaL_error(L, "out of memory"); }
         size = fread(d, 1, BUFSIZ, fp);
         pb_addsize(&b, size);
@@ -1504,10 +1508,10 @@ static void lpbE_map(lpb_Env *e, pb_Field *f) {
         len = pb_bufflen(e->b);
         lua_pushvalue(L, -2);
         lpbE_tagfield(e, kf, &ignoredlen);
-        e->b->size -= ignoredlen;
+        e->b->size -= (unsigned)ignoredlen;
         lua_pop(L, 1);
         lpbE_tagfield(e, vf, &ignoredlen);
-        e->b->size -= ignoredlen;
+        e->b->size -= (unsigned)ignoredlen;
         lua_pop(L, 1);
         lpb_addlength(L, e->b, len);
     }
@@ -1554,7 +1558,7 @@ static void lpb_encode(lpb_Env *e, pb_Type *t) {
                 size_t ignoredlen;
                 lpbE_tagfield(e, f, &ignoredlen);
                 if (t->is_proto3 && !f->oneof_idx)
-                    e->b->size -= ignoredlen;
+                    e->b->size -= (unsigned)ignoredlen;
             }
         }
         lua_pop(L, 1);
@@ -1574,7 +1578,7 @@ static int Lpb_encode(lua_State *L) {
     if (e.b != &LS->buffer)
         lua_settop(L, 3);
     else {
-        lua_pushlstring(L, e.b->buff, e.b->size);
+        lua_pushlstring(L, pb_buffer(e.b), pb_bufflen(e.b));
         pb_resetbuffer(e.b);
     }
     return 1;

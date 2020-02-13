@@ -1022,7 +1022,7 @@ if has_pb then
    ".protobufB\16DescriptorProtosH\1"
 
 function Parser.reload()
-   assert(pb.load(descriptor_pb))
+   assert(pb.load(descriptor_pb), "load descriptor msg failed")
 end
 
 local function do_compile(self, f, ...)
