@@ -716,8 +716,8 @@ PB_API size_t pb_addslice(pb_Buffer *b, pb_Slice s) {
     void *buff = pb_prepbuffsize(b, len);
     if (buff == NULL) return 0;
     memcpy(buff, s.p, len);
-	pb_addsize(b, len);
-	return len;
+    pb_addsize(b, len);
+    return len;
 }
 
 PB_API size_t pb_addlength(pb_Buffer *b, size_t len) {
@@ -743,18 +743,18 @@ PB_API size_t pb_addbytes(pb_Buffer *b, pb_Slice s) {
 
 PB_API size_t pb_addvarint32(pb_Buffer *b, uint32_t n) {
     char *buff = (char*)pb_prepbuffsize(b, 5);
-	size_t l;
+    size_t l;
     if (buff == NULL) return 0;
-	pb_addsize(b, l = pb_write32(buff, n));
-	return l;
+    pb_addsize(b, l = pb_write32(buff, n));
+    return l;
 }
 
 PB_API size_t pb_addvarint64(pb_Buffer *b, uint64_t n) {
     char *buff = (char*)pb_prepbuffsize(b, 10);
-	size_t l;
+    size_t l;
     if (buff == NULL) return 0;
-	pb_addsize(b, l = pb_write64(buff, n));
-	return l;
+    pb_addsize(b, l = pb_write64(buff, n));
+    return l;
 }
 
 PB_API size_t pb_addfixed32(pb_Buffer *b, uint32_t n) {
@@ -764,8 +764,8 @@ PB_API size_t pb_addfixed32(pb_Buffer *b, uint32_t n) {
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
     *ch   = n & 0xFF;
-	pb_addsize(b, 4);
-	return 4;
+    pb_addsize(b, 4);
+    return 4;
 }
 
 PB_API size_t pb_addfixed64(pb_Buffer *b, uint64_t n) {
@@ -779,8 +779,8 @@ PB_API size_t pb_addfixed64(pb_Buffer *b, uint64_t n) {
     *ch++ = n & 0xFF; n >>= 8;
     *ch++ = n & 0xFF; n >>= 8;
     *ch   = n & 0xFF;
-	pb_addsize(b, 8);
-	return 8;
+    pb_addsize(b, 8);
+    return 8;
 }
 
 
@@ -1020,8 +1020,8 @@ static void pbN_delname(pb_State *S, pb_NameEntry *name) {
             list = &(*list)->next;
         else {
             *list = (*list)->next;
-            free(name);
             --nt->count;
+            free(name);
             break;
         }
     }
@@ -1053,7 +1053,7 @@ PB_API pb_Name *pb_newname(pb_State *S, pb_Slice s) {
     if (s.p != NULL) {
         pb_NameCache *slot;
         pb_NameEntry *entry = pbN_cache(S, s, &slot);
-        if (entry) return (pb_Name*)(entry + 1);
+        if (entry) return pb_usename((pb_Name*)(entry + 1));
         slot->name = s.p;
         slot->hash = pbN_calchash(s);
         entry = pbN_getname(S, s, slot->hash);
@@ -1067,8 +1067,7 @@ PB_API pb_Name *pb_newname(pb_State *S, pb_Slice s) {
 PB_API void pb_delname(pb_State *S, pb_Name *name) {
     if (name != NULL) {
         pb_NameEntry *ne = (pb_NameEntry*)name - 1;
-        if (ne->refcount <= 1)
-        { pbN_delname(S, ne); return; }
+        if (ne->refcount <= 1) { pbN_delname(S, ne); return; }
         --ne->refcount;
     }
 }
@@ -1282,7 +1281,23 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
 
 /* .pb proto loader */
 
-#include <setjmp.h>
+#ifndef pb_throw
+# if defined(__cplusplus) && !defined(PB_USE_LONGJMP)
+#   define pb_throw(b)   throw(b)
+#   define pb_try(b,a)   try { (b)=1; a } catch(...) { }
+#   define pb_JumpBuf    int  /* dummy variable */
+# elif !defined(_WIN32)
+#   include <setjmp.h>
+#   define pb_throw(b) _longjmp((b), 1)
+#   define pb_try(b,a) if (_setjmp((b)) == 0) { a }
+#   define pb_JumpBuf  jmp_buf
+# else
+#   include <setjmp.h>
+#   define pb_throw(b) longjmp(b, 1)
+#   define pb_try(b,a) if (setjmp(b) == 0) { a }
+#   define pb_JumpBuf  jmp_buf
+# endif
+#endif /* pb_throw */
 
 typedef struct pb_Loader         pb_Loader;
 typedef struct pbL_FieldInfo     pbL_FieldInfo;
@@ -1298,10 +1313,11 @@ typedef struct pbL_FileInfo      pbL_FileInfo;
 #define pbL_delete(A) ((A) ? (void)free(pbL_rawh(A)) : (void)0)
 
 struct pb_Loader {
-    jmp_buf   jbuf;
     pb_Slice  s;
     pb_Buffer b;
+    int       ret;
     int       is_proto3;
+    pb_JumpBuf jbuf;
 };
 
 /* parsers */
@@ -1347,7 +1363,7 @@ struct pbL_FileInfo {
 };
 
 static void pbL_readbytes(pb_Loader *L, pb_Slice *pv)
-{ if (pb_readbytes(&L->s, pv) == 0) longjmp(L->jbuf, 1); }
+{ if (pb_readbytes(&L->s, pv) == 0) pb_throw(L->jbuf); }
 
 static void pbL_beginmsg(pb_Loader *L, pb_Slice *pv)
 { pb_Slice v; pbL_readbytes(L, &v); *pv = L->s, L->s = v; }
@@ -1358,22 +1374,23 @@ static void pbL_endmsg(pb_Loader *L, pb_Slice *pv)
 static void pbL_readint32(pb_Loader *L, int32_t *pv) {
     uint32_t v;
     if (pb_readvarint32(&L->s, &v) == 0)
-        longjmp(L->jbuf, 1);
+        pb_throw(L->jbuf);
     *pv = (int32_t)v;
 }
 
 static void pbL_grow(pb_Loader *L, void **pp, size_t obj_size) {
     enum { SIZE, COUNT, FIELDS };
-    size_t *h = *pp ? pbL_rawh(*pp) : NULL;
+    size_t *nh, *h = *pp ? pbL_rawh(*pp) : NULL;
     if (h == NULL || h[SIZE] <= h[COUNT]) {
         size_t used = (h ? h[COUNT] : 0);
-		size_t size = (h ? h[SIZE] : 2), newsize = size + (size >> 1);
-		size_t *nh  = (size_t*)realloc(h, sizeof(size_t)*FIELDS + newsize*obj_size);
-        if (nh == NULL || newsize < size) longjmp(L->jbuf, PB_ENOMEM);
-        nh[SIZE]  = newsize;
+        size_t size = (h ? h[SIZE]  : 4), nsize = size + (size >> 1);
+        nh = nsize < size ? NULL :
+            (size_t*)realloc(h, sizeof(size_t)*FIELDS+nsize*obj_size);
+        if (nh == NULL) { L->ret = PB_ENOMEM; pb_throw(L->jbuf); }
+        nh[SIZE]  = nsize;
         nh[COUNT] = used;
         *pp = nh + FIELDS;
-        memset((char*)*pp + used*obj_size, 0, (newsize - used)*obj_size);
+        memset((char*)*pp + used*obj_size, 0, (nsize - used)*obj_size);
     }
 }
 
@@ -1646,22 +1663,24 @@ static void pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Loader *L) {
     }
 }
 
+static void pb_doload(pb_State *S, pb_Loader *L, pbL_FileInfo **pinfo) {
+    pbL_FileDescriptorSet(L, pinfo);
+    pbL_loadFile(S, *pinfo, L);
+    L->ret = PB_OK;
+}
+
 PB_API int pb_load(pb_State *S, pb_Slice *s) {
-    volatile int ret = PB_ERROR;
     pbL_FileInfo *files = NULL;
     pb_Loader L;
-    if (!setjmp(L.jbuf)) {
-        L.s = *s;
-        L.is_proto3 = 0;
-        pb_initbuffer(&L.b);
-        pbL_FileDescriptorSet(&L, &files);
-        pbL_loadFile(S, files, &L);
-        ret = PB_OK;
-    }
+    pb_initbuffer(&L.b);
+    L.s         = *s;
+    L.ret       = PB_ERROR;
+    L.is_proto3 = 0;
+    pb_try(L.jbuf, pb_doload(S, &L, &files););
     pbL_delFileInfo(files);
     pb_resetbuffer(&L.b);
     s->p = L.s.p;
-    return ret;
+    return L.ret;
 }
 
 
