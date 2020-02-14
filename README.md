@@ -6,6 +6,8 @@
 
 Urho3d集成说明：https://note.youdao.com/ynoteshare1/index.html?id=20d06649fab669371140256abd7a362b&type=note
 
+Unreal SLua集成：https://github.com/zengdelang/slua-unreal-pb
+
 ToLua集成说明：http://changxianjie.com/tolua集成lua-protobuf/
 
 QQ群：485016061 [![lua-protobuf1交流群](https://pub.idqqimg.com/wpa/images/group.png)](https://shang.qq.com/wpa/qunwpa?idkey=d7e2973604a723c4f77d0a837df39be26e15be2c2ec29d5ebfdb64f94e74e6ae)
