@@ -1286,14 +1286,14 @@ typedef struct pbL_FileInfo      pbL_FileInfo;
 
 typedef struct pb_ArrayHeader {
     unsigned count;
-    unsigned free;
+    unsigned capacity;
 } pb_ArrayHeader;
 
 #define pbL_rawh(A)   ((pb_ArrayHeader*)(A) - 1)
 #define pbL_delete(A) ((A) ? (void)free(pbL_rawh(A)) : (void)0)
 #define pbL_count(A)  ((A) ? pbL_rawh(A)->count    : 0)
 #define pbL_add(A)    (pbL_grow((void**)&(A),sizeof(*(A)))==PB_OK ?\
-                       &(A)[--pbL_rawh(A)->free,pbL_rawh(A)->count++] : NULL)
+                       &(A)[pbL_rawh(A)->count++] : NULL)
 
 struct pb_Loader {
     pb_Slice  s;
@@ -1354,14 +1354,14 @@ static void pbL_endmsg(pb_Loader *L, pb_Slice *pv)
 
 static int pbL_grow(void **pp, size_t objs) {
     pb_ArrayHeader *nh, *h = *pp ? pbL_rawh(*pp) : NULL;
-    if (h == NULL || h->free == 0) {
+    if (h == NULL || h->capacity <= h->count) {
         size_t used = (h ? h->count : 0);
         size_t size = used + 4, nsize = size + (size >> 1);
         nh = nsize < size ? NULL :
             (pb_ArrayHeader*)realloc(h, sizeof(pb_ArrayHeader)+nsize*objs);
         if (nh == NULL) return PB_ENOMEM;
-        nh->count = (unsigned)used;
-        nh->free  = (unsigned)(nsize - used);
+        nh->count    = (unsigned)used;
+        nh->capacity = (unsigned)nsize;
         *pp = nh + 1;
         memset((char*)*pp + used*objs, 0, (nsize - used)*objs);
     }
