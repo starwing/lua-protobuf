@@ -515,10 +515,11 @@ function msg_body:extensions(lex, info)
 end
 
 function msg_body:reserved(lex, info)
-   if lex:test '%a' then
+   lex:whitespace()
+   if not lex '^%d' then
       local rt = default(info, 'reserved_name')
       repeat
-         insert_tab(rt, lex:ident 'field name')
+         insert_tab(rt, (lex:quote()))
       until not lex:test ','
    else
       local rt = default(info, 'reserved_range')
