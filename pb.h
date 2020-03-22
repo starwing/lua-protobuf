@@ -284,7 +284,7 @@ struct pb_Entry {
 /* fields */
 
 #define PB_NAMECACHE_LSIZE (5)
-#define pb_NAMECACHE_SIZE  (1<<PB_NAMECACHE_LSIZE)
+#define PB_NAMECACHE_SIZE  (1<<PB_NAMECACHE_LSIZE)
 
 typedef struct pb_NameEntry {
     struct pb_NameEntry *next;
@@ -305,7 +305,7 @@ typedef struct pb_NameCache {
 } pb_NameCache;
 
 struct pb_State {
-    pb_NameCache namecache[pb_NAMECACHE_SIZE];
+    pb_NameCache namecache[PB_NAMECACHE_SIZE];
     pb_NameTable nametable;
     pb_Table     types;
     pb_Pool      typepool;
@@ -1045,12 +1045,9 @@ static pb_NameEntry *pbN_getname(pb_State *S, pb_Slice s, unsigned hash) {
 }
 
 static pb_NameEntry *pbN_cache(pb_State *S, pb_Slice s, pb_NameCache **pslot) {
-    pb_NameEntry *entry = NULL;
-    size_t cidx = ((uintptr_t)s.p*2654435761U)&(pb_NAMECACHE_SIZE-1);
+    size_t cidx = ((uintptr_t)s.p*2654435761U)&(PB_NAMECACHE_SIZE-1);
     *pslot = &S->namecache[cidx];
-    if ((*pslot)->name == s.p)
-        entry = pbN_getname(S, s, (*pslot)->hash);
-    return entry;
+    return (*pslot)->name == s.p ? pbN_getname(S, s, (*pslot)->hash) : NULL;
 }
 
 PB_API pb_Name *pb_newname(pb_State *S, pb_Slice s) {

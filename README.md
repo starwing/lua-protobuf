@@ -317,8 +317,8 @@ These options are supported currently:
 | ----------------------- | ------------------------------------------------------------ |
 | `enum_as_name`          | set value to enum name when decode a enum **(default)**      |
 | `enum_as_value`         | set value to enum value when decode a enum                   |
-| `int64_as_number`       | set value to integer when it fit int32, otherwise return a number **(default)** |
-| `int64_as_string`       | same as above, but when it not fit int32, return a string instead |
+| `int64_as_number`       | set value to integer when it fit into uint32, otherwise return a number **(default)** |
+| `int64_as_string`       | same as above, but return a string instead |
 | `int64_as_hexstring`    | same as above, but return a hexadigit string instead         |
 | `no_default_values`     | do not default values for decoded message table **(default)** |
 | `use_default_values`    | set default values by copy values from default table before decode |
