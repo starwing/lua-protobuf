@@ -629,7 +629,7 @@ function _G.test_oneof()
    message TO_M3 {
        int32 value = 1;
    }
-   message TestOneof { 
+   message TestOneof {
        oneof body_oneof {
            TO_M1 m1 = 100;
            TO_M2 m2 = 200;
@@ -938,20 +938,20 @@ function _G.test_typefmt()
 
    local bytes = assert(pb.encode("Person", data))
    local s = require "pb.slice".new(bytes)
-   local function decode(type, s, data)
-      while #s > 0 do
-         local offset, tag = s:unpack"@v"
+   local function decode(type, str, d)
+      while #str > 0 do
+         local _, tag = str:unpack"@v"
          local name, _, pbtype = pb.field(type, math.floor(tag / 8))
          local fmt = pb.typefmt(pbtype)
          if fmt == "message" then
-            s:enter()
-            if data[name][1] then
-               decode(pbtype, s, data[name][1])
-               table.remove(data[name], 1)
+            str:enter()
+            if d[name][1] then
+               decode(pbtype, str, d[name][1])
+               table.remove(d[name], 1)
             end
-            s:leave()
+            str:leave()
          else
-            assert(data[name] == s:unpack(fmt))
+            assert(d[name] == str:unpack(fmt))
          end
       end
    end
@@ -1156,8 +1156,8 @@ function _G.test_hook()
       local function helper(t)
          return func(name, t)
       end
-      local old = pb.hook(name, helper)
-      assert(fetch == old)
+      local oldh = pb.hook(name, helper)
+      assert(fetch == oldh)
       assert(pb.hook(name) == helper)
    end
    local s = {}
@@ -1198,9 +1198,12 @@ end
 function _G.test_unsafe()
    local unsafe = require "pb.unsafe"
    assert(type(unsafe.decode) == "function")
+   assert(type(unsafe.use) == "function")
    fail("userdata expected, got boolean",
       function() unsafe.decode("", true, 1)
    end)
+   eq((unsafe.use "global"), true)
+   eq((unsafe.use "local"), true)
 end
 
 if _VERSION == "Lua 5.1" and not _G.jit then

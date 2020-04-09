@@ -125,6 +125,7 @@ static int lua53_rawgetp(lua_State *L, int idx, const void *p)
 #define pb_state(LS)     ((LS)->state)
 #define lpb_name(LS,s)   pb_name(pb_state(LS), (s), &(LS)->cache)
 
+static pb_State *global_state = NULL;
 static const char state_name[] = PB_STATE;
 
 enum lpb_Int64Mode { LPB_NUMBER, LPB_STRING, LPB_HEXSTRING };
@@ -1153,7 +1154,9 @@ static pb_Field *lpb_checkfield(lua_State *L, int idx, pb_Type *t) {
 static int Lpb_load(lua_State *L) {
     lpb_State *LS = default_lstate(L);
     pb_Slice s = lpb_checkslice(L, 1);
-    lua_pushboolean(L, pb_load(&LS->local, &s) == PB_OK);
+    int r = pb_load(&LS->local, &s);
+    if (r == PB_OK) global_state = &LS->local;
+    lua_pushboolean(L, r == PB_OK);
     lua_pushinteger(L, pb_pos(s)+1);
     return 2;
 }
@@ -1178,6 +1181,7 @@ static int Lpb_loadfile(lua_State *L) {
     fclose(fp);
     s = pb_result(&b);
     ret = pb_load(&LS->local, &s);
+    if (ret == PB_OK) global_state = &LS->local;
     pb_resetbuffer(&b);
     lua_pushboolean(L, ret == PB_OK);
     lua_pushinteger(L, pb_pos(s)+1);
@@ -1842,9 +1846,22 @@ static int Lpb_decode_unsafe(lua_State *L) {
     return lpb_decode(L, pb_lslice(data, size), 4);
 }
 
+static int Lpb_use(lua_State *L) {
+    const char *opts[] = { "global", "local", NULL };
+    lpb_State *LS = default_lstate(L);
+    pb_State *GS = global_state;
+    switch (luaL_checkoption(L, 1, NULL, opts)) {
+    case 0: if (GS) LS->state = GS; break;
+    case 1: LS->state = &LS->local; break;
+    }
+    lua_pushboolean(L, GS != NULL);
+    return 1;
+}
+
 LUALIB_API int luaopen_pb_unsafe(lua_State *L) {
     luaL_Reg libs[] = {
         { "decode", Lpb_decode_unsafe },
+        { "use",    Lpb_use           },
         { NULL, NULL }
     };
     luaL_newlib(L, libs);

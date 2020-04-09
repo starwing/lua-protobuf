@@ -225,9 +225,9 @@ typedef struct pb_Field pb_Field;
 
 PB_API int pb_load (pb_State *S, pb_Slice *s);
 
-PB_API pb_Type  *pb_newtype  (pb_State *S, const pb_Name *tname);
+PB_API pb_Type  *pb_newtype  (pb_State *S, pb_Name *tname);
 PB_API void      pb_deltype  (pb_State *S, pb_Type *t);
-PB_API pb_Field *pb_newfield (pb_State *S, pb_Type *t, const pb_Name *fname, int32_t number);
+PB_API pb_Field *pb_newfield (pb_State *S, pb_Type *t, pb_Name *fname, int32_t number);
 PB_API void      pb_delfield (pb_State *S, pb_Type *t, pb_Field *f);
 
 PB_API pb_Type  *pb_type   (const pb_State *S, const pb_Name *tname);
@@ -1068,9 +1068,9 @@ PB_API void pb_delname(pb_State *S, pb_Name *name) {
 }
 
 PB_API pb_Name *pb_newname(pb_State *S, pb_Slice s, pb_Cache *cache) {
-    const pb_Name *name = pb_name(S, s, cache);
+    pb_Name *name = (pb_Name*)pb_name(S, s, cache);
     pb_NameEntry *entry;
-    if (s.p == NULL || name) return pb_usename((pb_Name*)name);
+    if (s.p == NULL || name) return pb_usename(name);
     entry = pbN_newname(S, s, cache->hash);
     return entry ? pb_usename((pb_Name*)(entry + 1)) : NULL;
 }
@@ -1198,7 +1198,7 @@ static void pbT_freefield(pb_State *S, pb_Field *f) {
     pb_poolfree(&S->fieldpool, f);
 }
 
-PB_API pb_Type *pb_newtype(pb_State *S, const pb_Name *tname) {
+PB_API pb_Type *pb_newtype(pb_State *S, pb_Name *tname) {
     pb_TypeEntry *te;
     pb_Type *t;
     if (tname == NULL) return NULL;
@@ -1207,7 +1207,7 @@ PB_API pb_Type *pb_newtype(pb_State *S, const pb_Name *tname) {
     if ((t = te->value) != NULL) { t->is_dead = 0; return t; }
     if (!(t = (pb_Type*)pb_poolalloc(&S->typepool))) return NULL;
     pbT_inittype(t);
-    t->name = (pb_Name*)tname;
+    t->name = tname;
     t->basename = pbT_basename((const char*)tname);
     return te->value = t;
 }
@@ -1238,7 +1238,7 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     /*pb_poolfree(&S->typepool, t); */
 }
 
-PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, const pb_Name *fname, int32_t number) {
+PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t number) {
     pb_FieldEntry *nf, *tf;
     pb_Field *f;
     if (fname == NULL) return NULL;
@@ -1246,13 +1246,13 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, const pb_Name *fname, int3
     tf = (pb_FieldEntry*)pb_settable(&t->field_tags, number);
     if (nf == NULL || tf == NULL) return NULL;
     if ((f = nf->value) != NULL && tf->value == f) {
-        pb_delname(S, (pb_Name*)f->default_value);
+        pb_delname(S, f->default_value);
         f->default_value = NULL;
         return f;
     }
     if (!(f = (pb_Field*)pb_poolalloc(&S->fieldpool))) return NULL;
     memset(f, 0, sizeof(pb_Field));
-    f->name   = (pb_Name*)fname;
+    f->name   = fname;
     f->type   = t;
     f->number = number;
     if (nf->value && pb_field(t, nf->value->number) != nf->value)
