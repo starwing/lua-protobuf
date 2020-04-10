@@ -122,8 +122,8 @@ static int lua53_rawgetp(lua_State *L, int idx, const void *p)
 /* protobuf global state */
 
 #define default_state(L) (default_lstate(L)->state)
-#define pb_state(LS)     ((LS)->state)
-#define lpb_name(LS,s)   pb_name(pb_state(LS), (s), &(LS)->cache)
+#define lpb_state(LS)    ((LS)->state)
+#define lpb_name(LS,s)   pb_name(lpb_state(LS), (s), &(LS)->cache)
 
 static pb_State *global_state = NULL;
 static const char state_name[] = PB_STATE;
@@ -1134,20 +1134,20 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
 static const pb_Type *lpb_type(lpb_State *LS, pb_Slice s) {
     const pb_Type *t;
     if (s.p == NULL || *s.p == '.')
-        t = pb_type(pb_state(LS), lpb_name(LS, s));
+        t = pb_type(lpb_state(LS), lpb_name(LS, s));
     else {
         pb_Buffer b;
         pb_initbuffer(&b);
         *pb_prepbuffsize(&b, 1) = '.';
         pb_addsize(&b, 1);
         pb_addslice(&b, s);
-        t = pb_type(pb_state(LS), lpb_name(LS, pb_result(&b)));
+        t = pb_type(lpb_state(LS), pb_name(lpb_state(LS),pb_result(&b),NULL));
         pb_resetbuffer(&b);
     }
     return t;
 }
 
-static const pb_Field *lpb_checkfield(lua_State *L, int idx, const pb_Type *t) {
+static const pb_Field *lpb_field(lua_State *L, int idx, const pb_Type *t) {
     lpb_State *LS = default_lstate(L);
     int isint, number = (int)lua_tointegerx(L, idx, &isint);
     if (isint) return pb_field(t, number);
@@ -1223,7 +1223,7 @@ static int Lpb_typesiter(lua_State *L) {
     const pb_Type *t = lpb_type(LS, lpb_toslice(L, 2));
     if ((t == NULL && !lua_isnoneornil(L, 2)))
         return 0;
-    pb_nexttype(pb_state(LS), &t);
+    pb_nexttype(lpb_state(LS), &t);
     return lpb_pushtype(L, t);
 }
 
@@ -1261,13 +1261,13 @@ static int Lpb_type(lua_State *L) {
 static int Lpb_field(lua_State *L) {
     lpb_State *LS = default_lstate(L);
     const pb_Type *t = lpb_type(LS, lpb_checkslice(L, 1));
-    return lpb_pushfield(L, t, lpb_checkfield(L, 2, t));
+    return lpb_pushfield(L, t, lpb_field(L, 2, t));
 }
 
 static int Lpb_enum(lua_State *L) {
     lpb_State *LS = default_lstate(L);
     const pb_Type *t = lpb_type(LS, lpb_checkslice(L, 1));
-    const pb_Field *f = lpb_checkfield(L, 2, t);
+    const pb_Field *f = lpb_field(L, 2, t);
     if (f == NULL) return 0;
     if (lua_type(L, 2) == LUA_TNUMBER)
         lua_pushstring(L, (const char*)f->name);
@@ -1396,7 +1396,7 @@ static int Lpb_clear(lua_State *L) {
     LS->state = &LS->local;
     t = (pb_Type*)lpb_type(LS, lpb_checkslice(L, 1));
     if (lua_isnoneornil(L, 2)) pb_deltype(&LS->local, t);
-    else pb_delfield(&LS->local, t, (pb_Field*)lpb_checkfield(L, 2, t));
+    else pb_delfield(&LS->local, t, (pb_Field*)lpb_field(L, 2, t));
     LS->state = S;
     lpb_cleardefaults(L, LS, t);
     return 0;

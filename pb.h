@@ -1068,10 +1068,18 @@ PB_API void pb_delname(pb_State *S, pb_Name *name) {
 }
 
 PB_API pb_Name *pb_newname(pb_State *S, pb_Slice s, pb_Cache *cache) {
-    pb_Name *name = (pb_Name*)pb_name(S, s, cache);
     pb_NameEntry *entry;
-    if (s.p == NULL || name) return pb_usename(name);
-    entry = pbN_newname(S, s, cache->hash);
+    if (s.p == NULL) return NULL;
+    assert(cache == NULL);
+    /* if (cache == NULL) */{
+        unsigned hash = pbN_calchash(s);
+        entry = pbN_getname(S, s, hash);
+        if (entry == NULL) entry = pbN_newname(S, s, hash);
+    }/* else {
+        pb_Name *name = (pb_Name*)pb_name(S, s, cache);
+        if (name) return pb_usename(name);
+        entry = pbN_newname(S, s, cache->hash);
+    }*/
     return entry ? pb_usename((pb_Name*)(entry + 1)) : NULL;
 }
 
@@ -1079,16 +1087,20 @@ PB_API const pb_Name *pb_name(const pb_State *S, pb_Slice s, pb_Cache *cache) {
     pb_NameEntry *entry = NULL;
     pb_CacheSlot *slot;
     if (s.p == NULL) return NULL;
-    slot = cache->slots[((uintptr_t)s.p*2654435761U)&(PB_CACHE_SIZE-1)];
-    if (slot[0].name == s.p)
-        entry = pbN_getname(S, s, cache->hash = slot[0].hash);
-    else if (slot[1].name == s.p)
-        entry = pbN_getname(S, s, cache->hash = (++slot)[0].hash);
-    else
-        slot[1] = slot[0], slot[0].name = s.p;
-    if (entry == NULL) {
-        cache->hash = slot[0].hash = pbN_calchash(s);
-        entry = pbN_getname(S, s, slot[0].hash);
+    if (cache == NULL)
+        entry = pbN_getname(S, s, pbN_calchash(s));
+    else {
+        slot = cache->slots[((uintptr_t)s.p*2654435761U)&(PB_CACHE_SIZE-1)];
+        if (slot[0].name == s.p)
+            entry = pbN_getname(S, s, cache->hash = slot[0].hash);
+        else if (slot[1].name == s.p)
+            entry = pbN_getname(S, s, cache->hash = (++slot)[0].hash);
+        else
+            slot[1] = slot[0], slot[0].name = s.p;
+        if (entry == NULL) {
+            cache->hash = slot[0].hash = pbN_calchash(s);
+            entry = pbN_getname(S, s, slot[0].hash);
+        }
     }
     return entry ? (pb_Name*)(entry + 1) : NULL;
 }
@@ -1301,7 +1313,6 @@ typedef struct pb_ArrayHeader {
 
 struct pb_Loader {
     pb_Slice  s;
-    pb_Cache  c;
     pb_Buffer b;
     int       is_proto3;
 };
@@ -1588,7 +1599,7 @@ static int pbL_prefixname(pb_State *S, pb_Slice s, size_t *ps, pb_Loader *L, pb_
     pbCM(buff = pb_prepbuffsize(&L->b, pb_len(s) + 1));
     *buff = '.'; pb_addsize(&L->b, 1);
     if (pb_addslice(&L->b, s) == 0) return PB_ENOMEM;
-    if (out) *out = pb_newname(S, pb_result(&L->b), &L->c);
+    if (out) *out = pb_newname(S, pb_result(&L->b), NULL);
     return PB_OK;
 }
 
@@ -1601,7 +1612,7 @@ static int pbL_loadEnum(pb_State *S, pbL_EnumInfo *info, pb_Loader *L) {
     t->is_enum = 1;
     for (i = 0, count = pbL_count(info->value); i < count; ++i) {
         pbL_EnumValueInfo *ev = &info->value[i];
-        pbCE(pb_newfield(S, t, pb_newname(S, ev->name, &L->c), ev->number));
+        pbCE(pb_newfield(S, t, pb_newname(S, ev->name, NULL), ev->number));
     }
     L->b.size = curr;
     return PB_OK;
@@ -1611,11 +1622,11 @@ static int pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Loader *L, pb_Type
     pb_Type  *ft = NULL;
     pb_Field *f;
     if (info->type == PB_Tmessage || info->type == PB_Tenum)
-        pbCE(ft = pb_newtype(S, pb_newname(S, info->type_name, &L->c)));
+        pbCE(ft = pb_newtype(S, pb_newname(S, info->type_name, NULL)));
     if (t == NULL)
-        pbCE(t = pb_newtype(S, pb_newname(S, info->extendee, &L->c)));
-    pbCE(f = pb_newfield(S, t, pb_newname(S, info->name, &L->c), info->number));
-    f->default_value = pb_newname(S, info->default_value, &L->c);
+        pbCE(t = pb_newtype(S, pb_newname(S, info->extendee, NULL)));
+    pbCE(f = pb_newfield(S, t, pb_newname(S, info->name, NULL), info->number));
+    f->default_value = pb_newname(S, info->default_value, NULL);
     f->type      = ft;
     f->oneof_idx = info->oneof_index;
     f->type_id   = info->type;
@@ -1636,7 +1647,7 @@ static int pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Loader *L) {
     t->is_proto3 = L->is_proto3;
     for (i = 0, count = pbL_count(info->oneof_decl); i < count; ++i) {
         pb_OneofEntry *e = (pb_OneofEntry*)pb_settable(&t->oneof_index, i+1);
-        pbCM(e); pbCE(e->name = pb_newname(S, info->oneof_decl[i], &L->c));
+        pbCM(e); pbCE(e->name = pb_newname(S, info->oneof_decl[i], NULL));
         e->index = (int)i+1;
     }
     for (i = 0, count = pbL_count(info->field); i < count; ++i)
@@ -1653,12 +1664,12 @@ static int pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Loader *L) {
 
 static int pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Loader *L) {
     size_t i, count, j, jcount, curr = 0;
-    pb_Name *syntax = (pb_Name*)pb_name(S, pb_slice("proto3"), &L->c);
-    if (syntax == NULL) pbCM(syntax = pb_newname(S, pb_slice("proto3"), &L->c));
+    pb_Name *syntax;
+    pbCM(syntax = pb_newname(S, pb_slice("proto3"), NULL));
     for (i = 0, count = pbL_count(info); i < count; ++i) {
         if (info[i].package.p)
             pbC(pbL_prefixname(S, info[i].package, &curr, L, NULL));
-        if (pb_name(S, info[i].syntax, &L->c) == syntax) L->is_proto3 = 1;
+        L->is_proto3 = (pb_name(S, info[i].syntax, NULL) == syntax);
         for (j = 0, jcount = pbL_count(info[i].enum_type); j < jcount; ++j)
             pbC(pbL_loadEnum(S, &info[i].enum_type[j], L));
         for (j = 0, jcount = pbL_count(info[i].message_type); j < jcount; ++j)
@@ -1677,7 +1688,6 @@ PB_API int pb_load(pb_State *S, pb_Slice *s) {
     pb_initbuffer(&L.b);
     L.s         = *s;
     L.is_proto3 = 0;
-    memset(&L.c, 0, sizeof(pb_Cache));
     if ((r = pbL_FileDescriptorSet(&L, &files)) == PB_OK)
         r = pbL_loadFile(S, files, &L);
     pbL_delFileInfo(files);
