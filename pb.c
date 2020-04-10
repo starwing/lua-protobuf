@@ -1611,9 +1611,9 @@ static void lpb_usehooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
     const pb_Field *f = NULL;
-    int mode = t ? LS->default_mode : LPB_NODEF;
-    lua_newtable(L);
-    switch (t && t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
+    int mode = LS->default_mode;
+    lua_createtable(L, 0, t->field_count);
+    switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
         while (pb_nextfield(t, &f))
             if (!f->oneof_idx && lpb_pushdefault(L, LS, f, t->is_proto3))
@@ -1631,11 +1631,11 @@ static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
     }
 }
 
-static void lpb_fetchtable(lpb_Env *e, const pb_Field *f, const pb_Type *t) {
+static void lpb_fetchtable(lpb_Env *e, const pb_Field *f) {
     lua_State *L = e->L;
     if (lua53_getfield(L, -1, (const char*)f->name) == LUA_TNIL) {
         lua_pop(L, 1);
-        lpb_pushtypetable(L, e->LS, t);
+        lua_newtable(L);
         lua_pushvalue(L, -1);
         lua_setfield(L, -3, (const char*)f->name);
     }
@@ -1692,7 +1692,7 @@ static void lpbD_map(lpb_Env *e, const pb_Field *f) {
     pb_Slice p, *s = e->s;
     int mask = 0, top = lua_gettop(L) + 1;
     uint32_t tag;
-    lpb_fetchtable(e, f, NULL);
+    lpb_fetchtable(e, f);
     lpb_readbytes(L, s, &p);
     if (f->type == NULL) return;
     lua_pushnil(L);
@@ -1716,7 +1716,7 @@ static void lpbD_map(lpb_Env *e, const pb_Field *f) {
 
 static void lpbD_repeated(lpb_Env *e, const pb_Field *f, uint32_t tag) {
     lua_State *L = e->L;
-    lpb_fetchtable(e, f, NULL);
+    lpb_fetchtable(e, f);
     if (f->packed && pb_gettype(tag) == PB_TBYTES) {
         int len = (int)lua_rawlen(L, -1);
         pb_Slice p, *s = e->s;
