@@ -1070,6 +1070,7 @@ PB_API void pb_delname(pb_State *S, pb_Name *name) {
 PB_API pb_Name *pb_newname(pb_State *S, pb_Slice s, pb_Cache *cache) {
     pb_NameEntry *entry;
     if (s.p == NULL) return NULL;
+    (void)cache;
     assert(cache == NULL);
     /* if (cache == NULL) */{
         unsigned hash = pbN_calchash(s);
