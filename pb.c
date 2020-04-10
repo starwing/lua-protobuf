@@ -192,8 +192,8 @@ static lpb_State *default_lstate(lua_State *L) {
         }
         else{
             LS->state = &LS->local;
-            pb_init(&LS->local);
         }
+        pb_init(&LS->local);
         pb_initbuffer(&LS->buffer);
         luaL_setmetatable(L, PB_STATE);
         lua_rawsetp(L, LUA_REGISTRYINDEX, state_name);
