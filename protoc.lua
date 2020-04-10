@@ -808,8 +808,8 @@ function Parser:parse(src, name)
    name = name or "<input>"
    self.loaded[name] = true
    local lex = Lexer.new(name, src)
-   local info = { name = lex.name }
    local ctx = make_context(self, lex)
+   local info = { name = lex.name, syntax = ctx.syntax }
 
    local syntax = lex:keyword('syntax', 'opt')
    if syntax then

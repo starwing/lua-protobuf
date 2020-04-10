@@ -1641,26 +1641,11 @@ static void lpb_fetchtable(lpb_Env *e, const pb_Field *f) {
     }
 }
 
-static int lpbD_mismatch(lua_State *L, const pb_Field *f, pb_Slice *s, uint32_t tag) {
-    return luaL_error(L,
-            "type mismatch for field '%s' at offset %d, "
-            "%s expected for type %s, got %s",
-            (const char*)f->name,
-            pb_pos(*s)+1,
-            pb_wtypename(pb_wtypebytype(f->type_id), NULL),
-            pb_typename(f->type_id, NULL),
-            pb_wtypename(pb_gettype(tag), NULL));
-}
-
-static void lpbD_field(lpb_Env *e, const pb_Field *f, uint32_t tag) {
+static void lpbD_rawfield(lpb_Env *e, const pb_Field *f) {
     lua_State *L = e->L;
     pb_Slice sv, *s = e->s;
     const pb_Field *ev = NULL;
     uint64_t u64;
-
-    if (!f->packed && pb_wtypebytype(f->type_id) != (int)pb_gettype(tag))
-        lpbD_mismatch(L, f, s, tag);
-
     switch (f->type_id) {
     case PB_Tenum:
         if (pb_readvarint64(s, &u64) == 0)
@@ -1687,6 +1672,22 @@ static void lpbD_field(lpb_Env *e, const pb_Field *f, uint32_t tag) {
     }
 }
 
+static void lpbD_field(lpb_Env *e, const pb_Field *f, uint32_t tag) {
+    if (pb_wtypebytype(f->type_id) == (int)pb_gettype(tag)) {
+        lpbD_rawfield(e, f);
+        return;
+    }
+    luaL_error(e->L,
+            "type mismatch for %s%sfield '%s' at offset %d, "
+            "%s expected for type %s, got %s",
+            f->packed ? "packed " : "", f->repeated ? "repeated " : "",
+            (const char*)f->name,
+            pb_pos(*e->s)+1,
+            pb_wtypename(pb_wtypebytype(f->type_id), NULL),
+            pb_typename(f->type_id, NULL),
+            pb_wtypename(pb_gettype(tag), NULL));
+}
+
 static void lpbD_map(lpb_Env *e, const pb_Field *f) {
     lua_State *L = e->L;
     pb_Slice p, *s = e->s;
@@ -1705,9 +1706,9 @@ static void lpbD_map(lpb_Env *e, const pb_Field *f) {
             lua_replace(L, top+n);
         }
     }
-    if ((mask & 1) == 0 && lpb_pushdefault(L, e->LS, pb_field(f->type, 1), 1))
+    if (!(mask & 1) && lpb_pushdefault(L, e->LS, pb_field(f->type, 1), 1))
         lua_replace(L, top + 1), mask |= 1;
-    if ((mask & 2) == 0 && lpb_pushdefault(L, e->LS, pb_field(f->type, 2), 1))
+    if (!(mask & 2) && lpb_pushdefault(L, e->LS, pb_field(f->type, 2), 1))
         lua_replace(L, top + 2), mask |= 2;
     if (mask == 3) lua_rawset(L, -3);
     else           lua_pop(L, 2);
@@ -1717,17 +1718,18 @@ static void lpbD_map(lpb_Env *e, const pb_Field *f) {
 static void lpbD_repeated(lpb_Env *e, const pb_Field *f, uint32_t tag) {
     lua_State *L = e->L;
     lpb_fetchtable(e, f);
-    if (f->packed && pb_gettype(tag) == PB_TBYTES) {
+    if (pb_gettype(tag) != PB_TBYTES
+            || (!f->packed && pb_wtypebytype(f->type_id) == PB_TBYTES)) {
+        lpbD_field(e, f, tag);
+        lua_rawseti(L, -2, (lua_Integer)lua_rawlen(L, -2) + 1);
+    } else {
         int len = (int)lua_rawlen(L, -1);
         pb_Slice p, *s = e->s;
         lpb_readbytes(L, s, &p);
         while (p.p < p.end) {
-            lpb_withinput(e, &p, lpbD_field(e, f, tag));
+            lpb_withinput(e, &p, lpbD_rawfield(e, f));
             lua_rawseti(L, -2, ++len);
         }
-    } else {
-        lpbD_field(e, f, tag);
-        lua_rawseti(L, -2, (lua_Integer)lua_rawlen(L, -2) + 1);
     }
     lua_pop(L, 1);
 }
