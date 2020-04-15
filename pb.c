@@ -360,11 +360,11 @@ static void lpb_pushinteger(lua_State *L, int64_t n, int mode) {
 }
 
 typedef union lpb_Value {
-    pb_Slice s[1];
-    uint32_t u32;
-    uint64_t u64;
+    pb_Slice    s[1];
+    uint32_t    u32;
+    uint64_t    u64;
     lua_Integer lint;
-    lua_Number lnum;
+    lua_Number  lnum;
 } lpb_Value;
 
 static int lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type, size_t *plen) {
@@ -1493,11 +1493,13 @@ static void lpbE_field(lpb_Env *e, const pb_Field *f, size_t *plen) {
     }
 }
 
-static void lpbE_tagfield(lpb_Env *e, const pb_Field *f, size_t *plen) {
-    size_t klen = pb_addvarint32(e->b,
+static void lpbE_tagfield(lpb_Env *e, const pb_Field *f, int ignorezero) {
+    size_t hlen = pb_addvarint32(e->b,
             pb_pair(f->number, pb_wtypebytype(f->type_id)));
-    lpbE_field(e, f, plen);
-    if (plen && *plen != 0) *plen += klen;
+    size_t ignoredlen;
+    lpbE_field(e, f, &ignoredlen);
+    if (ignoredlen != 0 && ignorezero)
+        e->b->size -= (unsigned)(ignoredlen + hlen);
 }
 
 static void lpbE_map(lpb_Env *e, const pb_Field *f) {
@@ -1508,15 +1510,13 @@ static void lpbE_map(lpb_Env *e, const pb_Field *f) {
     lpb_checktable(L, f);
     lua_pushnil(L);
     while (lua_next(L, -2)) {
-        size_t len, ignoredlen;
+        size_t len;
         pb_addvarint32(e->b, pb_pair(f->number, PB_TBYTES));
         len = pb_bufflen(e->b);
         lua_pushvalue(L, -2);
-        lpbE_tagfield(e, kf, &ignoredlen);
-        e->b->size -= (unsigned)ignoredlen;
+        lpbE_tagfield(e, kf, 1);
         lua_pop(L, 1);
-        lpbE_tagfield(e, vf, &ignoredlen);
-        e->b->size -= (unsigned)ignoredlen;
+        lpbE_tagfield(e, vf, 1);
         lua_pop(L, 1);
         lpb_addlength(L, e->b, len);
     }
@@ -1538,7 +1538,7 @@ static void lpbE_repeated(lpb_Env *e, const pb_Field *f) {
         lpb_addlength(L, b, len);
     } else {
         for (i = 1; lua53_rawgeti(L, -1, i) != LUA_TNIL; ++i) {
-            lpbE_tagfield(e, f, NULL);
+            lpbE_tagfield(e, f, 0);
             lua_pop(L, 1);
         }
     }
@@ -1559,12 +1559,8 @@ static void lpb_encode(lpb_Env *e, const pb_Type *t) {
                 lpbE_map(e, f);
             else if (f->repeated)
                 lpbE_repeated(e, f);
-            else if (!f->type || !f->type->is_dead) {
-                size_t ignoredlen;
-                lpbE_tagfield(e, f, &ignoredlen);
-                if (t->is_proto3 && !f->oneof_idx)
-                    e->b->size -= (unsigned)ignoredlen;
-            }
+            else if (!f->type || !f->type->is_dead)
+                lpbE_tagfield(e, f, t->is_proto3 && !f->oneof_idx);
         }
         lua_pop(L, 1);
     }
