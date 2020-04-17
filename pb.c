@@ -738,6 +738,33 @@ static int Lpb_tohex(lua_State *L) {
     return 1;
 }
 
+static int Lpb_fromhex(lua_State *L) {
+    pb_Slice s = lpb_checkslice(L, 1);
+    lua_Integer r[2] = { 1, -1 };
+    luaL_Buffer lb;
+    int curr = 0, idx = 0, num;
+    rangerelat(L, 2, r, pb_len(s));
+    luaL_buffinit(L, &lb);
+    for (; r[0] <= r[1]; ++r[0]) {
+        switch (num = s.p[r[0]-1]) {
+        case '0': case '1': case '2': case '3':
+        case '4': case '5': case '6': case '7':
+        case '8': case '9': num -= '0'; break;
+        case 'A': case 'a': num  =  10; break;
+        case 'B': case 'b': num  =  11; break;
+        case 'C': case 'c': num  =  12; break;
+        case 'D': case 'd': num  =  13; break;
+        case 'E': case 'e': num  =  14; break;
+        case 'F': case 'f': num  =  15; break;
+        default: continue;
+        }
+        curr = curr<<4 | num;
+        if (++idx % 2 == 0) luaL_addchar(&lb, curr), curr = 0;
+    }
+    luaL_pushresult(&lb);
+    return 1;
+}
+
 static int Lpb_result(lua_State *L) {
     pb_Slice s = lpb_checkslice(L, 1);
     lua_Integer r[2] = {1, -1}, range = rangerelat(L, 2, r, pb_len(s));
@@ -815,6 +842,7 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
         { "__gc",       Lbuf_delete },
         { "delete",     Lbuf_delete },
         { "tohex",      Lpb_tohex },
+        { "fromhex",    Lpb_fromhex },
         { "result",     Lpb_result },
 #define ENTRY(name) { #name, Lbuf_##name }
         ENTRY(new),
@@ -1105,6 +1133,7 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
         { "__gc",       Lslice_reset },
         { "delete",     Lslice_reset },
         { "tohex",      Lpb_tohex   },
+        { "fromhex",    Lpb_fromhex   },
         { "result",     Lpb_result  },
 #define ENTRY(name) { #name, Lslice_##name }
         ENTRY(new),
@@ -1824,6 +1853,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(defaults),
         ENTRY(hook),
         ENTRY(tohex),
+        ENTRY(fromhex),
         ENTRY(result),
         ENTRY(option),
         ENTRY(state),

@@ -789,6 +789,8 @@ function _G.test_buffer()
    eq(buffer("foo", "bar"):result(), "foobar")
    eq(buffer.new("foo", "bar"):result(), "foobar")
 
+   eq(pb.fromhex"0123456789ABCDEF", "\1\35\69\103\137\171\205\239")
+
    local b = buffer.new()
    b:pack("b", true);       eq(b:tohex(-1), "01")
    b:pack("f", 0.125);      eq(b:tohex(-4), "00 00 00 3E")
