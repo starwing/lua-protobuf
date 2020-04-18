@@ -8,7 +8,7 @@ Urho3d集成说明：https://note.youdao.com/ynoteshare1/index.html?id=20d06649f
 
 Unreal SLua集成：https://github.com/zengdelang/slua-unreal-pb
 
-ToLua集成说明：http://changxianjie.com/tolua集成lua-protobuf/
+ToLua集成说明：[链接](http://changxianjie.gitee.io/unitypartner/2019/10/01/tolua中使用protobuf3—集成lua-protobuf/)
 
 QQ群：485016061 [![lua-protobuf1交流群](https://pub.idqqimg.com/wpa/images/group.png)](https://shang.qq.com/wpa/qunwpa?idkey=d7e2973604a723c4f77d0a837df39be26e15be2c2ec29d5ebfdb64f94e74e6ae)
 
@@ -496,3 +496,6 @@ All routines in `pb.buffer` module:
 | `b:result([i[,j]])` | string        | return the raw data, `i` and `j` are ranges in encoded data, includes,. Omit it means the whole range |
 | `b:pack(fmt, ...)`  | self          | encode the values passed to `b:pack()`, use `fmt` to indicate how to encode value |
 
+
+
+[http://changxianjie.gitee.io/unitypartner/2019/10/01/tolua中使用protobuf3—集成lua-protobuf/集成lua-protobuf/]: 
