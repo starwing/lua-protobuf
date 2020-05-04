@@ -18,6 +18,7 @@ branches:
     - lua54
 
 before_install:
+  - pip install --user urllib3[secure] cpp-coveralls
   - curl -O https://raw.githubusercontent.com/luarocks/hererocks/master/hererocks.py
   - python hererocks.py env --$LUA -rlatest
   - source env/bin/activate
