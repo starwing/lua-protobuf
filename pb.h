@@ -287,8 +287,7 @@ struct pb_Entry {
 
 /* fields */
 
-#define PB_CACHE_LSIZE (5)
-#define PB_CACHE_SIZE  (1<<PB_CACHE_LSIZE)
+#define PB_CACHE_SIZE  (53)
 
 typedef struct pb_NameEntry {
     struct pb_NameEntry *next;
@@ -1091,7 +1090,7 @@ PB_API const pb_Name *pb_name(const pb_State *S, pb_Slice s, pb_Cache *cache) {
     if (cache == NULL)
         entry = pbN_getname(S, s, pbN_calchash(s));
     else {
-        slot = cache->slots[((uintptr_t)s.p*2654435761U)&(PB_CACHE_SIZE-1)];
+        slot = cache->slots[((uintptr_t)s.p*2654435761U)%PB_CACHE_SIZE];
         if (slot[0].name == s.p)
             entry = pbN_getname(S, s, cache->hash = slot[0].hash);
         else if (slot[1].name == s.p)
