@@ -1,10 +1,11 @@
 language: c
-sudo: false
+os: linux
+dist: xenial
 
 env:
   global:
     - ROCKSPEC=rockspecs/lua-protobuf-scm-1.rockspec
-  matrix:
+  jobs:
     - LUA="lua 5.1"
     - LUA="lua 5.2"
     - LUA="lua 5.3"
