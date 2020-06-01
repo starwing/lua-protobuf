@@ -220,6 +220,18 @@ In below table of functions, we have several types that have special means:
 
 `pb.load()` accepts the schema binary data and returns a boolean indicates the result of loading, success or failure, and a offset reading in schema so far that is useful to figure out the reason of failure.
 
+#### Type mapping
+
+| Protobuf Types                                     | Lua Types                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| `double`, `float`                                  | `number`                                                     |
+| `int32`, `uint32`, `fixed32`, `sfixed32`, `sint32` | `number` or `integer` in Lua 5.3+                            |
+| `int64`, `uint64`, `fixed64`, `sfixed64`, `sint64` | `number` or `"#"` prefixed `string` or `integer` in Lua 5.3+ |
+| `bool`                                             | `boolean`                                                    |
+| `string`, `bytes`                                  | `string`                                                     |
+| `message`                                          | `table`                                                      |
+| `enum`                                             | `string` or `number`                                         |
+
 #### Type Information
 
 Using `pb.(type|field)[s]()` functions retrieve type information for loaded messages.  
@@ -500,4 +512,4 @@ All routines in `pb.buffer` module:
 
 
 
-[http://changxianjie.gitee.io/unitypartner/2019/10/01/tolua中使用protobuf3—集成lua-protobuf/集成lua-protobuf/]: 
+
