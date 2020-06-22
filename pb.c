@@ -1033,7 +1033,7 @@ static int Lslice_libcall(lua_State *L) {
 }
 
 static int Lslice_reset(lua_State *L) {
-    lpb_Slice *s = check_lslice(L, 1);
+    lpb_Slice *s = (lpb_Slice*)check_slice(L, 1);
     size_t size = lua_rawlen(L, 1);
     lpb_resetslice(L, s, size);
     if (!lua_isnoneornil(L, 2))
