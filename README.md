@@ -52,24 +52,24 @@ bin/luarocks make lua-protobuf/rockspecs/lua-protobuf-scm-1.rockspec CFLAGS="-fP
 cp protoc.lua pb.so ..
 ```
 
-Or you can build it by hand, it only has a pure Lua module `protoc.lua` and a pair of C source: `pb.h` and `pb.c`.
+Or you can build it by hand, it only has a pure Lua module `protoc.lua` and a pair of C source: `pb.h` and `pb.c`. *Notice* that in order to build the `pb` C module, you need Lua header file and/or libary file installed. replace `$LUA_HEADERS` and `$LUA_LIBS` below to real install locations.
 
 To build it on macOS, use your favor compiler:
 
 ```shell
-gcc -O2 -shared -undefined dynamic_lookup pb.c -o pb.so
+gcc -O2 -shared -undefined dynamic_lookup -I "$LUA_HEADERS" pb.c -o pb.so
 ```
 
 On Linux, use the nearly same command:
 
 ```shell
-gcc -O2 -shared -fPIC pb.c -o pb.so
+gcc -O2 -shared -fPIC -I "$LUA_HEADERS" pb.c -o pb.so
 ```
 
 On Windows, you could use MinGW or MSVC, create a `*.sln` project or build it on the command line (notice the `Lua_BUILD_AS_DLL` flag):
 
 ```shell
-cl /O2 /LD /Fepb.dll /I Lua53\include /DLUA_BUILD_AS_DLL pb.c Lua53\lib\lua53.lib
+cl /O2 /LD /Fepb.dll /I "$LUA_HEADERS" /DLUA_BUILD_AS_DLL pb.c "$LUA_LIBS"
 ```
 
 ## Example
