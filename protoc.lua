@@ -1083,22 +1083,26 @@ local function do_compile(self, f, ...)
 end
 
 function Parser:compile(s, name)
+   if self == Parser then self = Parser.new() end
    local set = do_compile(self, self.parse, self, s, name)
    return pb.encode('.google.protobuf.FileDescriptorSet', set)
 end
 
 function Parser:compilefile(fn)
+   if self == Parser then self = Parser.new() end
    local set = do_compile(self, self.parsefile, self, fn)
    return pb.encode('.google.protobuf.FileDescriptorSet', set)
 end
 
 function Parser:load(s, name)
+   if self == Parser then self = Parser.new() end
    local ret, pos = pb.load(self:compile(s, name))
    if ret then return ret, pos end
    error("load failed at offset "..pos)
 end
 
 function Parser:loadfile(fn)
+   if self == Parser then self = Parser.new() end
    local ret, pos = pb.load(self:compilefile(fn))
    if ret then return ret, pos end
    error("load failed at offset "..pos)
