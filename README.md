@@ -2,17 +2,9 @@
 
 [![Build Status](https://travis-ci.org/starwing/lua-protobuf.svg?branch=master)](https://travis-ci.org/starwing/lua-protobuf)[![Coverage Status](https://coveralls.io/repos/github/starwing/lua-protobuf/badge.svg?branch=master)](https://coveralls.io/github/starwing/lua-protobuf?branch=master)
 
-中文使用说明：https://zhuanlan.zhihu.com/p/26014103
+English | [中文](https://github.com/starwing/lua-protobuf/blob/master/README.zh.md)
 
-Urho3d集成说明：https://note.youdao.com/ynoteshare1/index.html?id=20d06649fab669371140256abd7a362b&type=note
-
-Unreal SLua集成：https://github.com/zengdelang/slua-unreal-pb
-
-Unreal UnLua集成：https://github.com/hxhb/unlua-pb
-
-ToLua集成说明：[链接](http://changxianjie.gitee.io/unitypartner/2019/10/01/tolua中使用protobuf3—集成lua-protobuf/)
-
-QQ群：485016061 [![lua-protobuf1交流群](https://pub.idqqimg.com/wpa/images/group.png)](https://shang.qq.com/wpa/qunwpa?idkey=d7e2973604a723c4f77d0a837df39be26e15be2c2ec29d5ebfdb64f94e74e6ae)
+---
 
 This project offers a C module for Lua (5.1, 5.2, 5.3, 5.4 and LuaJIT) manipulating Google's protobuf protocol, both for version 2 and 3 syntax and semantics. It splits to the lower-level and the high-level parts for different goals.
 
@@ -308,7 +300,7 @@ Using `pb.defaults()` to get a table with all default values from a message. thi
 
 #### Hooks
 
-If set `pb.option "enable_hooks"`, the hook function will enabled. you could use `pb.hook()` to set or get a hook function. call it with type name directly get current setted hook. call it with two arguments to set a hook. and call it with `nil` as the second argument to remove the hook. in all case, the original one will be returned.
+If set `pb.option "enable_hooks"`, the hook function will be enabled. you could use `pb.hook()` to set or get a hook function: call it with type name directly get current setted hook; call it with two arguments to set a hook; and call it with `nil` as the second argument to remove the hook. in all case, the original one will be returned.
 
 After the hook function setted and hook enabled, the function will be called *after* a message get decoded. So you could get all values in the table passed to hook function. That's the only argument of hook.
 
