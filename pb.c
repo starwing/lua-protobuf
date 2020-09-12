@@ -1882,6 +1882,20 @@ static int Lpb_decode_unsafe(lua_State *L) {
     return lpb_decode(L, pb_lslice(data, size), 4);
 }
 
+static int Lpb_slice_unsafe(lua_State *L) {
+    const char *data = (const char *)lua_touserdata(L, 1);
+    size_t size = (size_t)luaL_checkinteger(L, 2);
+    if (data == NULL) typeerror(L, 1, "userdata");
+    return lpb_newslice(L, data, size);
+}
+
+static int Lpb_touserdata(lua_State *L) {
+    pb_Slice s = lpb_toslice(L, 1);
+    lua_pushlightuserdata(L, (void*)s.p);
+    lua_pushinteger(L, pb_len(s));
+    return 2;
+}
+
 static int Lpb_use(lua_State *L) {
     const char *opts[] = { "global", "local", NULL };
     lpb_State *LS = default_lstate(L);
@@ -1896,8 +1910,10 @@ static int Lpb_use(lua_State *L) {
 
 LUALIB_API int luaopen_pb_unsafe(lua_State *L) {
     luaL_Reg libs[] = {
-        { "decode", Lpb_decode_unsafe },
-        { "use",    Lpb_use           },
+        { "decode",     Lpb_decode_unsafe },
+        { "slice",      Lpb_slice_unsafe  },
+        { "touserdata", Lpb_touserdata    },
+        { "use",        Lpb_use           },
         { NULL, NULL }
     };
     luaL_newlib(L, libs);

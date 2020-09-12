@@ -789,7 +789,7 @@ function _G.test_buffer()
    eq(buffer("foo", "bar"):result(), "foobar")
    eq(buffer.new("foo", "bar"):result(), "foobar")
 
-   eq(pb.fromhex"0123456789ABCDEF", "\1\35\69\103\137\171\205\239")
+   eq(pb.fromhex"01 23 456789ABCDEF", "\1\35\69\103\137\171\205\239")
 
    local b = buffer.new()
    b:pack("b", true);       eq(b:tohex(-1), "01")
@@ -1083,6 +1083,7 @@ function _G.test_load()
    eq(pb.load(buf:result()), true)
    fail("unknown type <unknown>", function() pb.encode("load_test", { test_unknown = 1 }) end)
    fail("<unknown> expected for type <unknown>, got varint", function() pb.decode("load_test", "\8\1") end)
+   fail("unknown type <unknown> (0)", function() pb.decode("load_test", "\14\1") end)
 
    buf:reset()
    buf:pack("v(v(vsv(vsvvvv)))",
@@ -1227,6 +1228,24 @@ function _G.test_unsafe()
    fail("userdata expected, got boolean",
       function() unsafe.decode("", true, 1)
    end)
+   fail("userdata expected, got boolean",
+      function() unsafe.slice(true, 1)
+   end)
+   local s, len = unsafe.touserdata(io.stdin, 0)
+   -- s is a null pointer!
+   fail("userdata expected, got userdata",
+      function() unsafe.slice(s, len)
+   end)
+   check_load [[
+   message TestType {
+   }
+   ]]
+   s, len = unsafe.touserdata("", 0)
+   eq(type(s), "userdata")
+   eq(len, 0)
+   table_eq(unsafe.decode("TestType", s, len), {})
+   table_eq(pb.decode("TestType", unsafe.slice(s, len)), {})
+   pb.clear "TestType"
    eq((unsafe.use "global"), true)
    eq((unsafe.use "local"), true)
 end
