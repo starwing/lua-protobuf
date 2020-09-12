@@ -1,26 +1,28 @@
 language: c
-sudo: false
+os: linux
+dist: xenial
 
 env:
   global:
-    - LUAROCKS=2.4.3
     - ROCKSPEC=rockspecs/lua-protobuf-scm-1.rockspec
-  matrix:
+  jobs:
     - LUA="lua 5.1"
     - LUA="lua 5.2"
     - LUA="lua 5.3"
+    - LUA="lua 5.4"
     - LUA="luajit 2.0"
     - LUA="luajit 2.1"
 
 branches:
   only:
     - master
-    - new
+    - lua54
 
 before_install:
-  - pip install --user hererocks urllib3[secure] cpp-coveralls
-  - hererocks env --$LUA -rlatest    # Use latest LuaRocks, install into 'env' directory.
-  - source env/bin/activate          # Add directory with all installed binaries to PATH.
+  - pip install --user urllib3[secure] cpp-coveralls
+  - curl -O https://raw.githubusercontent.com/luarocks/hererocks/master/hererocks.py
+  - python hererocks.py env --$LUA -rlatest
+  - source env/bin/activate
 
 install:
   # - sudo luarocks make $ROCKSPEC CFLAGS="-O2 -fPIC -ftest-coverage -fprofile-arcs" LIBFLAG="-shared --coverage"

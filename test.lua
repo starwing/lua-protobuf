@@ -37,6 +37,13 @@ local function check_msg(name, data, r)
    eq(data2, r or data)
 end
 
+local function withstate(f)
+   local old = pb.state(nil)
+   local ok, res = pcall(f, old)
+   pb.state(old)
+   assert(ok, res)
+end
+
 _G.test_io = {} do
 
 function _G.test_io.setup()
@@ -565,6 +572,25 @@ function _G.test_packed()
       "MessageB", { messageValue = { { intValue = 1 } } })), "0A 02 08 01")
    pb.clear "MessageA"
    pb.clear "MessageB"
+
+   check_load [[
+      syntax="proto3";
+      message Message3
+      {
+          repeated int32 v1 = 1;
+      } ]]
+   check_load [[
+      message Message2
+      {
+          repeated int32 v1 = 1;
+      } ]]
+   local t = { v1 = {1,2,3,4,5} }
+   local bytes = pb.encode("Message2", t)
+   eq(pb.decode("Message3", bytes), t)
+   bytes = pb.encode("Message3", t)
+   eq(pb.decode("Message2", bytes), t)
+   pb.clear "Message2"
+   pb.clear "Message3"
    pb.option "auto_default_values"
    assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
@@ -762,6 +788,8 @@ function _G.test_buffer()
 
    eq(buffer("foo", "bar"):result(), "foobar")
    eq(buffer.new("foo", "bar"):result(), "foobar")
+
+   eq(pb.fromhex"0123456789ABCDEF", "\1\35\69\103\137\171\205\239")
 
    local b = buffer.new()
    b:pack("b", true);       eq(b:tohex(-1), "01")
@@ -1004,8 +1032,7 @@ function _G.test_typefmt()
 end
 
 function _G.test_load()
-   do
-      local old = pb.state(nil)
+   withstate(function()
       protoc.reload()
       assert(protoc:load [[ message Test_Load1 { optional int32 t = 1; } ]])
       assert(pb.type "Test_Load1")
@@ -1017,10 +1044,9 @@ function _G.test_load()
       assert(pb.type "Test_Load1")
       assert(p:load [[ message Test_Load2 { optional int32 t = 2; } ]])
       assert(pb.type "Test_Load2")
-      pb.state(old)
-   end
+   end)
 
-   local old = pb.state(nil) -- discard previous one and save
+   withstate(function(old)
    assert(old.setdefault)
    eq(pb.type ".google.protobuf.FileDescriptorSet", nil)
    eq({pb.load "\16\255\255\1\10\2\18\3"}, {false, 8})
@@ -1056,7 +1082,7 @@ function _G.test_load()
             )
    eq(pb.load(buf:result()), true)
    fail("unknown type <unknown>", function() pb.encode("load_test", { test_unknown = 1 }) end)
-   fail("unknown type <unknown>", function() pb.decode("load_test", "\8\1") end)
+   fail("<unknown> expected for type <unknown>, got varint", function() pb.decode("load_test", "\8\1") end)
 
    buf:reset()
    buf:pack("v(v(vsv(vsvvvv)))",
@@ -1121,13 +1147,12 @@ function _G.test_load()
    buf:reset()
    buf:pack("v(v(v(vx)))", s(1), s(4), s(6), v(3), -1)
    eq({pb.load(buf:result())}, { false, 8 })
-
-   pb.state(old)
+   end)
    assert(pb.type ".google.protobuf.FileDescriptorSet")
 end
 
 function _G.test_hook()
-   local old = pb.state(nil)
+   withstate(function()
    protoc.reload()
    check_load [[
       enum Type {
@@ -1192,7 +1217,7 @@ function _G.test_hook()
    assert(res.contacts[2].hooked)
    assert(type(res.contacts[1].type) == "table")
    assert(type(res.contacts[2].type) == "table")
-   pb.state(old)
+   end)
 end
 
 function _G.test_unsafe()

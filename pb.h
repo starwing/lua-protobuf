@@ -287,8 +287,7 @@ struct pb_Entry {
 
 /* fields */
 
-#define PB_CACHE_LSIZE (5)
-#define PB_CACHE_SIZE  (1<<PB_CACHE_LSIZE)
+#define PB_CACHE_SIZE  (53)
 
 typedef struct pb_NameEntry {
     struct pb_NameEntry *next;
@@ -864,7 +863,7 @@ static pb_Entry *pbT_hash(const pb_Table *t, pb_Key key) {
 
 static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
     pb_Entry *mp, *on, *next, *f = NULL;
-    if (t->size == 0 && pb_resizetable(t, t->size*2) == 0) return NULL;
+    if (t->size == 0 && pb_resizetable(t, (size_t)t->size*2) == 0) return NULL;
     if (key == 0) {
         mp = t->hash;
         t->has_zero = 1;
@@ -873,7 +872,7 @@ static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
             pb_Entry *cur = pbT_index(t->hash, t->lastfree -= t->entry_size);
             if (cur->key == 0 && cur->next == 0) { f = cur; break; }
         }
-        if (f == NULL) return pb_resizetable(t, t->size*2) ?
+        if (f == NULL) return pb_resizetable(t, (size_t)t->size*2u) ?
             pbT_newkey(t, key) : NULL;
         if ((on = pbT_hash(t, mp->key)) != mp) {
             while ((next = pbT_index(on, on->next)) != mp) on = next;
@@ -938,7 +937,7 @@ PB_API pb_Entry *pb_settable(pb_Table *t, pb_Key key) {
 
 PB_API int pb_nextentry(const pb_Table *t, const pb_Entry **pentry) {
     size_t i = *pentry ? pbT_offset(*pentry, t->hash) : 0;
-    size_t size = t->size*t->entry_size;
+    size_t size = (size_t)t->size*t->entry_size;
     if (*pentry == NULL && t->has_zero) {
         *pentry = t->hash;
         return 1;
@@ -1091,7 +1090,7 @@ PB_API const pb_Name *pb_name(const pb_State *S, pb_Slice s, pb_Cache *cache) {
     if (cache == NULL)
         entry = pbN_getname(S, s, pbN_calchash(s));
     else {
-        slot = cache->slots[((uintptr_t)s.p*2654435761U)&(PB_CACHE_SIZE-1)];
+        slot = cache->slots[((uintptr_t)s.p*2654435761U)%PB_CACHE_SIZE];
         if (slot[0].name == s.p)
             entry = pbN_getname(S, s, cache->hash = slot[0].hash);
         else if (slot[1].name == s.p)
@@ -1615,7 +1614,7 @@ static int pbL_loadEnum(pb_State *S, pbL_EnumInfo *info, pb_Loader *L) {
         pbL_EnumValueInfo *ev = &info->value[i];
         pbCE(pb_newfield(S, t, pb_newname(S, ev->name, NULL), ev->number));
     }
-    L->b.size = curr;
+    L->b.size = (unsigned)curr;
     return PB_OK;
 }
 
@@ -1659,7 +1658,7 @@ static int pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Loader *L) {
         pbC(pbL_loadEnum(S, &info->enum_type[i], L));
     for (i = 0, count = pbL_count(info->nested_type); i < count; ++i)
         pbC(pbL_loadType(S, &info->nested_type[i], L));
-    L->b.size = curr;
+    L->b.size = (unsigned)curr;
     return PB_OK;
 }
 
@@ -1677,7 +1676,7 @@ static int pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Loader *L) {
             pbC(pbL_loadType(S, &info[i].message_type[j], L));
         for (j = 0, jcount = pbL_count(info[i].extension); j < jcount; ++j)
             pbC(pbL_loadField(S, &info[i].extension[j], L, NULL));
-        L->b.size = curr;
+        L->b.size = (unsigned)curr;
     }
     return PB_OK;
 }
