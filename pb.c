@@ -1306,8 +1306,8 @@ static int Lpb_enum(lua_State *L) {
 }
 
 static int lpb_pushdefault(lua_State *L, lpb_State *LS, const pb_Field *f, int is_proto3) {
-    const pb_Type *type = f->type;
     int ret = 0;
+    const pb_Type *type;
     char *end;
     if (f == NULL) return 0;
     if (is_proto3 && f->repeated) { lua_newtable(L); return 1; }
@@ -1319,6 +1319,7 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, const pb_Field *f, int i
             ret = 1, lua_pushliteral(L, "");
         break;
     case PB_Tenum:
+        if ((type = f ? f->type : NULL) == NULL) return 0;
         if ((f = pb_fname(type, f->default_value)) != NULL) {
             if (LS->enum_as_value)
                 ret = 1, lpb_pushinteger(L, f->number, LS->int64_mode);
