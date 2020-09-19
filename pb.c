@@ -125,7 +125,7 @@ static int lua53_rawgetp(lua_State *L, int idx, const void *p)
 #define lpb_state(LS)    ((LS)->state)
 #define lpb_name(LS,s)   pb_name(lpb_state(LS), (s), &(LS)->cache)
 
-static pb_State *global_state = NULL;
+static const pb_State *global_state = NULL;
 static const char state_name[] = PB_STATE;
 
 enum lpb_Int64Mode { LPB_NUMBER, LPB_STRING, LPB_HEXSTRING };
@@ -164,7 +164,7 @@ static void lpb_pushhooktable(lua_State *L, lpb_State *LS)
 static int Lpb_delete(lua_State *L) {
     lpb_State *LS = (lpb_State*)luaL_testudata(L, 1, PB_STATE);
     if (LS != NULL) {
-        pb_State *GS = global_state;
+        const pb_State *GS = global_state;
         pb_free(&LS->local);
         if (&LS->local == GS)
             global_state = NULL;
@@ -1899,7 +1899,7 @@ static int Lpb_touserdata(lua_State *L) {
 static int Lpb_use(lua_State *L) {
     const char *opts[] = { "global", "local", NULL };
     lpb_State *LS = default_lstate(L);
-    pb_State *GS = global_state;
+    const pb_State *GS = global_state;
     switch (luaL_checkoption(L, 1, NULL, opts)) {
     case 0: if (GS) LS->state = GS; break;
     case 1: LS->state = &LS->local; break;
