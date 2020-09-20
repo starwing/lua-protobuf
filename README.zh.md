@@ -139,7 +139,7 @@ print(require "serpent".block(data2))
 | `p.loaded`          | table      | 一个包含了所有已载入的 `DescriptorProto` 表的缓存表   |
 | `p.unknown_module`  | 详情见下   | 处理schema里`import`语句找不到文件的回调              |
 | `p.unknown_type`    | 详情见下   | 处理schema里未知类型的回调                            |
-| `p.include_imports` | bool       | auto load imported proto                              |
+| `p.include_imports` | bool       | 编译结果中包含所有`import`的文件    |
 
 要编译一个文本的schema信息，首先，生成一个编译器实例。一个编译器实例会记住你用它编译的每一个scehma文件，从而能够正确处理schema之间的import关系：
 
@@ -179,7 +179,7 @@ function p:unknown_type(name)
 end
 ```
 
-设置好这些选项或者回调以后，使用`load()`或`compile()`或`parse()`来按照你的需求得到想要的结果。这些函数都需要直接传入scehma的文本内容作为参数，可以可选地多传入一个文件名，用于支持schema之间的自动import指令。
+设置好这些选项或者回调以后，使用`load()`或`compile()`或`parse()`来按照你的需求得到想要的结果。这些函数都需要直接传入scehma的文本内容作为参数，可以可选地多传入当前schema对应的文件名，用于方便schema之间的`import`指令找到对应的文件，但是除非设置了`include_imports`，否则`import`指令即使找到了对应的文件也不会编译/加载对应文件，只是会检查类型引入是否正确。即使没有设置`include_imports`，也可以手动按照拓扑顺序依次load对应文件从而加载所有schema。
 
 ### `pb` 模块
 
@@ -229,6 +229,8 @@ end
 #### 内存数据库载入 Schema 信息
 
 `pb.load()` 接受一个二进制的schema数据，并将其载入到内存数据库中。如果载入成功则返回`true`，否则返回`false`，无论成功与否，都会返回读取的二进制数据的字节数。如果载入失败，你可以检查在这个字节位置周围是否有数据错误的情况，比如被`NUL`字符截断等等的问题。
+
+二进制流中是什么样的schema，就会载入什么样的schema。通常只能载入一个文件。如果需要同时载入多个文件（比如包括import后的文件，或者多个不相干文件），可以通过在使用`protoc.exe`或者`protoc.lua`编译二进制schema的时候编译多个文件，或者使用`include_imports`在二进制数据中包含多个文件的内容实现。注意根据protobuf的特性，直接将多个schema二进制数据连接在一起载入也是可行的。
 
 
 #### 类型映射
