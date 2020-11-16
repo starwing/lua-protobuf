@@ -137,7 +137,7 @@ print(require "serpent".block(data2))
 | `p:compile(string[, filename])` | string     | 将文本schema信息转换成二进制.pb文件数据 |
 | `p:load(string[, filename])`    | `true`     | 将文本schema信息转换后，调用`pb.load()`载入内存数据库 |
 | `p.loaded`          | table      | 一个包含了所有已载入的 `DescriptorProto` 表的缓存表   |
-| `p.unknown_module`  | 详情见下   | 处理schema里`import`语句找不到文件的回调              |
+| `p.unknown_import`  | 详情见下   | 处理schema里`import`语句找不到文件的回调              |
 | `p.unknown_type`    | 详情见下   | 处理schema里未知类型的回调                            |
 | `p.include_imports` | bool       | 编译结果中包含所有`import`的文件    |
 
@@ -151,13 +151,13 @@ local p = protoc.new()
 
 ```lua
 -- 设置回调……
-p.unknown_module = function(self, module_name) ... end
+p.unknown_import = function(self, module_name) ... end
 p.unknown_type   = function(self, type_name) ... end
 -- ……和选项
 p.include_imports = true
 ```
 
-`unknown_module`和`unknown_type`可以被设置成多种类型的值：如果被设置成`true`，则所有不存在的模块或者消息类型会自动生成一个默认值（空模块/空消息）而不会报错。`pb.load()`会自动处理空消息的合并，因此这样载入信息也不会出错。如果设置一个字符串值，那么这个字符串是一个Lua的正则表达式，满足正则表达式的模块或者消息类型会被设置成默认值，而不满足的则会报错：
+`unknown_import`和`unknown_type`可以被设置成多种类型的值：如果被设置成`true`，则所有不存在的模块或者消息类型会自动生成一个默认值（空模块/空消息）而不会报错。`pb.load()`会自动处理空消息的合并，因此这样载入信息也不会出错。如果设置一个字符串值，那么这个字符串是一个Lua的正则表达式，满足正则表达式的模块或者消息类型会被设置成默认值，而不满足的则会报错：
 
 ```lua
 p.unknown_type = "Foo.*"
@@ -168,7 +168,7 @@ p.unknown_type = "Foo.*"
 如果这些回调被设置成一个函数，这个函数会在找不到模块/消息的时候被调用。调用的时候会传入找不到的模块/消息的名字，你需要返回一个`DescriptorProto`数据表（对模块而言），或者一个类型的名字和这个类型的实际分类，比如说`message`或者`enum`，如下所示：
 
 ```lua
-function p:unknown_module(name)
+function p:unknown_import(name)
   -- 如果找不到 "foo.proto" 文件而调用了这个函数，那就自己手动载入 "my_foo.proto" 文件并返回信息
   return p:load("my_"..name)
 end
