@@ -14,6 +14,8 @@ Unreal UnLua集成：https://github.com/hxhb/unlua-pb
 
 ToLua集成说明：[链接](http://changxianjie.gitee.io/unitypartner/2019/10/01/tolua中使用protobuf3—集成lua-protobuf/)
 
+xlua集成：[链接](https://github.com/91Act/build_xlua_with_libs)
+
 QQ群：485016061 [![lua-protobuf1交流群](https://pub.idqqimg.com/wpa/images/group.png)](https://shang.qq.com/wpa/qunwpa?idkey=d7e2973604a723c4f77d0a837df39be26e15be2c2ec29d5ebfdb64f94e74e6ae)
 
 本项目提供在 Lua 全版本（5.1+、LuaJIT）下的protobuf 2/3 版本支持。提供了高级的消息编码/解码接口以及底层的protobuf wireformat 二进制数据操作接口。
