@@ -1,0 +1,66 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the action will run. 
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  test_ubuntu:
+    runs-on: ${{ matrix.os }}
+    env:
+      ROCKSPEC: rockspecs/lua-protobuf-scm-1.rockspec
+    strategy:
+      matrix:
+        luaVersion: ["5.1", "5.2", "5.3", "5.4", "luajit-2.0.5", "luajit-2.1.0-beta3"]
+        os: ["ubuntu-latest"]
+    steps:
+      - name: Install LCov
+        run: |
+          sudo apt install libperlio-gzip-perl libjson-perl
+          wget "https://github.com/linux-test-project/lcov/archive/master.zip"
+          unzip "master.zip"
+          cd "lcov-master"
+          sudo make install
+      - uses: actions/checkout@master
+      - name: Install Lua ${{ matrix.luaVersion }}
+        uses: leafo/gh-actions-lua@master
+        with:
+          luaVersion: ${{ matrix.luaVersion }}
+      - name: Install Luarocks
+        uses: leafo/gh-actions-luarocks@master
+      - name: Build
+        run: |
+          luarocks make $ROCKSPEC CFLAGS="-O3 -fPIC -Wall -Wextra --coverage" LIBFLAG="-shared --coverage"
+      - name: Run Tests
+        run: |
+          lua test.lua
+      - name: Run LCov
+        run: |
+          mkdir -p coverage
+          lcov -c -d . -o coverage/lcov.info.all
+          lcov -r coverage/lcov.info.all '/usr/*' -o coverage/lcov.info
+      - name: Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          flag-name: run-${{ matrix.luaVersion }}
+          parallel: true
+  finish:
+    needs: test_ubuntu
+    runs-on: ubuntu-latest
+    steps:
+    - name: Coveralls Finished
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.github_token }}
+        parallel-finished: true
