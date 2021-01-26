@@ -16,6 +16,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   test_ubuntu:
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip ci]')"
     runs-on: ${{ matrix.os }}
     env:
       ROCKSPEC: rockspecs/lua-protobuf-scm-1.rockspec
