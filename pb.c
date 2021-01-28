@@ -1019,6 +1019,7 @@ static int Lslice_new(lua_State *L) {
     lua_settop(L, 3);
     s = (lpb_Slice*)lua_newuserdata(L, sizeof(lpb_Slice));
     lpb_initslice(L, 1, s, sizeof(lpb_Slice));
+    if (s->curr.p == NULL) s->curr = pb_lslice("", 0);
     luaL_setmetatable(L, PB_SLICE);
     return 1;
 }
@@ -1925,5 +1926,5 @@ PB_NS_END
 
 /* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
  * maccc: flags+='-ggdb -shared -undefined dynamic_lookup' output='pb.so'
- * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua53' */
+ * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua54' */
 
