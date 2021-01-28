@@ -1,6 +1,6 @@
 # 在Lua中操作Google protobuf格式数据
 
-[![Build Status](https://github.com/starwing/lua-protobuf/workflows/CI/badge.svg)](https://travis-ci.org/starwing/lua-protobuf)[![Coverage Status](https://coveralls.io/repos/github/starwing/lua-protobuf/badge.svg?branch=master)](https://coveralls.io/github/starwing/lua-protobuf?branch=master)
+[![Build Status](https://img.shields.io/github/workflow/status/starwing/lua-protobuf/CI)](https://github.com/starwing/lua-protobuf/actions?query=branch%3Amaster)[![Coverage Status](https://img.shields.io/coveralls/github/starwing/lua-protobuf)](https://coveralls.io/github/starwing/lua-protobuf?branch=master)
 
 [English](https://github.com/starwing/lua-protobuf/blob/master/README.md) | 中文
 
