@@ -298,6 +298,12 @@ function Parser.new()
    return setmetatable(self, Parser)
 end
 
+function Parser:reset()
+   self.typemap = {}
+   self.loaded  = {}
+   return self
+end
+
 function Parser:error(msg)
    return self.lex:error(msg)
 end
@@ -455,7 +461,7 @@ local function field(self, lex, ident)
    return info, map_entry
 end
 
-local function label_field(self, lex, ident)
+local function label_field(self, lex, ident, parent)
    local label = labels[ident]
    local info, map_entry
    if not label then
@@ -464,11 +470,18 @@ local function label_field(self, lex, ident)
       end
       return field(self, lex, ident)
    end
-   if label == labels.optional and self.syntax == "proto3" then
+   local proto3_optional = label == labels.optional and self.syntax == "proto3"
+   if proto3_optional and not (self.proto3_optional and parent) then
       return lex:error("proto3 disallow 'optional' label")
    end
    info, map_entry = field(self, lex, lex:type_name())
-   info.label = label
+   if proto3_optional then
+      local ot = default(parent, "oneof_decl")
+      info.oneof_index = #ot
+      ot[#ot+1] = { name = "optional_" .. info.name }
+   else
+      info.label = label
+   end
    return info, map_entry
 end
 
@@ -616,7 +629,7 @@ function toplevel:message(lex, info)
          body_parser(self, lex, typ)
       else
          local fs = default(typ, 'field')
-         local f, t = label_field(self, lex, ident)
+         local f, t = label_field(self, lex, ident, typ)
          self.locmap[f] = pos
          insert_tab(fs, f)
          if t then
@@ -766,6 +779,8 @@ local function make_context(self, lex)
    ctx.loaded  = self.loaded
    ctx.typemap = self.typemap
    ctx.paths   = self.paths
+   ctx.proto3_optional =
+      self.experimental_allow_proto3_optional
 
    function ctx.import_fallback(import_name)
       if self.unknown_import == true then
