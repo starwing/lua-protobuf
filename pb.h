@@ -554,7 +554,7 @@ PB_API size_t pb_readgroup(pb_Slice *s, uint32_t tag, pb_Slice *pv) {
             pv->end = s->p - count;
             return s->p - p;
         }
-        pb_skipvalue(s, newtag);
+        if (pb_skipvalue(s, newtag) == 0) break;
     }
     s->p = p;
     return 0;
@@ -1399,7 +1399,7 @@ static int pbL_FieldOptions(pb_Loader *L, pbL_FieldInfo *info) {
         switch (tag) {
         case pb_pair(2, PB_TVARINT): /* bool packed */
             pbC(pbL_readint32(L, &info->packed)); break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     pbL_endmsg(L, &s);
@@ -1432,7 +1432,7 @@ static int pbL_FieldDescriptorProto(pb_Loader *L, pbL_FieldInfo *info) {
         case pb_pair(9, PB_TVARINT): /* int32 oneof_index */
             pbC(pbL_readint32(L, &info->oneof_index));
             ++info->oneof_index; break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     pbL_endmsg(L, &s);
@@ -1449,7 +1449,7 @@ static int pbL_EnumValueDescriptorProto(pb_Loader *L, pbL_EnumValueInfo *info) {
             pbC(pbL_readbytes(L, &info->name)); break;
         case pb_pair(2, PB_TVARINT): /* int32 number */
             pbC(pbL_readint32(L, &info->number)); break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     pbL_endmsg(L, &s);
@@ -1466,7 +1466,7 @@ static int pbL_EnumDescriptorProto(pb_Loader *L, pbL_EnumInfo *info) {
             pbC(pbL_readbytes(L, &info->name)); break;
         case pb_pair(2, PB_TBYTES): /* EnumValueDescriptorProto value */
             pbC(pbL_EnumValueDescriptorProto(L, pbL_add(info->value))); break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     pbL_endmsg(L, &s);
@@ -1481,7 +1481,7 @@ static int pbL_MessageOptions(pb_Loader *L, pbL_TypeInfo *info) {
         switch (tag) {
         case pb_pair(7, PB_TVARINT): /* bool map_entry */
             pbC(pbL_readint32(L, &info->is_map)); break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     pbL_endmsg(L, &s);
@@ -1496,7 +1496,7 @@ static int pbL_OneofDescriptorProto(pb_Loader *L, pbL_TypeInfo *info) {
         switch (tag) {
         case pb_pair(1, PB_TBYTES): /* string name */
             pbC(pbL_readbytes(L, pbL_add(info->oneof_decl))); break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     pbL_endmsg(L, &s);
@@ -1523,7 +1523,7 @@ static int pbL_DescriptorProto(pb_Loader *L, pbL_TypeInfo *info) {
             pbC(pbL_OneofDescriptorProto(L, info)); break;
         case pb_pair(7, PB_TBYTES): /* MessageOptions options */
             pbC(pbL_MessageOptions(L, info)); break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     pbL_endmsg(L, &s);
@@ -1546,7 +1546,7 @@ static int pbL_FileDescriptorProto(pb_Loader *L, pbL_FileInfo *info) {
             pbC(pbL_FieldDescriptorProto(L, pbL_add(info->extension))); break;
         case pb_pair(12, PB_TBYTES): /* string syntax */
             pbC(pbL_readbytes(L, &info->syntax)); break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     pbL_endmsg(L, &s);
@@ -1559,7 +1559,7 @@ static int pbL_FileDescriptorSet(pb_Loader *L, pbL_FileInfo **pfiles) {
         switch (tag) {
         case pb_pair(1, PB_TBYTES): /* FileDescriptorProto file */
             pbC(pbL_FileDescriptorProto(L, pbL_add(*pfiles))); break;
-        default: pb_skipvalue(&L->s, tag);
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
         }
     }
     return PB_OK;
