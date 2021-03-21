@@ -454,6 +454,7 @@ All routines in `pb.slice` module:
 | `s:delete()`              | none         | same as `s:reset()`, free it's content                       |
 | `tostring(s)`             | string       | return the string repr of the object                         |
 | `#s`                      | number       | returns the count of bytes can read in current view          |
+| `s:result([i[, j]])`      | String       | return the remaining bytes in current view                   |
 | `s:reset([...])`          | self         | reset object to another data                                 |
 | `s:level()`               | number       | returns the count of stored state                            |
 | `s:level(number)`         | p, i, j      | returns the informations of the `n`th stored state           |

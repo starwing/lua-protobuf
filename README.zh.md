@@ -488,8 +488,9 @@ end
 | --------------- | ------- | --------------------------------------------- |
 | `slice.new(data[,i[,j]])` | Slice object | 创建一个新的 slice 对象 |
 | `s:delete()`              | none         | 和 `s:reset()`相同，重置并释放slice对象引用的内存 |
-| `tostring(s)`             | string       | 得到当前视图的二进制数据 |
+| `tostring(s)`             | string       | 返回slice的字符串表示信息 |
 | `#s`                      | number       | 得到当前视图还未读取的字节数 |
+| `s:result([i[, j]])` | String | 得到当前视图的二进制数据 |
 | `s:reset([data[,i[,j]]])` | self         | 将slice对象重置绑定另一个数据源 |
 | `s:level()`               | number       | 返回当前视图栈的深度 |
 | `s:level(number)`         | p, i, j      | 返回第n层视图栈的信息（读取位置、视图偏移） |
