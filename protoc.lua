@@ -780,7 +780,7 @@ local function make_context(self, lex)
    ctx.typemap = self.typemap
    ctx.paths   = self.paths
    ctx.proto3_optional =
-      self.experimental_allow_proto3_optional
+      self.proto3_optional or self.experimental_allow_proto3_optional
 
    function ctx.import_fallback(import_name)
       if self.unknown_import == true then
