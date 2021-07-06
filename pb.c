@@ -175,7 +175,7 @@ static int Lpb_delete(lua_State *L) {
         LS->state = NULL;
         pb_resetbuffer(&LS->buffer);
         luaL_unref(L, LUA_REGISTRYINDEX, LS->defs_index);
-		luaL_unref(L, LUA_REGISTRYINDEX, LS->enc_hooks_index);
+        luaL_unref(L, LUA_REGISTRYINDEX, LS->enc_hooks_index);
         luaL_unref(L, LUA_REGISTRYINDEX, LS->dec_hooks_index);
     }
     return 0;
@@ -191,7 +191,7 @@ static lpb_State *default_lstate(lua_State *L) {
         LS = (lpb_State*)lua_newuserdata(L, sizeof(lpb_State));
         memset(LS, 0, sizeof(lpb_State));
         LS->defs_index = LUA_NOREF;
-		LS->enc_hooks_index = LUA_NOREF;
+        LS->enc_hooks_index = LUA_NOREF;
         LS->dec_hooks_index = LUA_NOREF;
         LS->state = &LS->local;
         pb_init(&LS->local);
@@ -1443,8 +1443,8 @@ static int Lpb_clear(lua_State *L) {
         pb_free(&LS->local), pb_init(&LS->local);
         luaL_unref(L, LUA_REGISTRYINDEX, LS->defs_index);
         LS->defs_index = LUA_NOREF;
-		luaL_unref(L, LUA_REGISTRYINDEX, LS->enc_hooks_index);
-		LS->enc_hooks_index = LUA_NOREF;
+        luaL_unref(L, LUA_REGISTRYINDEX, LS->enc_hooks_index);
+        LS->enc_hooks_index = LUA_NOREF;
         luaL_unref(L, LUA_REGISTRYINDEX, LS->dec_hooks_index);
         LS->dec_hooks_index = LUA_NOREF;
         return 0;
@@ -1543,7 +1543,7 @@ static void lpbE_field(lpb_Env *e, const pb_Field *f, size_t *plen) {
     if (plen) *plen = 0;
     switch (f->type_id) {
     case PB_Tenum:
-		lpb_useenchooks(L, e->LS, f->type);
+        lpb_useenchooks(L, e->LS, f->type);
         lpbE_enum(e, f);
         break;
 
@@ -1618,7 +1618,7 @@ static void lpbE_repeated(lpb_Env *e, const pb_Field *f) {
 static void lpb_encode(lpb_Env *e, const pb_Type *t) {
     lua_State *L = e->L;
     luaL_checkstack(L, 3, "message too many levels");
-	lpb_useenchooks(L, e->LS, t);
+    lpb_useenchooks(L, e->LS, t);
     lua_pushnil(L);
     while (lua_next(L, -2)) {
         if (lua_type(L, -2) == LUA_TSTRING) {

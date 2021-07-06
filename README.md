@@ -300,9 +300,9 @@ Using `pb.defaults()` to get a table with all default values from a message. thi
 
 #### Hooks
 
-If set `pb.option "enable_hooks"`, the hook function will be enabled. you could use `pb.hook()` to set or get a hook function: call it with type name directly get current setted hook; call it with two arguments to set a hook; and call it with `nil` as the second argument to remove the hook. in all case, the original one will be returned.
+If set `pb.option "enable_hooks"`, the hook function will be enabled. you could use `pb.hook()` and `pb.encode_hook` to set or get a decode or encode hook function, respectively: call it with type name directly get current setted hook; call it with two arguments to set a hook; and call it with `nil` as the second argument to remove the hook. in all case, the original one will be returned.
 
-After the hook function setted and hook enabled, the function will be called *after* a message get decoded. So you could get all values in the table passed to hook function. That's the only argument of hook.
+After the hook function setted and hook enabled, the decode function will be called *after* a message get decoded and encode functions will be called *before* the message is encoded. So you could get all values in the table passed to hook function. That's the only argument of hook.
 
 If you need type name in hook functions, use this helper:
 
