@@ -1221,6 +1221,68 @@ function _G.test_hook()
    end)
 end
 
+function _G.test_encode_hook()
+   withstate(function()
+   protoc.reload()
+   check_load [[
+      enum Type {
+         HOME = 1;
+         WORK = 2;
+      }
+      message Phone {
+         optional string name        = 1;
+         optional int64  phonenumber = 2;
+         optional Type   type        = 3;
+      }
+      message Person {
+         optional string name     = 1;
+         optional int32  age      = 2;
+         optional string address  = 3;
+         repeated Phone  contacts = 4;
+      } ]]
+   pb.option "enable_hooks"
+   assert(pb.encode_hook "Phone" == nil)
+   fail("function expected, got boolean",
+        function() pb.encode_hook("Phone", true) end)
+   fail("type not found",
+      function() pb.encode_hook "-invalid-type-" end)
+   local function make_encode_hook(name, func)
+      local fetch = pb.encode_hook(name)
+      local function helper(t)
+         return func(name, t)
+      end
+      local oldh = pb.encode_hook(name, helper)
+      assert(fetch == oldh)
+      assert(pb.encode_hook(name) == helper)
+   end
+   local s = {}
+   make_encode_hook("Person", function(name, t)
+      s[#s+1] = ("(%s|%s)"):format(name, t.name)
+   end)
+   make_encode_hook("Phone", function(name, t)
+      s[#s+1] = ("(%s|%s|%s)"):format(name, t.name, t.phonenumber)
+      return t
+   end)
+   make_encode_hook("Type", function(name, t)
+      s[#s+1] = ("(%s|(%s)%s)"):format(name, t.type, t.value)
+      return t.value
+   end)
+   local data = {
+      name = "ilse",
+      age  = 18,
+      contacts = {
+         { name = "alice", type = {type="zzz", value="HOME"}, phonenumber = 12312341234 },
+         { name = "bob",   type = {type="grr", value="WORK"}, phonenumber = 45645674567 }
+      }
+   }
+   local res = pb.decode("Person", pb.encode("Person", data))
+   s = table.concat(s)
+   assert(s == "(Person|ilse)(Phone|alice|12312341234)"..
+          "(Type|(zzz)HOME)(Phone|bob|45645674567)"..
+         "(Type|(grr)WORK)")
+   end)
+end
+
 function _G.test_unsafe()
    local unsafe = require "pb.unsafe"
    assert(type(unsafe.decode) == "function")
