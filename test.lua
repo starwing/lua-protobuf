@@ -1258,28 +1258,36 @@ function _G.test_encode_hook()
    local s = {}
    make_encode_hook("Person", function(name, t)
       s[#s+1] = ("(%s|%s)"):format(name, t.name)
+      return t
    end)
-   make_encode_hook("Phone", function(name, t)
+   make_encode_hook("Phone", function(name, ph)
+      ph_name, ty, num = ph:match("(%w+)|(%w+)|(%d+)")
+      t = {
+         name = ph_name,
+         type = ty,
+         phonenumber = tonumber(num),
+      }
       s[#s+1] = ("(%s|%s|%s)"):format(name, t.name, t.phonenumber)
       return t
    end)
-   make_encode_hook("Type", function(name, t)
-      s[#s+1] = ("(%s|(%s)%s)"):format(name, t.type, t.value)
-      return t.value
+   make_encode_hook("Type", function(name, v)
+      local t = v:lower() == v and "HOME" or "WORK"
+      s[#s+1] = ("(%s|(%s)%s)"):format(name, v, t)
+      return t
    end)
    local data = {
       name = "ilse",
       age  = 18,
       contacts = {
-         { name = "alice", type = {type="zzz", value="HOME"}, phonenumber = 12312341234 },
-         { name = "bob",   type = {type="grr", value="WORK"}, phonenumber = 45645674567 }
+         "alice|zzz|12312341234",
+         "bob|Grr|45645674567",
       }
    }
    local res = pb.decode("Person", pb.encode("Person", data))
    s = table.concat(s)
    assert(s == "(Person|ilse)(Phone|alice|12312341234)"..
           "(Type|(zzz)HOME)(Phone|bob|45645674567)"..
-         "(Type|(grr)WORK)")
+         "(Type|(Grr)WORK)")
    end)
 end
 
