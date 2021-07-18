@@ -1548,6 +1548,7 @@ static void lpbE_field(lpb_Env *e, const pb_Field *f, size_t *plen) {
         break;
 
     case PB_Tmessage:
+        lpb_useenchooks(L, e->LS, f->type);
         lpb_checktable(L, f);
         len = pb_bufflen(b);
         lpb_encode(e, f->type);
@@ -1618,7 +1619,6 @@ static void lpbE_repeated(lpb_Env *e, const pb_Field *f) {
 static void lpb_encode(lpb_Env *e, const pb_Type *t) {
     lua_State *L = e->L;
     luaL_checkstack(L, 3, "message too many levels");
-    lpb_useenchooks(L, e->LS, t);
     lua_pushnil(L);
     while (lua_next(L, -2)) {
         if (lua_type(L, -2) == LUA_TSTRING) {
@@ -1646,6 +1646,7 @@ static int Lpb_encode(lua_State *L) {
     e.L = L, e.LS = LS, e.b = test_buffer(L, 3);
     if (e.b == NULL) pb_resetbuffer(e.b = &LS->buffer);
     lua_pushvalue(L, 2);
+    lpb_useenchooks(L, e.LS, t);
     lpb_encode(&e, t);
     if (e.b != &LS->buffer)
         lua_settop(L, 3);
