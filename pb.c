@@ -1680,7 +1680,7 @@ static void lpb_usedechooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
     const pb_Field *f = NULL;
     int mode = LS->default_mode;
-    lua_createtable(L, 0, t->field_count);
+    lua_createtable(L, 0, t->field_count - t->oneof_count);
     switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
         while (pb_nextfield(t, &f))
