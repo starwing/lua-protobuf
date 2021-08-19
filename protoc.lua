@@ -224,12 +224,18 @@ function Lexer:structure(opt)
    end
    local t = {}
    while not self:test "}" do
-      local ident = self:full_ident "field name"     -- TODO: full_ident?
+      local pos, name, npos = self "^%s*()(%b[])()"
+      if not pos then
+         name = self:full_ident "field name"
+         self.pos = pos
+      else
+         self.pos = npos
+      end
       self:test ":"
       local value = self:constant()
       self:test ","
       self:line_end "opt"
-      t[ident] = value
+      t[name] = value
    end
    return t
 end
