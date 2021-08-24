@@ -1578,6 +1578,7 @@ static void pbL_delTypeInfo(pbL_TypeInfo *info) {
     pbL_delete(info->enum_type);
     pbL_delete(info->field);
     pbL_delete(info->extension);
+    pbL_delete(info->oneof_decl);
 }
 
 static void pbL_delFileInfo(pbL_FileInfo *files) {
