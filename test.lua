@@ -450,7 +450,7 @@ function _G.test_default()
       array = {},
    })
    local chunk2, _ = pb.encode("TestDefault", {defaulted_int = 0,defaulted_bool = true})
-   local data2 = pb.decode("TestDefault", chunk2)
+   local dt = pb.decode("TestDefault", chunk2)
    eq(dt.defaulted_int, 0)
    eq(dt.defaulted_bool, true)
    eq(dt.defaulted_str, nil)
