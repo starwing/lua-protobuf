@@ -443,6 +443,25 @@ function _G.test_default()
    table_eq(dt.array, {})
 
    pb.option "no_default_values"
+   pb.option "enable_encode_default_values"
+   local dt = pb.decode("TestDefault", "")
+   eq(getmetatable(dt), nil)
+   table_eq(dt,{
+      array = {},
+   })
+   local chunk2, _ = pb.encode("TestDefault", {defaulted_int = 0,defaulted_bool = true})
+   local data2 = pb.decode("TestDefault", chunk2)
+   eq(dt.defaulted_int, 0)
+   eq(dt.defaulted_bool, true)
+   eq(dt.defaulted_str, nil)
+   eq(dt.defaulted_num, nil)
+   eq(dt.color, nil)
+   eq(dt.bool1, nil)
+   eq(dt.bool2, nil)
+   table_eq(dt.array, {})
+
+   pb.option "disable_encode_default_values"
+   pb.option "no_default_values"
 
    pb.option "enum_as_name"
    pb.clear "TestDefault"
