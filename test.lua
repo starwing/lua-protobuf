@@ -443,7 +443,8 @@ function _G.test_default()
    table_eq(dt.array, {})
 
    pb.option "no_default_values"
-   pb.option "enable_encode_default_values"
+   pb.option "encode_default_values"
+   pb.option "decode_default_array"
    local dt = pb.decode("TestDefault", "")
    eq(getmetatable(dt), nil)
    table_eq(dt,{
@@ -460,7 +461,6 @@ function _G.test_default()
    eq(dt.bool2, nil)
    table_eq(dt.array, {})
 
-   pb.option "disable_encode_default_values"
    pb.option "no_default_values"
 
    pb.option "enum_as_name"

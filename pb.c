@@ -144,6 +144,7 @@ typedef struct lpb_State {
     unsigned default_mode  : 2; /* lpb_DefMode */
     unsigned int64_mode    : 2; /* lpb_Int64Mode */
     unsigned encode_default_values : 1;
+    unsigned decode_default_array  : 1;
 } lpb_State;
 
 static int lpb_reftable(lua_State *L, int ref) {
@@ -1571,11 +1572,10 @@ static void lpbE_tagfield(lpb_Env *e, const pb_Field *f, int ignorezero) {
     size_t ignoredlen;
     lpbE_field(e, f, &ignoredlen);
     lpb_State *LS = e->LS;
-    if (LS->encode_default_values) {
-        ignorezero = 0;
+    if (!LS->encode_default_values) {
+        if (ignoredlen != 0 && ignorezero)
+            e->b->size -= (unsigned)(ignoredlen + hlen);
     }
-    if (ignoredlen != 0 && ignorezero)
-        e->b->size -= (unsigned)(ignoredlen + hlen);
 }
 
 static void lpbE_map(lpb_Env *e, const pb_Field *f) {
@@ -1700,7 +1700,7 @@ static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
         lua_setmetatable(L, -2);
         break;
     default: /* no default value */
-        if (LS->encode_default_values) {
+        if (LS->decode_default_array) {
             while (pb_nextfield(t, &f))
                 if (f->repeated && lpb_pushdefault(L, LS, f, t->is_proto3))
                     lua_setfield(L, -2, (const char*)f->name);
@@ -1871,8 +1871,8 @@ static int Lpb_option(lua_State *L) {
     X(8, use_default_metatable, LS->default_mode = LPB_METADEF)    \
     X(9, enable_hooks,          LS->use_hooks = 1)                 \
     X(10, disable_hooks,        LS->use_hooks = 0)                 \
-    X(11, enable_encode_default_values,         LS->encode_default_values = 1)      \
-    X(12, disable_encode_default_values,        LS->encode_default_values = 0)      \
+    X(11, encode_default_values,LS->encode_default_values = 1)     \
+    X(12, decode_default_array, LS->decode_default_array = 1)      \
 
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,
