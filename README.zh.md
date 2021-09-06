@@ -366,8 +366,8 @@ end
 | `use_default_metatable` | 将默认值表作为解码目标表的元表使用 |
 | `enable_hooks`          | `pb.decode` 启用钩子功能      |
 | `disable_hooks`         | `pb.decode` 禁用钩子功能 **(默认)**            |
-| `decode_default_values` | 默认值也参与编码 |
-| `disable_hooks`         | 对于数组,将空值解码为空表 |
+| `encode_default_values` | 默认值也参与编码 |
+| `decode_default_array`  | 对于数组,将空值解码为空表 |
 
  *注意*： `int64_as_string` 或 `int64_as_hexstring` 返回的字符串会带一个 `'#'` 字符前缀，因为Lua会自动把数字表示的字符串当作数字使用，从而导致精度损失。带一个前缀会让Lua认为这个字符串并不是数字，从而避免了Lua的自动转换。
 
