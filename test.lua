@@ -461,6 +461,8 @@ function _G.test_default()
    eq(dt.bool2, nil)
    table_eq(dt.array, {})
 
+   pb.option "no_encode_default_values"
+   pb.option "no_decode_default_array"
    pb.option "no_default_values"
 
    pb.option "enum_as_name"

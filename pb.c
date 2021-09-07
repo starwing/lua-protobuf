@@ -1572,9 +1572,8 @@ static void lpbE_tagfield(lpb_Env *e, const pb_Field *f, int ignorezero) {
     size_t ignoredlen;
     lpbE_field(e, f, &ignoredlen);
     lpb_State *LS = e->LS;
-    if (!LS->encode_default_values) {
-        if (ignoredlen != 0 && ignorezero)
-            e->b->size -= (unsigned)(ignoredlen + hlen);
+    if (!LS->encode_default_values && ignoredlen != 0 && ignorezero) {
+        e->b->size -= (unsigned)(ignoredlen + hlen);
     }
 }
 
@@ -1872,7 +1871,9 @@ static int Lpb_option(lua_State *L) {
     X(9, enable_hooks,          LS->use_hooks = 1)                 \
     X(10, disable_hooks,        LS->use_hooks = 0)                 \
     X(11, encode_default_values,LS->encode_default_values = 1)     \
-    X(12, decode_default_array, LS->decode_default_array = 1)      \
+    X(12, no_encode_default_values,LS->encode_default_values = 0)  \
+    X(13, decode_default_array, LS->decode_default_array = 1)      \
+    X(14, no_decode_default_array, LS->decode_default_array = 0)   \
 
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,
