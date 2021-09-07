@@ -331,6 +331,10 @@ These options are supported currently:
 | `use_default_metatable` | set default values by set table from `pb.default()` as the metatable |
 | `enable_hooks`          | `pb.decode` will call `pb.hooks()` hook functions            |
 | `disable_hooks`         | `pb.decode` do not call hooks **(default)**                  |
+| `encode_default_values` | default values also encode |
+| `no_encode_default_values` | do not encode default values **(default)** |
+| `decode_default_array`  | work with `no_default_values`,decode null to empty table for array |
+| `no_decode_default_array`  | work with `no_default_values`,decode null to nil for array **(default)** |
 
  *Note*: The string returned by `int64_as_string` or `int64_as_hexstring` will prefix a `'#'` character. Because Lua may convert between string with number, prefix a `'#'` makes Lua return the string as-is.
 
