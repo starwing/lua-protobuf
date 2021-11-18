@@ -61,7 +61,7 @@ end
 
 function Lexer:expected(patt, name)
    if not self:test(patt) then
-      return self:error((name or "'"..patt.."'").." expected")
+      return self:error((name or ("'"..patt.."'")).." expected")
    end
    return self
 end
@@ -608,7 +608,7 @@ function msg_body:oneof(lex, info)
       if ident == "option" then
          toplevel.option(self, lex, oneof)
       else
-         local f, t = field(self, lex, ident, "no_label")
+         local f, t = field(self, lex, ident)
          self.locmap[f] = lex.pos
          if t then insert_tab(ts, t) end
          f.oneof_index = index - 1
@@ -1195,4 +1195,3 @@ end
 end
 
 return Parser
-
