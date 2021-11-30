@@ -1571,10 +1571,8 @@ static void lpbE_tagfield(lpb_Env *e, const pb_Field *f, int ignorezero) {
             pb_pair(f->number, pb_wtypebytype(f->type_id)));
     size_t ignoredlen;
     lpbE_field(e, f, &ignoredlen);
-    lpb_State *LS = e->LS;
-    if (!LS->encode_default_values && ignoredlen != 0 && ignorezero) {
+    if (!e->LS->encode_default_values && ignoredlen != 0 && ignorezero)
         e->b->size -= (unsigned)(ignoredlen + hlen);
-    }
 }
 
 static void lpbE_map(lpb_Env *e, const pb_Field *f) {
