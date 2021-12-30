@@ -473,7 +473,7 @@ PB_API size_t pb_readvarint32(pb_Slice *s, uint32_t *pv) {
     uint64_t u64;
     size_t ret;
     if (s->p >= s->end)  return 0;
-    if (!(*s->p & 0x80)) { *pv = *s->p++; return 1; }
+    if (!(*s->p & 0x80)) return *pv = *s->p++, 1;
     if (pb_len(*s) >= 10 || !(s->end[-1] & 0x80))
         return pb_readvarint32_fallback(s, pv);
     if ((ret = pb_readvarint_slow(s, &u64)) != 0)
@@ -483,7 +483,7 @@ PB_API size_t pb_readvarint32(pb_Slice *s, uint32_t *pv) {
 
 PB_API size_t pb_readvarint64(pb_Slice *s, uint64_t *pv) {
     if (s->p >= s->end)  return 0;
-    if (!(*s->p & 0x80)) { *pv = *s->p++; return 1; }
+    if (!(*s->p & 0x80)) return *pv = *s->p++, 1;
     if (pb_len(*s) >= 10 || !(s->end[-1] & 0x80))
         return pb_readvarint64_fallback(s, pv);
     return pb_readvarint_slow(s, pv);
@@ -1217,7 +1217,7 @@ PB_API pb_Type *pb_newtype(pb_State *S, pb_Name *tname) {
     if (tname == NULL) return NULL;
     te = (pb_TypeEntry*)pb_settable(&S->types, (pb_Key)tname);
     if (te == NULL) return NULL;
-    if ((t = te->value) != NULL) { t->is_dead = 0; return t; }
+    if ((t = te->value) != NULL) return t->is_dead = 0, t;
     if (!(t = (pb_Type*)pb_poolalloc(&S->typepool))) return NULL;
     pbT_inittype(t);
     t->name = tname;

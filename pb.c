@@ -33,7 +33,7 @@ PB_NS_BEGIN
 #define check_slice(L,idx)  ((pb_Slice*)luaL_checkudata(L,idx,PB_SLICE))
 #define test_slice(L,idx)   ((pb_Slice*)luaL_testudata(L,idx,PB_SLICE))
 #define push_slice(L,s)     lua_pushlstring((L), (s).p, pb_len((s)))
-#define return_self(L) { lua_settop(L, 1); return 1; }
+#define return_self(L) { return lua_settop(L, 1), 1; }
 
 #if LUA_VERSION_NUM < 502
 #include <assert.h>
@@ -92,7 +92,7 @@ static void *luaL_testudata(lua_State *L, int idx, const char *type) {
 
 static int luaL_fileresult(lua_State *L, int stat, const char *fname) {
     int en = errno;
-    if (stat) { lua_pushboolean(L, 1); return 1; }
+    if (stat) return lua_pushboolean(L, 1), 1;
     lua_pushnil(L);
     lua_pushfstring(L, "%s: %s", fname, strerror(en));
     /*if (fname) lua_pushfstring(L, "%s: %s", fname, strerror(en));
@@ -111,11 +111,11 @@ static int luaL_fileresult(lua_State *L, int stat, const char *fname) {
 # define lua53_rawgetp  lua_rawgetp
 #else /* not Lua 5.3 */
 static int lua53_getfield(lua_State *L, int idx, const char *field)
-{ lua_getfield(L, idx, field); return lua_type(L, -1); }
+{ return lua_getfield(L, idx, field), lua_type(L, -1); }
 static int lua53_rawgeti(lua_State *L, int idx, lua_Integer i)
-{ lua_rawgeti(L, idx, i); return lua_type(L, -1); }
+{ return lua_rawgeti(L, idx, i), lua_type(L, -1); }
 static int lua53_rawgetp(lua_State *L, int idx, const void *p)
-{ lua_rawgetp(L, idx, p); return lua_type(L, -1); }
+{ return lua_rawgetp(L, idx, p), lua_type(L, -1); }
 #endif
 
 
@@ -1003,7 +1003,7 @@ static int lpb_unpackfmt(lua_State *L, int idx, const char *fmt, pb_Slice *s) {
     for (; *fmt != '\0'; ++fmt) {
         if (lpb_unpackloc(L, &idx, top, *fmt, s, &rets))
             continue;
-        if (s->p >= s->end) { lua_pushnil(L); return rets + 1; }
+        if (s->p >= s->end) return lua_pushnil(L), rets + 1;
         luaL_checkstack(L, 1, "too many values");
         if (!lpb_unpackscalar(L, &idx, top, *fmt, s)) {
             argcheck(L, (type = lpb_typefmt(*fmt)) >= 0,
@@ -1215,7 +1215,7 @@ static int Lpb_loadfile(lua_State *L) {
     pb_initbuffer(&b);
     do {
         char *d = pb_prepbuffsize(&b, BUFSIZ);
-        if (d == NULL) { fclose(fp); return luaL_error(L, "out of memory"); }
+        if (d == NULL) return fclose(fp), luaL_error(L, "out of memory");
         size = fread(d, 1, BUFSIZ, fp);
         pb_addsize(&b, size);
     } while (size == BUFSIZ);
@@ -1319,7 +1319,7 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, const pb_Field *f, int i
     const pb_Type *type;
     char *end;
     if (f == NULL) return 0;
-    if (is_proto3 && f->repeated) { lua_newtable(L); return 1; }
+    if (is_proto3 && f->repeated) return lua_newtable(L), 1;
     switch (f->type_id) {
     case PB_Tbytes: case PB_Tstring:
         if (f->default_value)
