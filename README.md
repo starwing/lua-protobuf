@@ -154,7 +154,7 @@ If these are functions, the unknown type and module name will be passed to funct
 ```lua
 function p:unknown_module(name)
   -- if can not find "foo.proto", load "my_foo.proto" instead
-  return p:load("my_"..name)
+  return p:parsefile("my_"..name)
 end
 
 function p:unknown_type(name)

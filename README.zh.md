@@ -172,7 +172,7 @@ p.unknown_type = "Foo.*"
 ```lua
 function p:unknown_import(name)
   -- 如果找不到 "foo.proto" 文件而调用了这个函数，那就自己手动载入 "my_foo.proto" 文件并返回信息
-  return p:load("my_"..name)
+  return p:parsefile("my_"..name)
 end
 
 function p:unknown_type(name)
