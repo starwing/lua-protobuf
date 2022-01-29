@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package helloworld;
+
+// build testdata/proto.pb with:
+// protoc --include_imports --descriptor_set_out=testdata/proto.pb testdata/src.proto
+import "testdata/import.proto";
+
+service S1 {
+  rpc SayHello (pkg.Request) returns (pkg.Response) {}
+  rpc Plus (PlusRequest) returns (PlusResponse) {}
+}
+
+service S2 {
+  rpc Plus (PlusRequest) returns (PlusResponse) {}
+}
+
+message PlusRequest {
+  int32 a = 1;
+  int32 b = 2;
+}
+
+message PlusResponse {
+  int32 res = 1;
+}

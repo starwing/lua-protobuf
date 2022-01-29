@@ -1341,6 +1341,65 @@ function _G.test_unsafe()
    eq((unsafe.use "local"), true)
 end
 
+function _G.test_services()
+    pb.state(nil)
+    protoc.reload()
+
+    local f = io.open("testdata/proto.pb")
+    local data = f:read("*a")
+    eq(pb.load(data), true)
+
+    local services = {}
+    for name, basename, methods in pb.services() do
+        table.insert(services, {
+            name = name,
+            basename = basename,
+            methods = methods,
+        })
+    end
+    local actual = {
+        {
+            basename="RouteService",
+            methods={
+                {input_type=".pkg.Empty", name="FlushAll", output_type=".pkg.Response"},
+                {input_type=".pkg.Empty", name="GetAll", output_type=".pkg.Response"},
+                {input_type=".pkg.Request", name="Get", output_type=".pkg.Response"},
+                {input_type=".pkg.Request", name="Insert", output_type=".pkg.Response"},
+                {input_type=".pkg.Request", name="Update", output_type=".pkg.Response"},
+                {input_type=".pkg.Request", name="Remove", output_type=".pkg.Response"}
+            },
+            name=".pkg.RouteService"
+        },
+        {
+            basename="S2",
+            methods={
+                {
+                    input_type=".helloworld.PlusRequest",
+                    name="Plus",
+                    output_type=".helloworld.PlusResponse"
+                }
+            },
+            name=".helloworld.S2"
+        },
+        {
+            basename="S1",
+            methods={
+                {input_type=".pkg.Request", name="SayHello", output_type=".pkg.Response"},
+                {
+                    input_type=".helloworld.PlusRequest",
+                    name="Plus",
+                    output_type=".helloworld.PlusResponse"
+                }
+            },
+            name=".helloworld.S1"
+        }
+    }
+    table_eq(services, actual)
+
+    pb.state(nil)
+    protoc.reload()
+end
+
 if _VERSION == "Lua 5.1" and not _G.jit then
    lu.LuaUnit.run()
 else

@@ -1,3 +1,4 @@
+#include <stdio.h>
 #ifndef pb_h
 #define pb_h
 
@@ -218,6 +219,9 @@ PB_API const pb_Name *pb_name (const pb_State *S, pb_Slice s, pb_Cache *cache);
 typedef struct pb_Type  pb_Type;
 typedef struct pb_Field pb_Field;
 
+typedef struct pb_Method  pb_Method;
+typedef struct pb_Service pb_Service;
+
 #define PB_OK     0
 #define PB_ERROR  1
 #define PB_ENOMEM 2
@@ -229,9 +233,13 @@ PB_API void      pb_deltype  (pb_State *S, pb_Type *t);
 PB_API pb_Field *pb_newfield (pb_State *S, pb_Type *t, pb_Name *fname, int32_t number);
 PB_API void      pb_delfield (pb_State *S, pb_Type *t, pb_Field *f);
 
+PB_API void        pb_delservice(pb_State *S, pb_Service *s);
+PB_API pb_Service *pb_newservice(pb_State *S, pb_Name *name);
+
 PB_API const pb_Type  *pb_type  (const pb_State *S, const pb_Name *tname);
 PB_API const pb_Field *pb_fname (const pb_Type *t,  const pb_Name *tname);
 PB_API const pb_Field *pb_field (const pb_Type *t,  int32_t number);
+PB_API const pb_Service *pb_service (const pb_State *S, const pb_Name *name);
 
 PB_API const pb_Name *pb_oneofname (const pb_Type *t, int oneof_index);
 
@@ -315,8 +323,10 @@ struct pb_Cache {
 struct pb_State {
     pb_NameTable nametable;
     pb_Table     types;
+    pb_Table     services;
     pb_Pool      typepool;
     pb_Pool      fieldpool;
+    pb_Pool      servicepool;
 };
 
 struct pb_Field {
@@ -343,6 +353,19 @@ struct pb_Type {
     unsigned is_map    : 1;
     unsigned is_proto3 : 1;
     unsigned is_dead   : 1;
+};
+
+struct pb_Method {
+    pb_Name    *name;
+    pb_Name    *input_type;
+    pb_Name    *output_type;
+};
+
+struct pb_Service {
+    pb_Name    *name;
+    const char *basename;
+    pb_Method  *methods;
+    int         method_count;
 };
 
 
@@ -1111,6 +1134,7 @@ PB_API const pb_Name *pb_name(const pb_State *S, pb_Slice s, pb_Cache *cache) {
 
 typedef struct pb_TypeEntry { pb_Entry entry; pb_Type *value; } pb_TypeEntry;
 typedef struct pb_FieldEntry { pb_Entry entry; pb_Field *value; } pb_FieldEntry;
+typedef struct pb_ServiceEntry { pb_Entry entry; pb_Service *value; } pb_ServiceEntry;
 
 typedef struct pb_OneofEntry {
     pb_Entry entry;
@@ -1121,18 +1145,25 @@ typedef struct pb_OneofEntry {
 PB_API void pb_init(pb_State *S) {
     memset(S, 0, sizeof(pb_State));
     S->types.entry_size = sizeof(pb_TypeEntry);
+    S->services.entry_size = sizeof(pb_ServiceEntry);
     pb_initpool(&S->typepool, sizeof(pb_Type));
     pb_initpool(&S->fieldpool, sizeof(pb_Field));
+    pb_initpool(&S->servicepool, sizeof(pb_Service));
 }
 
 PB_API void pb_free(pb_State *S) {
     const pb_TypeEntry *te = NULL;
+    const pb_ServiceEntry *se = NULL;
     if (S == NULL) return;
     while (pb_nextentry(&S->types, (const pb_Entry**)&te))
         if (te->value != NULL) pb_deltype(S, te->value);
     pb_freetable(&S->types);
     pb_freepool(&S->typepool);
     pb_freepool(&S->fieldpool);
+    while (pb_nextentry(&S->services, (const pb_Entry**)&se))
+        if (se->value != NULL) pb_delservice(S, se->value);
+    pb_freetable(&S->services);
+    pb_freepool(&S->servicepool);
     pbN_free(S);
 }
 
@@ -1154,6 +1185,13 @@ PB_API const pb_Field *pb_field(const pb_Type *t, int32_t number) {
     pb_FieldEntry *fe = NULL;
     if (t != NULL) fe = (pb_FieldEntry*)pb_gettable(&t->field_tags, number);
     return fe ? fe->value : NULL;
+}
+
+PB_API const pb_Service *pb_service(const pb_State *S, const pb_Name *name) {
+    pb_ServiceEntry *e = NULL;
+    if (S != NULL && name != NULL)
+        e = (pb_ServiceEntry*)pb_gettable(&S->services, (pb_Key)name);
+    return e ? e->value : NULL;
 }
 
 PB_API const pb_Name *pb_oneofname(const pb_Type *t, int idx) {
@@ -1185,6 +1223,19 @@ PB_API int pb_nextfield(const pb_Type *t, const pb_Field **pfield) {
                 return 1;
     }
     *pfield = NULL;
+    return 0;
+}
+
+PB_API int pb_nextservice(const pb_State *S, const pb_Service **pservice) {
+    const pb_ServiceEntry *e = NULL;
+    if (S != NULL) {
+        if (*pservice != NULL)
+            e = (pb_ServiceEntry*)pb_gettable(&S->services, (pb_Key)(*pservice)->name);
+        while (pb_nextentry(&S->services, (const pb_Entry**)&e))
+            if ((*pservice = e->value) != NULL)
+                return 1;
+    }
+    *pservice = NULL;
     return 0;
 }
 
@@ -1287,6 +1338,30 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
     if (count) pbT_freefield(S, f), --t->field_count;
 }
 
+PB_API void pb_delservice(pb_State *S, pb_Service *s) {
+    if (S == NULL || s == NULL) return;
+    if (s->methods) {
+        free(s->methods);
+    }
+}
+
+static void pbT_initservice(pb_Service *s) {
+    memset(s, 0, sizeof(pb_Service));
+}
+
+PB_API pb_Service *pb_newservice(pb_State *S, pb_Name *name) {
+    pb_ServiceEntry *se;
+    pb_Service *s;
+    if (name == NULL) return NULL;
+    se = (pb_ServiceEntry*)pb_settable(&S->services, (pb_Key)name);
+    if (se == NULL) return NULL;
+    if (!(s = (pb_Service*)pb_poolalloc(&S->servicepool))) return NULL;
+    pbT_initservice(s);
+    s->name = name;
+    s->basename = pbT_basename((const char*)name);
+    return se->value = s;
+}
+
 
 /* .pb proto loader */
 
@@ -1296,6 +1371,8 @@ typedef struct pbL_EnumValueInfo pbL_EnumValueInfo;
 typedef struct pbL_EnumInfo      pbL_EnumInfo;
 typedef struct pbL_TypeInfo      pbL_TypeInfo;
 typedef struct pbL_FileInfo      pbL_FileInfo;
+typedef struct pbL_MethodInfo    pbL_MethodInfo;
+typedef struct pbL_ServiceInfo   pbL_ServiceInfo;
 
 #define pbC(e)  do { int r = (e); if (r != PB_OK) return r; } while (0)
 #define pbCM(e) do { if ((e) == NULL) return PB_ENOMEM; } while (0)
@@ -1352,12 +1429,24 @@ struct pbL_TypeInfo {
     pb_Slice      *oneof_decl;
 };
 
+struct pbL_MethodInfo {
+    pb_Slice           name;
+    pb_Slice           input_type;
+    pb_Slice           output_type;
+};
+
+struct pbL_ServiceInfo {
+    pb_Slice        name;
+    pbL_MethodInfo *methods;
+};
+
 struct pbL_FileInfo {
-    pb_Slice       package;
-    pb_Slice       syntax;
-    pbL_EnumInfo  *enum_type;
-    pbL_TypeInfo  *message_type;
-    pbL_FieldInfo *extension;
+    pb_Slice          package;
+    pb_Slice          syntax;
+    pbL_EnumInfo     *enum_type;
+    pbL_TypeInfo     *message_type;
+    pbL_FieldInfo    *extension;
+    pbL_ServiceInfo  *service;
 };
 
 static int pbL_readbytes(pb_Loader *L, pb_Slice *pv)
@@ -1531,6 +1620,42 @@ static int pbL_DescriptorProto(pb_Loader *L, pbL_TypeInfo *info) {
     return PB_OK;
 }
 
+static int pbL_MethodDescriptorProto(pb_Loader *L, pbL_MethodInfo *info) {
+    pb_Slice s;
+    uint32_t tag;
+    pbCM(info); pbC(pbL_beginmsg(L, &s));
+    while (pb_readvarint32(&L->s, &tag)) {
+        switch (tag) {
+        case pb_pair(1, PB_TBYTES): /* string name */
+            pbC(pbL_readbytes(L, &info->name)); break;
+        case pb_pair(2, PB_TBYTES): /* string input_type */
+            pbC(pbL_readbytes(L, &info->input_type)); break;
+        case pb_pair(3, PB_TBYTES): /* string output_type */
+            pbC(pbL_readbytes(L, &info->output_type)); break;
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
+        }
+    }
+    pbL_endmsg(L, &s);
+    return PB_OK;
+}
+
+static int pbL_ServiceDescriptorProto(pb_Loader *L, pbL_ServiceInfo *info) {
+    pb_Slice s;
+    uint32_t tag;
+    pbCM(info); pbC(pbL_beginmsg(L, &s));
+    while (pb_readvarint32(&L->s, &tag)) {
+        switch (tag) {
+        case pb_pair(1, PB_TBYTES): /* string name */
+            pbC(pbL_readbytes(L, &info->name)); break;
+        case pb_pair(2, PB_TBYTES): /* methods */
+            pbC(pbL_MethodDescriptorProto(L, pbL_add(info->methods))); break;
+        default: if (pb_skipvalue(&L->s, tag) == 0) return PB_ERROR;
+        }
+    }
+    pbL_endmsg(L, &s);
+    return PB_OK;
+}
+
 static int pbL_FileDescriptorProto(pb_Loader *L, pbL_FileInfo *info) {
     pb_Slice s;
     uint32_t tag;
@@ -1543,6 +1668,8 @@ static int pbL_FileDescriptorProto(pb_Loader *L, pbL_FileInfo *info) {
             pbC(pbL_DescriptorProto(L, pbL_add(info->message_type))); break;
         case pb_pair(5, PB_TBYTES): /* EnumDescriptorProto enum_type */
             pbC(pbL_EnumDescriptorProto(L, pbL_add(info->enum_type))); break;
+        case pb_pair(6, PB_TBYTES): /* ServiceDescriptorProto service */
+            pbC(pbL_ServiceDescriptorProto(L, pbL_add(info->service))); break;
         case pb_pair(7, PB_TBYTES): /* FieldDescriptorProto extension */
             pbC(pbL_FieldDescriptorProto(L, pbL_add(info->extension))); break;
         case pb_pair(12, PB_TBYTES): /* string syntax */
@@ -1588,9 +1715,12 @@ static void pbL_delFileInfo(pbL_FileInfo *files) {
             pbL_delTypeInfo(&files[i].message_type[j]);
         for (j = 0, jcount = pbL_count(files[i].enum_type); j < jcount; ++j)
             pbL_delete(files[i].enum_type[j].value);
+        for (j = 0, jcount = pbL_count(files[i].service); j < jcount; ++j)
+            pbL_delete(files[i].service[j].methods);
         pbL_delete(files[i].message_type);
         pbL_delete(files[i].enum_type);
         pbL_delete(files[i].extension);
+        pbL_delete(files[i].service);
     }
     pbL_delete(files);
 }
@@ -1664,6 +1794,31 @@ static int pbL_loadType(pb_State *S, pbL_TypeInfo *info, pb_Loader *L) {
     return PB_OK;
 }
 
+static int pbL_loadMethod(pb_State *S, pbL_MethodInfo *info, pb_Service *s) {
+    pb_Method  *meth = &s->methods[s->method_count];
+
+    s->method_count++;
+
+    pbCE(meth->name = pb_newname(S, info->name, NULL));
+    pbCE(meth->input_type = pb_newname(S, info->input_type, NULL));
+    pbCE(meth->output_type = pb_newname(S, info->output_type, NULL));
+    return PB_OK;
+}
+
+static int pbL_loadService(pb_State *S, pbL_ServiceInfo *info, pb_Loader *L) {
+    size_t i, count, curr;
+    pb_Name *name;
+    pb_Service *s;
+    pbC(pbL_prefixname(S, info->name, &curr, L, &name));
+    pbCM(s = pb_newservice(S, name));
+    count = pbL_count(info->methods);
+    pbCM(s->methods = malloc(sizeof(pb_Method) * count));
+    for (i = 0; i < count; ++i)
+        pbC(pbL_loadMethod(S, &info->methods[i], s));
+    L->b.size = (unsigned)curr;
+    return PB_OK;
+}
+
 static int pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Loader *L) {
     size_t i, count, j, jcount, curr = 0;
     pb_Name *syntax;
@@ -1678,6 +1833,8 @@ static int pbL_loadFile(pb_State *S, pbL_FileInfo *info, pb_Loader *L) {
             pbC(pbL_loadType(S, &info[i].message_type[j], L));
         for (j = 0, jcount = pbL_count(info[i].extension); j < jcount; ++j)
             pbC(pbL_loadField(S, &info[i].extension[j], L, NULL));
+        for (j = 0, jcount = pbL_count(info[i].service); j < jcount; ++j)
+            pbC(pbL_loadService(S, &info[i].service[j], L));
         L->b.size = (unsigned)curr;
     }
     return PB_OK;

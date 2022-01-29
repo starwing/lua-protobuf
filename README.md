@@ -201,6 +201,7 @@ In below table of functions, we have several types that have special means:
 | `pb.field(type, string)`       | see below       | return informations for specific field of type          |
 | `pb.typefmt(type)`             | String          | transform type name of field into pack/unpack formatter |
 | `pb.enum(type, string)`        | number          | get the value of a enum by name                         |
+| `pb.services()`                | iterator        | iterate all services in `pb` module                     |
 | `pb.enum(type, number)`        | string          | get the name of a enum by value                         |
 | `pb.defaults(type[, table])`   | table           | get the default table of type                           |
 | `pb.hook(type[, function])`    | function        | get or set hook functions                               |
@@ -273,6 +274,45 @@ enum Color { Red = 1; Green = 2; Blue = 3 }
 ]]
 print(pb.enum("Color", "Red")) --> 1
 print(pb.enum("Color", 2)) --> "Green"
+```
+
+`pb.services()` returns a iterator to fetch each defined service.
+
+- name : the full qualifier name of service, e.g. ".package.FooService"
+- basename: the service name without package prefix, e.g. "FooService"
+- methods: the methods of this sercice, in `{name = ..., input_type = ..., output_type = ...}` format
+
+Assumed we have a proto file like:
+
+```proto
+package helloworld;
+
+import "testdata/import.proto";
+
+service S1 {
+  rpc SayHello (pkg.Request) returns (pkg.Response) {}
+  rpc Plus (PlusRequest) returns (PlusResponse) {}
+}
+```
+
+The code
+
+```lua
+for name, basename, methods in pb.services() do
+    print(name, ' ', basename)
+    for i = 1, #methods do
+        local method = methods[i]
+        print(method.name, ' ', method.input_type, ' ', method.output_type)
+    end
+end
+```
+
+will print:
+
+```text
+.helloworld.S1          S1
+SayHello                .pkg.Request            .pkg.Response
+Plus            .helloworld.PlusRequest         .helloworld.PlusResponse
 ```
 
 #### Default Values

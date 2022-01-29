@@ -20,3 +20,4 @@ lua*/
 out*
 test*
 test*.lua
+!testdata/

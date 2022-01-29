@@ -1192,6 +1192,22 @@ static const pb_Field *lpb_field(lua_State *L, int idx, const pb_Type *t) {
     return pb_fname(t, lpb_name(LS, lpb_checkslice(L, idx)));
 }
 
+static const pb_Service *lpb_service(lpb_State *LS, pb_Slice s) {
+    const pb_Service *t;
+    if (s.p == NULL || *s.p == '.')
+        t = pb_service(lpb_state(LS), lpb_name(LS, s));
+    else {
+        pb_Buffer b;
+        pb_initbuffer(&b);
+        *pb_prepbuffsize(&b, 1) = '.';
+        pb_addsize(&b, 1);
+        pb_addslice(&b, s);
+        t = pb_service(lpb_state(LS), pb_name(lpb_state(LS),pb_result(&b),NULL));
+        pb_resetbuffer(&b);
+    }
+    return t;
+}
+
 static int Lpb_load(lua_State *L) {
     lpb_State *LS = default_lstate(L);
     pb_Slice s = lpb_checkslice(L, 1);
@@ -1312,6 +1328,51 @@ static int Lpb_enum(lua_State *L) {
     else
         lpb_pushinteger(L, f->number, LS->int64_mode);
     return 1;
+}
+
+static int lpb_pushservice(lua_State *L, const pb_Service *s) {
+    int         i;
+    pb_Method  *meth;
+
+    if (s == NULL) return 0;
+    lua_pushstring(L, (const char*)s->name);
+    lua_pushstring(L, (const char*)s->basename);
+    lua_createtable(L, s->method_count, 0);
+    for (i = 0; i < s->method_count; i++) {
+        meth = &s->methods[i];
+
+        lua_createtable(L, 0, 3);
+
+        lua_pushliteral(L, "name");
+        lua_pushstring(L, (const char*)meth->name);
+        lua_rawset(L, -3);
+        lua_pushliteral(L, "input_type");
+        lua_pushstring(L, (const char*)meth->input_type);
+        lua_rawset(L, -3);
+        lua_pushliteral(L, "output_type");
+        lua_pushstring(L, (const char*)meth->output_type);
+        lua_rawset(L, -3);
+
+        lua_rawseti(L, -2, i + 1);
+    }
+
+    return 3;
+}
+
+static int Lpb_servicesiter(lua_State *L) {
+    lpb_State *LS = default_lstate(L);
+    const pb_Service *s = lpb_service(LS, lpb_toslice(L, 2));
+    if ((s == NULL && !lua_isnoneornil(L, 2)))
+        return 0;
+    pb_nextservice(lpb_state(LS), &s);
+    return lpb_pushservice(L, s);
+}
+
+static int Lpb_services(lua_State *L) {
+    lua_pushcfunction(L, Lpb_servicesiter);
+    lua_pushnil(L);
+    lua_pushnil(L);
+    return 3;
 }
 
 static int lpb_pushdefault(lua_State *L, lpb_State *LS, const pb_Field *f, int is_proto3) {
@@ -1905,6 +1966,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(field),
         ENTRY(typefmt),
         ENTRY(enum),
+        ENTRY(services),
         ENTRY(defaults),
         ENTRY(hook),
         ENTRY(encode_hook),
