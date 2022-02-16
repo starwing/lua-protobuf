@@ -121,7 +121,7 @@ print(require "serpent".block(data2))
 | `p:compile(string)` | string        | transform schema to binary *.pb format data          |
 | `p:load(string)`    | true          | load schema into `pb` module                         |
 | `p.loaded`          | table         | contains all parsed `DescriptorProto` table          |
-| `p.unknown_module`  | see below     | handle schema import error                           |
+| `p.unknown_import`  | see below     | handle schema import error                           |
 | `p.unknown_type`    | see below     | handle unknown type in schema                        |
 | `p.include_imports` | bool          | auto load imported proto                             |
 
@@ -135,13 +135,13 @@ Then, set some options to the compiler, e.g. the unknown handlers:
 
 ```lua
 -- set some hooks
-p.unknown_module = function(self, module_name) ... end
+p.unknown_import = function(self, module_name) ... end
 p.unknown_type   = function(self, type_name) ... end
 -- ... and options
 p.include_imports = true
 ```
 
-The `unknwon_module` and `unknown_type` handle could be `true`, string or a function.  Seting it to `true` means all *non-exist* modules and types are given a default value without triggering an error;  A string means a Lua pattern that indicates whether an unknown module or type should raise an error, e.g.
+The `unknown_import` and `unknown_type` handle could be `true`, string or a function.  Seting it to `true` means all *non-exist* modules and types are given a default value without triggering an error;  A string means a Lua pattern that indicates whether an unknown module or type should raise an error, e.g.
 
 ```lua
 p.unknown_type = "Foo.*"
@@ -152,7 +152,7 @@ means all types prefixed by `Foo` will be treat as existing type and do not trig
 If these are functions, the unknown type and module name will be passed to functions.  For module handler, it should return a `DescriptorProto` Table produced by `p:load()` functions, for type handler, it should return a type name and type, such as `message` or `enum`, e.g.
 
 ```lua
-function p:unknown_module(name)
+function p:unknown_import(name)
   -- if can not find "foo.proto", load "my_foo.proto" instead
   return p:parsefile("my_"..name)
 end
