@@ -961,7 +961,7 @@ static int lpb_unpackscalar(lua_State *L, int *pidx, int top, int fmt, pb_Slice 
         break;
     case 'c':
         argcheck(L, *pidx <= top, 1, "format argument exceed");
-        v.lint = luaL_checkinteger(L, *pidx++);
+        v.lint = luaL_checkinteger(L, (*pidx)++);
         if (pb_readslice(s, (size_t)v.lint, v.s) == 0)
             luaL_error(L, "invalid sub string at offset %d", pb_pos(*s)+1);
         push_slice(L, *v.s);
@@ -984,9 +984,9 @@ static int lpb_unpackloc(lua_State *L, int *pidx, int top, int fmt, pb_Slice *s,
     case '*': case '+':
         argcheck(L, *pidx <= top, 1, "format argument exceed");
         if (fmt == '*')
-            li = posrelat(luaL_checkinteger(L, *pidx++), len);
+            li = posrelat(luaL_checkinteger(L, (*pidx)++), len);
         else
-            li = pb_pos(*s) + luaL_checkinteger(L, *pidx++) + 1;
+            li = pb_pos(*s) + luaL_checkinteger(L, (*pidx)++) + 1;
         if (li == 0) li = 1;
         if (li > (lua_Integer)len) li = (lua_Integer)len + 1;
         s->p = s->start + li - 1;
@@ -1601,14 +1601,17 @@ static void lpbE_repeated(lpb_Env *e, const pb_Field *f) {
     int i;
     lpb_checktable(L, f);
     if (f->packed) {
-        size_t len;
+        size_t len, bufflen = pb_bufflen(b);
         pb_addvarint32(b, pb_pair(f->number, PB_TBYTES));
         len = pb_bufflen(b);
         for (i = 1; lua53_rawgeti(L, -1, i) != LUA_TNIL; ++i) {
             lpbE_field(e, f, NULL);
             lua_pop(L, 1);
         }
-        lpb_addlength(L, b, len);
+        if (i == 1)
+            pb_bufflen(b) = bufflen;
+        else
+            lpb_addlength(L, b, len);
     } else {
         for (i = 1; lua53_rawgeti(L, -1, i) != LUA_TNIL; ++i) {
             lpbE_tagfield(e, f, 0);
