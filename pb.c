@@ -1685,7 +1685,7 @@ static void lpb_usedechooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
     const pb_Field *f = NULL;
     int mode = LS->default_mode;
-    lua_createtable(L, 0, t->field_count - t->oneof_count);
+    lua_createtable(L, 0, t->field_count - t->oneof_field + t->oneof_count*2);
     switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
         while (pb_nextfield(t, &f))
@@ -1827,6 +1827,11 @@ static int lpbD_message(lpb_Env *e, const pb_Type *t) {
             lpbD_repeated(e, f, tag);
         else {
             lua_pushstring(L, (const char*)f->name);
+            if (f->oneof_idx) {
+                lua_pushstring(L, (const char*)pb_oneofname(t, f->oneof_idx));
+                lua_pushvalue(L, -2);
+                lua_rawset(L, -4);
+            }
             lpbD_field(e, f, tag);
             lua_rawset(L, -3);
         }

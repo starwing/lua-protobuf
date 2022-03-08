@@ -11,6 +11,7 @@ local protoc = require "protoc"
 local eq       = lu.assertEquals
 local table_eq = lu.assertItemsEquals
 local fail     = lu.assertErrorMsgContains
+local is_true  = lu.assertIsTrue
 
 local types = 0
 for _ in pb.types() do
@@ -543,6 +544,9 @@ function _G.test_packed()
    fail("table expected at field 'packs', got boolean",
         function() pb.encode("TestPacked", { packs = true }) end)
 
+   local data = {packs = {}}
+   check_msg(".TestPacked", data, {})
+
    local hasEmpty
    for _, name in pb.types() do
       if name == "Empty" then
@@ -684,10 +688,10 @@ function _G.test_oneof()
        }
    } ]]
    check_msg("TestOneof", {})
-   check_msg("TestOneof", { m1 = {} })
-   check_msg("TestOneof", { m2 = {} })
-   check_msg("TestOneof", { m3 = { value = 0 } })
-   check_msg("TestOneof", { m3 = { value = 10 } })
+   check_msg("TestOneof", { m1 = {}, body_oneof = "m1" })
+   check_msg("TestOneof", { m2 = {}, body_oneof = "m2" })
+   check_msg("TestOneof", { m3 = { value = 0 }, body_oneof = "m3" })
+   check_msg("TestOneof", { m3 = { value = 10 }, body_oneof = "m3" })
    pb.clear "TestOneof"
 
    check_load [[
@@ -702,12 +706,17 @@ function _G.test_oneof()
       TestOneof msg = 1;
    }
    ]]
-   check_msg("TestOneof", { foo = 0 })
-   check_msg("TestOneof", { bar = "" })
-   check_msg("TestOneof", { foo = 0, bar = "" })
-   check_msg("Outter", { msg = { foo = 0 }})
-   check_msg("Outter", { msg = { bar = "" }})
-   check_msg("Outter", { msg = { foo = 0, bar = "" }})
+
+   check_msg("TestOneof", { foo = 0, body = "foo" })
+   check_msg("TestOneof", { bar = "", body = "bar" })
+   local chunk = pb.encode("TestOneof", { foo = 0, bar = "" })
+   local data = pb.decode("TestOneof", chunk)
+   is_true(data.body == "foo" or data.body == "bar")
+   check_msg("Outter", { msg = { foo = 0, body = "foo" }})
+   check_msg("Outter", { msg = { bar = "", body = "bar" }})
+   local chunk = pb.encode("Outter", {msg = { foo = 0, bar = "" }})
+   local data = pb.decode("Outter", chunk)
+   is_true(data.msg.body == "foo" or data.msg.body == "bar")
    pb.clear "TestOneof"
    pb.clear "Outter"
 
@@ -720,12 +729,12 @@ function _G.test_oneof()
        }
    } ]]
 
-   check_msg("TestOneof", { name = "foo" })
-   check_msg("TestOneof", { value = 0 })
-   check_msg("TestOneof", { name = "foo", value = 0 })
+   check_msg("TestOneof", { name = "foo", test_oneof = "name" })
+   check_msg("TestOneof", { value = 0, test_oneof = "value" })
+   local chunk = pb.encode("TestOneof", { name = "foo", value = 0 })
+   local data = pb.decode("TestOneof", chunk)
+   is_true(data.test_oneof == "name" or data.test_oneof == "value")
 
-   local data = { name = "foo", value = 5 }
-   check_msg("TestOneof", data)
    eq(pb.field("TestOneof", "name"), "name")
    pb.clear("TestOneof", "name")
    eq(pb.field("TestOneof", "name"), nil)
