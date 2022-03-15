@@ -1769,9 +1769,8 @@ static void lpbD_field(lpb_Env *e, const pb_Field *f, uint32_t tag) {
 static void lpbD_map(lpb_Env *e, const pb_Field *f) {
     lua_State *L = e->L;
     pb_Slice p, *s = e->s;
-    int mask = 0, top = lua_gettop(L) + 1;
+    int mask = 0, top = lua_gettop(L);
     uint32_t tag;
-    lpb_fetchtable(e, f);
     lpb_readbytes(L, s, &p);
     if (f->type == NULL) return;
     lua_pushnil(L);
@@ -1790,12 +1789,10 @@ static void lpbD_map(lpb_Env *e, const pb_Field *f) {
         lua_replace(L, top + 2), mask |= 2;
     if (mask == 3) lua_rawset(L, -3);
     else           lua_pop(L, 2);
-    lua_pop(L, 1);
 }
 
 static void lpbD_repeated(lpb_Env *e, const pb_Field *f, uint32_t tag) {
     lua_State *L = e->L;
-    lpb_fetchtable(e, f);
     if (pb_gettype(tag) != PB_TBYTES
             || (!f->packed && pb_wtypebytype(f->type_id) == PB_TBYTES)) {
         lpbD_field(e, f, tag);
@@ -1809,7 +1806,6 @@ static void lpbD_repeated(lpb_Env *e, const pb_Field *f, uint32_t tag) {
             lua_rawseti(L, -2, ++len);
         }
     }
-    lua_pop(L, 1);
 }
 
 static int lpbD_message(lpb_Env *e, const pb_Type *t) {
@@ -1821,11 +1817,15 @@ static int lpbD_message(lpb_Env *e, const pb_Type *t) {
         const pb_Field *f = pb_field(t, pb_gettag(tag));
         if (f == NULL)
             pb_skipvalue(s, tag);
-        else if (f->type && f->type->is_map)
+        else if (f->type && f->type->is_map) {
+            lpb_fetchtable(e, f);
             lpbD_map(e, f);
-        else if (f->repeated)
+            lua_pop(L, 1);
+        } else if (f->repeated) {
+            lpb_fetchtable(e, f);
             lpbD_repeated(e, f, tag);
-        else {
+            lua_pop(L, 1);
+        } else {
             lua_pushstring(L, (const char*)f->name);
             if (f->oneof_idx) {
                 lua_pushstring(L, (const char*)pb_oneofname(t, f->oneof_idx));
