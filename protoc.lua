@@ -227,7 +227,6 @@ function Lexer:structure(opt)
       local pos, name, npos = self "^%s*()(%b[])()"
       if not pos then
          name = self:full_ident "field name"
-         self.pos = pos
       else
          self.pos = npos
       end
