@@ -2,7 +2,7 @@ package = "lua-protobuf"
 version = "scm-1"
 
 source = {
-  url = "git://github.com/starwing/lua-protobuf.git",
+  url = "git+https://github.com/starwing/lua-protobuf.git",
 }
 
 description = {

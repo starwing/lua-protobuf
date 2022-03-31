@@ -1,7 +1,7 @@
 package = "lua-protobuf"
 version = "0.3.4-1"
 source = {
-   url = "git://github.com/starwing/lua-protobuf.git",
+   url = "git+https://github.com/starwing/lua-protobuf.git",
    tag = "0.3.4"
 }
 description = {
