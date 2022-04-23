@@ -335,6 +335,8 @@ These options are supported currently:
 | `no_encode_default_values` | do not encode default values **(default)** |
 | `decode_default_array`  | work with `no_default_values`,decode null to empty table for array |
 | `no_decode_default_array`  | work with `no_default_values`,decode null to nil for array **(default)** |
+| `encode_order`          | guarantees the same message will be encoded into the same result with the same schema and the same data (but the order itself is not specified) |
+| `no_encode_order`       | do not have guarantees about encode orders **(default)** |
 
  *Note*: The string returned by `int64_as_string` or `int64_as_hexstring` will prefix a `'#'` character. Because Lua may convert between string with number, prefix a `'#'` makes Lua return the string as-is.
 

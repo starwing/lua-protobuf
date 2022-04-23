@@ -145,6 +145,7 @@ typedef struct lpb_State {
     unsigned int64_mode    : 2; /* lpb_Int64Mode */
     unsigned encode_default_values : 1;
     unsigned decode_default_array  : 1;
+    unsigned encode_order  : 1;
 } lpb_State;
 
 static int lpb_reftable(lua_State *L, int ref) {
@@ -1621,24 +1622,35 @@ static void lpbE_repeated(lpb_Env *e, const pb_Field *f) {
     lua_pop(L, 1);
 }
 
+static void lpb_encode_onefield(lpb_Env *e, const pb_Type *t, const pb_Field *f) {
+    if (f->type && f->type->is_map)
+        lpbE_map(e, f);
+    else if (f->repeated)
+        lpbE_repeated(e, f);
+    else if (!f->type || !f->type->is_dead)
+        lpbE_tagfield(e, f, t->is_proto3 && !f->oneof_idx);
+}
+
 static void lpb_encode(lpb_Env *e, const pb_Type *t) {
     lua_State *L = e->L;
     luaL_checkstack(L, 3, "message too many levels");
-    lua_pushnil(L);
-    while (lua_next(L, -2)) {
-        if (lua_type(L, -2) == LUA_TSTRING) {
-            const pb_Field *f =
-                pb_fname(t, lpb_name(e->LS, lpb_toslice(L, -2)));
-            if (f == NULL)
-                /* skip */;
-            else if (f->type && f->type->is_map)
-                lpbE_map(e, f);
-            else if (f->repeated)
-                lpbE_repeated(e, f);
-            else if (!f->type || !f->type->is_dead)
-                lpbE_tagfield(e, f, t->is_proto3 && !f->oneof_idx);
+    if (e->LS->encode_order) {
+        const pb_Field *f = NULL;
+        while (pb_nextfield(t, &f)) {
+            if (lua53_getfield(L, -1, (const char*)f->name) != LUA_TNIL)
+                lpb_encode_onefield(e, t, f);
+            lua_pop(L, 1);
         }
-        lua_pop(L, 1);
+    } else {
+        lua_pushnil(L);
+        while (lua_next(L, -2)) {
+            if (lua_type(L, -2) == LUA_TSTRING) {
+                const pb_Field *f =
+                    pb_fname(t, lpb_name(e->LS, lpb_toslice(L, -2)));
+                if (f != NULL) lpb_encode_onefield(e, t, f);
+            }
+            lua_pop(L, 1);
+        }
     }
 }
 
@@ -1880,6 +1892,8 @@ static int Lpb_option(lua_State *L) {
     X(12, no_encode_default_values,LS->encode_default_values = 0)  \
     X(13, decode_default_array, LS->decode_default_array = 1)      \
     X(14, no_decode_default_array, LS->decode_default_array = 0)   \
+    X(15, encode_order,          LS->encode_order = 1)             \
+    X(16, no_encode_order,       LS->encode_order = 0)             \
 
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,

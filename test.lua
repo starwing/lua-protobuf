@@ -1350,6 +1350,40 @@ function _G.test_unsafe()
    eq((unsafe.use "local"), true)
 end
 
+function _G.test_order()
+   withstate(function()
+   protoc.reload()
+   check_load [[
+      enum Type {
+         HOME = 1;
+         WORK = 2;
+      }
+      message Phone {
+         optional string name        = 1;
+         optional int64  phonenumber = 2;
+         optional Type   type        = 3;
+      }
+      message Person {
+         optional string name     = 1;
+         optional int32  age      = 2;
+         optional string address  = 3;
+         repeated Phone  contacts = 4;
+      } ]]
+   pb.option "encode_order"
+   local data = {
+      name = "ilse",
+      age  = 18,
+      contacts = {
+         { name = "alice", phonenumber = 12312341234 },
+         { name = "bob",   phonenumber = 45645674567 }
+      }
+   }
+   local b1 = pb.encode("Person", data)
+   local b2 = pb.encode("Person", data)
+   eq(b1, b2)
+   end)
+end
+
 if _VERSION == "Lua 5.1" and not _G.jit then
    lu.LuaUnit.run()
 else
