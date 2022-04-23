@@ -143,8 +143,9 @@ typedef struct lpb_State {
     unsigned enum_as_value : 1;
     unsigned default_mode  : 2; /* lpb_DefMode */
     unsigned int64_mode    : 2; /* lpb_Int64Mode */
-    unsigned encode_default_values : 1;
-    unsigned decode_default_array  : 1;
+    unsigned encode_default_values  : 1;
+    unsigned decode_default_array   : 1;
+    unsigned decode_default_message : 1;
     unsigned encode_order  : 1;
 } lpb_State;
 
@@ -1170,6 +1171,8 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
 
 /* high level typeinfo/encode/decode routines */
 
+static int lpb_pushdeffield(lua_State *L, lpb_State *LS, const pb_Field *f, int is_proto3);
+
 static const pb_Type *lpb_type(lpb_State *LS, pb_Slice s) {
     const pb_Type *t;
     if (s.p == NULL || *s.p == '.')
@@ -1315,12 +1318,35 @@ static int Lpb_enum(lua_State *L) {
     return 1;
 }
 
-static int lpb_pushdefault(lua_State *L, lpb_State *LS, const pb_Field *f, int is_proto3) {
+static void lpb_newtypetable(lua_State *L, const pb_Type *t, int with_repeat) {
+    const pb_Field *f = NULL;
+    if (t == NULL) { lua_newtable(L); return; }
+    lua_createtable(L, 0, t->field_count - t->oneof_field + t->oneof_count*2);
+    if (!with_repeat) return;
+    while (pb_nextfield(t, &f)) {
+        if (f->repeated) {
+            lua_newtable(L);
+            lua_setfield(L, -2, (const char*)f->name);
+        }
+    }
+}
+
+static int lpb_pushdefmsg(lua_State *L, lpb_State *LS, const pb_Type *t) {
+    const pb_Field *f = NULL;
+    if (t == NULL) return 0;
+    lpb_newtypetable(L, t, 0);
+    while (pb_nextfield(t, &f))
+        if (!f->oneof_idx && lpb_pushdeffield(L, LS, f, t->is_proto3))
+            lua_setfield(L, -2, (const char*)f->name);
+    return 1;
+}
+
+static int lpb_pushdeffield(lua_State *L, lpb_State *LS, const pb_Field *f, int is_proto3) {
     int ret = 0;
     const pb_Type *type;
     char *end;
     if (f == NULL) return 0;
-    if (is_proto3 && f->repeated) return lua_newtable(L), 1;
+    if (f->repeated) return is_proto3 ? (lua_newtable(L), 1) : 0;
     switch (f->type_id) {
     case PB_Tbytes: case PB_Tstring:
         if (f->default_value)
@@ -1343,6 +1369,8 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, const pb_Field *f, int i
         }
         break;
     case PB_Tmessage:
+        if (LS->decode_default_message)
+            return lpb_pushdefmsg(L, LS, f->type);
         return 0;
     case PB_Tbool:
         if (f->default_value) {
@@ -1370,14 +1398,17 @@ static int lpb_pushdefault(lua_State *L, lpb_State *LS, const pb_Field *f, int i
     return ret;
 }
 
-static void lpb_pushdefaults(lua_State *L, lpb_State *LS, const pb_Type *t) {
+static void lpb_pushdefmeta(lua_State *L, lpb_State *LS, const pb_Type *t) {
     lpb_pushdeftable(L, LS);
     if (lua53_rawgetp(L, -1, t) != LUA_TTABLE) {
         const pb_Field *f = NULL;
         lua_pop(L, 1);
-        lua_newtable(L);
+        lpb_newtypetable(L, t, 0);
         while (pb_nextfield(t, &f))
-            if (!f->repeated && lpb_pushdefault(L, LS, f, t->is_proto3))
+            if (!f->oneof_idx                    /* not oneof */
+                    && f->type_id != PB_Tmessage /* not message */
+                    && !f->repeated              /* not repeated */
+                    && lpb_pushdeffield(L, LS, f, t->is_proto3))
                 lua_setfield(L, -2, (const char*)f->name);
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
@@ -1387,7 +1418,7 @@ static void lpb_pushdefaults(lua_State *L, lpb_State *LS, const pb_Type *t) {
     lua_remove(L, -2);
 }
 
-static void lpb_cleardefaults(lua_State *L, lpb_State *LS, const pb_Type *t) {
+static void lpb_cleardefmeta(lua_State *L, lpb_State *LS, const pb_Type *t) {
     lpb_pushdeftable(L, LS);
     lua_pushnil(L);
     lua_rawsetp(L, -2, t);
@@ -1399,8 +1430,8 @@ static int Lpb_defaults(lua_State *L) {
     const pb_Type *t = lpb_type(LS, lpb_checkslice(L, 1));
     int clear = lua_toboolean(L, 2);
     if (t == NULL) luaL_argerror(L, 1, "type not found");
-    lpb_pushdefaults(L, LS, t);
-    if (clear) lpb_cleardefaults(L, LS, t);
+    lpb_pushdefmeta(L, LS, t);
+    if (clear) lpb_cleardefmeta(L, LS, t);
     return 1;
 }
 
@@ -1457,7 +1488,7 @@ static int Lpb_clear(lua_State *L) {
     if (lua_isnoneornil(L, 2)) pb_deltype(&LS->local, t);
     else pb_delfield(&LS->local, t, (pb_Field*)lpb_field(L, 2, t));
     LS->state = S;
-    lpb_cleardefaults(L, LS, t);
+    lpb_cleardefmeta(L, LS, t);
     return 0;
 }
 
@@ -1695,28 +1726,18 @@ static void lpb_usedechooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
 }
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
-    const pb_Field *f = NULL;
     int mode = LS->default_mode;
-    lua_createtable(L, 0, t->field_count - t->oneof_field + t->oneof_count*2);
     switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
-        while (pb_nextfield(t, &f))
-            if (!f->oneof_idx && lpb_pushdefault(L, LS, f, t->is_proto3))
-                lua_setfield(L, -2, (const char*)f->name);
+        lpb_pushdefmsg(L, LS, t);
         break;
     case LPB_METADEF:
-        while (pb_nextfield(t, &f))
-            if (f->repeated && lpb_pushdefault(L, LS, f, t->is_proto3))
-                lua_setfield(L, -2, (const char*)f->name);
-        lpb_pushdefaults(L, LS, t);
+        lpb_newtypetable(L, t, t->is_proto3);
+        lpb_pushdefmeta(L, LS, t);
         lua_setmetatable(L, -2);
         break;
     default: /* no default value */
-        if (LS->decode_default_array) {
-            while (pb_nextfield(t, &f))
-                if (f->repeated && lpb_pushdefault(L, LS, f, t->is_proto3))
-                    lua_setfield(L, -2, (const char*)f->name);
-        }
+        lpb_newtypetable(L, t, LS->decode_default_array);
         break;
     }
 }
@@ -1795,9 +1816,9 @@ static void lpbD_map(lpb_Env *e, const pb_Field *f) {
             lua_replace(L, top+n);
         }
     }
-    if (!(mask & 1) && lpb_pushdefault(L, e->LS, pb_field(f->type, 1), 1))
+    if (!(mask & 1) && lpb_pushdeffield(L, e->LS, pb_field(f->type, 1), 1))
         lua_replace(L, top + 1), mask |= 1;
-    if (!(mask & 2) && lpb_pushdefault(L, e->LS, pb_field(f->type, 2), 1))
+    if (!(mask & 2) && lpb_pushdeffield(L, e->LS, pb_field(f->type, 2), 1))
         lua_replace(L, top + 2), mask |= 2;
     if (mask == 3) lua_rawset(L, -3);
     else           lua_pop(L, 2);
@@ -1894,6 +1915,8 @@ static int Lpb_option(lua_State *L) {
     X(14, no_decode_default_array, LS->decode_default_array = 0)   \
     X(15, encode_order,          LS->encode_order = 1)             \
     X(16, no_encode_order,       LS->encode_order = 0)             \
+    X(17, decode_default_message, LS->decode_default_message = 1)      \
+    X(18, no_decode_default_message, LS->decode_default_message = 0)   \
 
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,
