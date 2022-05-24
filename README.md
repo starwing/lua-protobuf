@@ -326,7 +326,8 @@ These options are supported currently:
 | `int64_as_number`       | set value to integer when it fit into uint32, otherwise return a number **(default)** |
 | `int64_as_string`       | same as above, but return a string instead |
 | `int64_as_hexstring`    | same as above, but return a hexadigit string instead         |
-| `no_default_values`     | do not default values for decoded message table **(default)** |
+| `auto_default_values`   | act as `use_default_values` for proto3 and act as `no_default_values` for the others **(default)** |
+| `no_default_values`     | do not default values for decoded message table |
 | `use_default_values`    | set default values by copy values from default table before decode |
 | `use_default_metatable` | set default values by set table from `pb.default()` as the metatable |
 | `enable_hooks`          | `pb.decode` will call `pb.hooks()` hook functions            |

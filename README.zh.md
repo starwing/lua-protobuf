@@ -361,8 +361,9 @@ end
 | `int64_as_number`       | 如果值的大小小于uint32允许的最大值，则存储整数，否则存储Lua浮点数类型（$\le$ Lua 5.2，可能会导致不精确）或者64位整数类型（$\ge$ Lua 5.3，这个版本开始才支持64位整数类型） **(默认)** |
 | `int64_as_string`       | 同上，但返回一个前缀`"#"`的字符串以避免精度损失 |
 | `int64_as_hexstring`    | 同上，但返回一个16进制的字符串 |
-| `no_default_values`     | 忽略默认值设置 **(默认)** |
-| `use_default_values`    | set default values by copy values from default table before decode |
+| `auto_default_values`   | 对于 proto3，采取 `use_default_values` 的设置；对于其他 protobuf 格式，则采取 `no_default_values` 的设置 **(默认)** |
+| `no_default_values`     | 忽略默认值设置 |
+| `use_default_values`    | 将默认值表复制到解码目标表中来 |
 | `use_default_metatable` | 将默认值表作为解码目标表的元表使用 |
 | `enable_hooks`          | `pb.decode` 启用钩子功能      |
 | `disable_hooks`         | `pb.decode` 禁用钩子功能 **(默认)**            |
