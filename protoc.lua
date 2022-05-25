@@ -458,8 +458,8 @@ local function field(self, lex, ident)
       if options.packed and options.packed == "false" then
          options.packed = false
       end
+      info.options = options
    end
-   info.options = options
    if info.number <= 0 then
       lex:error("invalid tag number: "..info.number)
    end
@@ -523,21 +523,21 @@ function toplevel:import(lex, info)
    end
 end
 
-local msg_body = {} do
+local msgbody = {} do
 
-function msg_body:message(lex, info)
+function msgbody:message(lex, info)
    local nested_type = default(info, 'nested_type')
    insert_tab(nested_type, toplevel.message(self, lex))
    return self
 end
 
-function msg_body:enum(lex, info)
+function msgbody:enum(lex, info)
    local nested_type = default(info, 'enum_type')
    insert_tab(nested_type, toplevel.enum(self, lex))
    return self
 end
 
-function msg_body:extend(lex, info)
+function msgbody:extend(lex, info)
    local extension = default(info, 'extension')
    local nested_type = default(info, 'nested_type')
    local ft, mt = toplevel.extend(self, lex, {})
@@ -550,22 +550,27 @@ function msg_body:extend(lex, info)
    return self
 end
 
-function msg_body:extensions(lex, info)
+function msgbody:extensions(lex, info)
    local rt = default(info, 'extension_range')
+   local idx = #rt
    repeat
       local start = lex:integer "field number range"
       local stop = math.floor(2^29)
-      lex:keyword 'to'
-      if not lex:keyword('max', 'opt') then
-         stop = lex:integer "field number range end or 'max'"
+      if lex:keyword('to', 'opt') then
+         if not lex:keyword('max', 'opt') then
+            stop = lex:integer "field number range end or 'max'"
+         end
+         insert_tab(rt, { start = start, ['end'] = stop })
+      else
+         insert_tab(rt, { start = start, ['end'] = start })
       end
-      insert_tab(rt, { start = start, ['end'] = stop })
    until not lex:test ','
+   rt[idx+1].options = inline_option(lex)
    lex:line_end()
    return self
 end
 
-function msg_body:reserved(lex, info)
+function msgbody:reserved(lex, info)
    lex:whitespace()
    if not lex '^%d' then
       local rt = default(info, 'reserved_name')
@@ -595,7 +600,7 @@ function msg_body:reserved(lex, info)
    return self
 end
 
-function msg_body:oneof(lex, info)
+function msgbody:oneof(lex, info)
    local fs = default(info, "field")
    local ts = default(info, "nested_type")
    local ot = default(info, "oneof_decl")
@@ -618,8 +623,8 @@ function msg_body:oneof(lex, info)
    ot[index] = oneof
 end
 
-function msg_body:option(lex, info)
-   toplevel.option(self, lex, default(info, 'options'))
+function msgbody:option(lex, info)
+   toplevel.option(self, lex, info)
 end
 
 end
@@ -633,7 +638,7 @@ function toplevel:message(lex, info)
    lex:expected "{"
    while not lex:test "}" do
       local ident, pos = lex:type_name()
-      local body_parser = msg_body[ident]
+      local body_parser = msgbody[ident]
       if body_parser then
          body_parser(self, lex, typ)
       else
@@ -665,13 +670,12 @@ function toplevel:enum(lex, info)
    while not lex:test "}" do
       local ident = lex:ident 'enum constant name'
       if ident == 'option' then
-         toplevel.option(self, lex, default(enum, 'options'))
+         toplevel.option(self, lex, enum)
       elseif ident == 'reserved' then
-         msg_body.reserved(self, lex, enum)
+         msgbody.reserved(self, lex, enum)
       else
          local values  = default(enum, 'value')
          local number  = lex:expected '=' :integer()
-         lex:line_end()
          insert_tab(values, {
             name    = ident,
             number  = number,
@@ -737,7 +741,7 @@ function svr_body:rpc(lex, info)
       while not lex:test "}" do
          lex:line_end "opt"
          lex:keyword "option"
-         toplevel.option(self, lex, default(rpc, 'options'))
+         toplevel.option(self, lex, rpc)
       end
    end
    lex:line_end "opt"
@@ -746,7 +750,7 @@ function svr_body:rpc(lex, info)
 end
 
 function svr_body:option(lex, info)
-   toplevel.option(self, lex, default(info, 'options'))     -- TODO: should be deeper in the info?
+   return toplevel.option(self, lex, info)
 end
 
 function svr_body.stream(_, lex)
