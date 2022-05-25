@@ -139,6 +139,7 @@ typedef struct lpb_State {
     int defs_index;
     int enc_hooks_index;
     int dec_hooks_index;
+    int repeated_mt_index;
     unsigned use_hooks     : 1; /* lpb_Int64Mode */
     unsigned enum_as_value : 1;
     unsigned default_mode  : 2; /* lpb_DefMode */
@@ -168,6 +169,21 @@ static void lpb_pushenchooktable(lua_State *L, lpb_State *LS)
 
 static void lpb_pushdechooktable(lua_State *L, lpb_State *LS)
 { LS->dec_hooks_index = lpb_reftable(L, LS->dec_hooks_index); }
+
+static void lpb_setrepeatedmttable(lua_State *L, lpb_State *LS)
+{
+    lua_pushvalue(L, -1);
+    LS->repeated_mt_index = luaL_ref(L, LUA_REGISTRYINDEX);
+}
+
+static int lpb_pushrepeatedmttable(lua_State *L, lpb_State *LS)
+{
+    if (LS->repeated_mt_index != LUA_NOREF) {
+        lua_rawgeti(L, LUA_REGISTRYINDEX, LS->repeated_mt_index);
+        return 1;
+    }
+    return 0;
+}
 
 static int Lpb_delete(lua_State *L) {
     lpb_State *LS = (lpb_State*)luaL_testudata(L, 1, PB_STATE);
@@ -1346,7 +1362,16 @@ static int lpb_pushdeffield(lua_State *L, lpb_State *LS, const pb_Field *f, int 
     const pb_Type *type;
     char *end;
     if (f == NULL) return 0;
-    if (f->repeated) return is_proto3 ? (lua_newtable(L), 1) : 0;
+    if (f->repeated){
+        if (!is_proto3){
+            return 0;
+        }
+        lua_newtable(L);
+        if (lpb_pushrepeatedmttable(L, LS)){
+            lua_setmetatable(L, -2);
+        }
+        return 1;
+    }
     switch (f->type_id) {
     case PB_Tbytes: case PB_Tstring:
         if (f->default_value)
@@ -1467,6 +1492,20 @@ static int Lpb_encode_hook(lua_State *L) {
         lua_rawsetp(L, 3, t);
     }
     return 1;
+}
+
+static int Lpb_repeated_mt(lua_State *L) {
+    lpb_State *LS = default_lstate(L);
+    int type = lua_type(L, 1);
+    if (type != LUA_TNONE && type != LUA_TNIL && type != LUA_TTABLE)
+    {
+        return 0;
+    }
+    if (type == LUA_TTABLE) {
+        lua_settop(L, 1);
+        lpb_setrepeatedmttable(L, LS);
+    }
+    return 0;
 }
 
 static int Lpb_clear(lua_State *L) {
@@ -1953,6 +1992,7 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         ENTRY(defaults),
         ENTRY(hook),
         ENTRY(encode_hook),
+        ENTRY(repeated_mt),
         ENTRY(tohex),
         ENTRY(fromhex),
         ENTRY(result),
