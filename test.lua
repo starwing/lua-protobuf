@@ -113,7 +113,7 @@ function _G.test_io.test()
    fail("invalid bytes length: 0 (at offset 2)",
         function() pb.decode("Person", "\10\255") end)
 
-   fail("un-finished bytes (len 10 at offset 3)",
+   fail("unfinished bytes (len 10 at offset 3)",
         function() pb.decode("Person", "\10\10") end)
 
    local data = {
@@ -640,6 +640,9 @@ function _G.test_map()
    check_load [[
    syntax = "proto3";
    message TestEmpty {}
+   message TestNum {
+      int32 f = 1;
+   }
    message TestMap {
        map<string, int32> map = 1;
        map<string, int32> packed_map = 2 [packed=true];
@@ -665,6 +668,11 @@ function _G.test_map()
                packed_map = {},
                msg_map = {},
             })
+   end)
+   fail("type mismatch for repeated field 'map' at offset 2,"..
+        " bytes expected for type message, got varint", function()
+      local chunk = pb.encode("TestNum", {f = 123})
+      pb.decode("TestMap", chunk)
    end)
    --eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
    eq(pb.decode("TestMap", "\10\0"), {

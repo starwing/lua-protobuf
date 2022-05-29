@@ -287,7 +287,7 @@ static void lpb_readbytes(lua_State *L, pb_Slice *s, pb_Slice *pv) {
         luaL_error(L, "invalid bytes length: %d (at offset %d)",
                 (int)len, pb_pos(*s)+1);
     if (pb_readslice(s, (size_t)len, pv) == 0 && len != 0)
-        luaL_error(L, "un-finished bytes (len %d at offset %d)",
+        luaL_error(L, "unfinished bytes (len %d at offset %d)",
                 (int)len, pb_pos(*s)+1);
 }
 
@@ -1783,11 +1783,8 @@ static void lpbD_rawfield(lpb_Env *e, const pb_Field *f) {
     }
 }
 
-static void lpbD_field(lpb_Env *e, const pb_Field *f, uint32_t tag) {
-    if (pb_wtypebytype(f->type_id) == (int)pb_gettype(tag)) {
-        lpbD_rawfield(e, f);
-        return;
-    }
+static void lpbD_checktype(lpb_Env *e, const pb_Field *f, uint32_t tag) {
+    if (pb_wtypebytype(f->type_id) == (int)pb_gettype(tag)) return;
     luaL_error(e->L,
             "type mismatch for %s%sfield '%s' at offset %d, "
             "%s expected for type %s, got %s",
@@ -1797,6 +1794,11 @@ static void lpbD_field(lpb_Env *e, const pb_Field *f, uint32_t tag) {
             pb_wtypename(pb_wtypebytype(f->type_id), NULL),
             pb_typename(f->type_id, NULL),
             pb_wtypename(pb_gettype(tag), NULL));
+}
+
+static void lpbD_field(lpb_Env *e, const pb_Field *f, uint32_t tag) {
+    lpbD_checktype(e, f, tag);
+    lpbD_rawfield(e, f);
 }
 
 static void lpbD_map(lpb_Env *e, const pb_Field *f) {
@@ -1852,6 +1854,7 @@ static int lpbD_message(lpb_Env *e, const pb_Type *t) {
             pb_skipvalue(s, tag);
         else if (f->type && f->type->is_map) {
             lpb_fetchtable(e, f);
+            lpbD_checktype(e, f, tag);
             lpbD_map(e, f);
             lua_pop(L, 1);
         } else if (f->repeated) {
