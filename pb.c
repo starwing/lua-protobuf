@@ -1705,6 +1705,13 @@ static int Lpb_encode(lua_State *L) {
     return 1;
 }
 
+LUALIB_API void lpb_encode(lua_State *L, lpb_State *LS, const pb_Type *t, pb_Buffer *b) {
+    lpb_Env e;
+    e.L = L, e.LS = LS, e.b = b;
+    if (e.LS->use_enc_hooks) lpb_useenchooks(L, e.LS, t);
+    lpbE_encode(&e, t);
+}
+
 
 /* protobuf decode */
 
@@ -1894,6 +1901,12 @@ static int Lpb_decode(lua_State *L) {
     return lpbD_decode(L, lua_isnoneornil(L, 2) ?
             pb_lslice(NULL, 0) :
             lpb_checkslice(L, 2), 3);
+}
+
+LUALIB_API void lpb_decode(lua_State *L, lpb_State *LS, const pb_Type *t, pb_Slice *s) {
+    lpb_Env e;
+    e.L = L, e.LS = LS, e.s = s;
+    lpbD_message(&e, t);
 }
 
 
