@@ -1295,6 +1295,7 @@ function _G.test_encode_hook()
          repeated Phone  contacts = 4;
       } ]]
    pb.option "enable_hooks"
+   pb.option "enable_enchooks"
    assert(pb.encode_hook "Phone" == nil)
    fail("function expected, got boolean",
         function() pb.encode_hook("Phone", true) end)
