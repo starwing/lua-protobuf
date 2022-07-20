@@ -308,7 +308,7 @@ static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
     int neg = 0;
     const char *s, *os;
 #if LUA_VERSION_NUM >= 503
-    uint64_t v = (uint64_t)lua_tointegerx(L, idx, isint);
+    uint64_t v = (uint64_t)lua_tonumberx(L, idx, isint);
     if (*isint) return v;
 #else
     uint64_t v = 0;
