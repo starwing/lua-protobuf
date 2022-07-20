@@ -1890,6 +1890,34 @@ static int lpbD_decode(lua_State *L, pb_Slice s, int start) {
     return lpbD_message(&e, t);
 }
 
+/*
+ * Brief  : lpbD_decode for C
+ * Param  : L       lua_State
+ *          type    message typename
+ *          data    data buffer
+ *          size    length of data buffer
+ *          errmsg  error message buffer
+ *          errlen  length of error message buffer
+ * Return : 0       failed
+ *          1       succeeded
+ */
+int lpbD_decode_c(lua_State *L, const char *type, const char *data, size_t size, char *errmsg, size_t errlen)
+{
+    lpb_State *LS = lpb_lstate(L);
+    const pb_Type *t = lpb_type(LS, pb_slice(type));
+    if (t == NULL) {
+        if (errmsg != NULL && errlen > 0) {
+            snprintf(errmsg, errlen, "type '%s' does not exists", type);
+        }
+        return 0;
+    }
+
+    lpb_pushtypetable(L, LS, t);
+    pb_Slice s = pb_lslice(data, size);
+    lpb_Env e = {.L = L, .LS = LS, .s = &s};
+    return lpbD_message(&e, t);
+}
+
 static int Lpb_decode(lua_State *L) {
     return lpbD_decode(L, lua_isnoneornil(L, 2) ?
             pb_lslice(NULL, 0) :
