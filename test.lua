@@ -1409,6 +1409,139 @@ function _G.test_order()
    end)
 end
 
+function _G.test_pack_unpack_msg()
+   withstate(function()
+   protoc.reload()
+   check_load [[
+      syntax = "proto3";
+      enum Type {
+         HOME = 1;
+         WORK = 2;
+      }
+      message Phone {
+         string name        = 1;
+         int64  phonenumber = 2;
+         Type   type        = 3;
+      }
+      message Friend {
+         string name = 1;
+         repeated Friend friends = 2;
+      }
+      message Person {
+         // will be sorted by field number
+
+         repeated Friend friends = 200;
+         map<string, Phone> map = 100;
+
+         string name     = 1;
+         int32  age      = 2;
+         string address  = 3;
+         repeated Phone  contacts = 4;
+      } ]]
+
+   local function __copy(src)
+      if "table" ~= type(src) then return src end
+
+      local dst = {}
+      for k, v in pairs(src) do
+         dst[k] = __copy(v)
+      end
+
+      return dst
+   end
+
+   local name = "ilse"
+   local age  = 18
+   local address = "earth"
+   local contacts = {
+      { name = "alice", phonenumber = 12312341234 },
+      { name = "bob",   phonenumber = 45645674567 }
+   }
+   local map = {
+      ["m111111111"] = contacts[1],
+      ["m222222222"] = contacts[2]
+   }
+   local friends = {
+      { name = "f10", friends = {
+         { name = "f11"}, { name = "f12" }
+      }},
+      { name = "f20", friends = {
+         { name = "f21"}, { name = "f22" }
+      }}
+   }
+
+   local person = {
+      name = name,
+      age = age,
+      address = address,
+      contacts = __copy(contacts),
+      map = __copy(map),
+      friends = __copy(friends)
+   }
+   -- fill default value for eq
+   for _, m in pairs(person.map) do
+      m.type = 0
+   end
+   for _, m in pairs(person.contacts) do
+      m.type = 0
+   end
+   for _, f in pairs(person.friends) do
+      for _, f2 in pairs(f.friends) do
+         f2.friends = {}
+      end
+   end
+
+   local b1 = pb.pack_msg("Person", name, age, address, contacts, map, friends)
+
+   local p = pb.decode("Person", b1)
+   eq(person, p)
+
+   local n1, a1, e1, c1, m1, f1 = pb.unpack_msg("Person", b1)
+   eq(n1, person.name)
+   eq(a1, person.age)
+   eq(e1, person.address)
+   eq(c1, person.contacts)
+   eq(m1, person.map)
+   eq(f1, person.friends)
+
+   local b2 = pb.pack_msg("Person")
+   local n2, a2, e2, c2, m2, f2 = pb.unpack_msg("Person", b2)
+   eq(n2, "")
+   eq(a2, 0)
+   eq(e2, "")
+   eq(c2, {})
+   eq(m2, {})
+   eq(f2, {})
+
+   local b3 = pb.pack_msg("Person", nil, age, nil, contacts, nil)
+   local n3, a3, e3, c3, m3, f3 = pb.unpack_msg("Person", b3)
+   eq(n3, "")
+   eq(a3, person.age)
+   eq(e3, "")
+   eq(c3, person.contacts)
+   eq(m3, {})
+   eq(f3, {})
+
+   fail("integer format error: 'abc'",
+            function() pb.pack_msg("Person", nil, "abc") end)
+   fail("bad argument #2 to 'pack_msg' (string expected for field 'name', got number)",
+            function() pb.pack_msg("Person", 100, "abc") end)
+   fail("type mismatch for field 'name' at offset 2, bytes expected for type string, got 32bit",
+            function() pb.unpack_msg("Person", "\13\1") end)
+
+   pb.option "no_default_values"
+   local n4, a4, e4, c4, m4, f4 = pb.unpack_msg("Person", b2)
+   eq(n4, nil)
+   eq(a4, nil)
+   eq(e4, nil)
+   eq(c4, nil)
+   eq(m4, nil)
+   eq(f4, nil)
+
+   end)
+end
+
+
 if _VERSION == "Lua 5.1" and not _G.jit then
    lu.LuaUnit.run()
 else

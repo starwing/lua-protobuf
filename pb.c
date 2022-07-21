@@ -1609,17 +1609,18 @@ static void lpbE_tagfield(lpb_Env *e, const pb_Field *f, int ignorezero, int idx
 
 static void lpbE_map(lpb_Env *e, const pb_Field *f, int idx) {
     lua_State *L = e->L;
+    int top = lua_gettop(L);
     const pb_Field *kf = pb_field(f->type, 1);
     const pb_Field *vf = pb_field(f->type, 2);
     if (kf == NULL || vf == NULL) return;
     lpb_checktable(L, f, idx);
     lua_pushnil(L);
-    while (lua_next(L, -2)) {
+    while (lua_next(L, idx)) {
         size_t len;
         pb_addvarint32(e->b, pb_pair(f->number, PB_TBYTES));
         len = pb_bufflen(e->b);
-        lpbE_tagfield(e, kf, 1, -2);
-        lpbE_tagfield(e, vf, 1, -1);
+        lpbE_tagfield(e, kf, 1, top + 1);
+        lpbE_tagfield(e, vf, 1, top + 2);
         lpb_addlength(L, e->b, len);
 
         lua_pop(L, 1);
@@ -1945,8 +1946,9 @@ void lpb_pushunpackdef(lua_State* L, lpb_State* LS, const pb_Type* t, pb_Field**
     if (mode != LPB_COPYDEF && mode != LPB_METADEF) return;
 
     for (i = 0; i < t->field_count; i++) {
-        if (lua_isnoneornil(L, top + i) && lpb_pushdeffield(L, LS, l[i], t->is_proto3)) {
-            lua_replace(L, top + i);
+        int idx = top + i + 1;
+        if (lua_isnoneornil(L, idx) && lpb_pushdeffield(L, LS, l[i], t->is_proto3)) {
+            lua_replace(L, idx);
         }
     }
 }
@@ -1981,7 +1983,8 @@ static int lpb_unpack_msg(lpb_Env* e, const pb_Type* t) {
 
         if (f->type && f->type->is_map) {
             lpbD_checktype(e, f, tag);
-            lua_newtable(L);
+            if (!last_index)
+                lua_newtable(L);
             lpbD_map(e, f);
         }
         else if (f->repeated) {
