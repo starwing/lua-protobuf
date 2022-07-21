@@ -2008,7 +2008,6 @@ static int lpb_unpack_msg(lpb_Env* e, const pb_Type* t) {
         lpb_pushunpackdef(L, e->LS, t, list, top);
     }
 
-    if (e->LS->use_dec_hooks) lpb_usedechooks(L, e->LS, t);
     return field_count;
 }
 

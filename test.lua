@@ -1538,6 +1538,34 @@ function _G.test_pack_unpack_msg()
    eq(m4, nil)
    eq(f4, nil)
 
+   pb.option "enable_hooks"
+   pb.option "enable_enchooks"
+
+   local hook_contacts = {
+      { name = "alice", phonenumber = 123456789 },
+   }
+   local hook_count = 0
+   pb.encode_hook("Person", function(v)
+      hook_count = hook_count + 1
+      eq(true, false) -- won't be called
+   end)
+   pb.encode_hook("Phone", function(v)
+      hook_count = hook_count + 1
+      eq(v, hook_contacts[1])
+   end)
+   pb.hook("Person", function(v)
+      hook_count = hook_count + 1
+      eq(true, false) -- won't be called
+   end)
+   pb.hook("Phone", function(v)
+      hook_count = hook_count + 1
+      eq(v, hook_contacts[1])
+   end)
+   local b5 = pb.pack_msg("Person", nil, age, nil, hook_contacts)
+   local n5, a5 = pb.unpack_msg("Person", b5)
+
+   eq(hook_count, 2)
+
    end)
 end
 
