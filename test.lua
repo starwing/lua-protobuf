@@ -464,9 +464,7 @@ function _G.test_default()
    pb.option "decode_default_array"
    local dt = pb.decode("TestDefault", "")
    eq(getmetatable(dt), nil)
-   table_eq(dt,{
-      array = {},
-   })
+   table_eq(dt,{ array = {} })
    local chunk2, _ = pb.encode("TestDefault", {defaulted_int = 0,defaulted_bool = true})
    local dt = pb.decode("TestDefault", chunk2)
    eq(dt.defaulted_int, 0)
@@ -674,7 +672,11 @@ function _G.test_map()
       local chunk = pb.encode("TestNum", {f = 123})
       pb.decode("TestMap", chunk)
    end)
-   --eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
+   eq(pb.decode("TestMap", "\10\4\3\10\1\1"), {
+      map = {["\1"] = 0},
+      packed_map = {},
+      msg_map = {},
+   })
    eq(pb.decode("TestMap", "\10\0"), {
       map = { [""] = 0 },
       packed_map = {},
@@ -683,7 +685,7 @@ function _G.test_map()
    eq(pb.decode("TestMap", "\26\0"), {
       map = {},
       packed_map = {},
-      msg_map = {}
+      msg_map = {[""] = {}}
    })
 
    check_load [[
