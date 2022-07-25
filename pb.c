@@ -1329,51 +1329,47 @@ static int lpb_pushdeffield(lua_State *L, lpb_State *LS, const pb_Field *f, int 
     char *end;
     if (f == NULL) return 0;
     switch (f->type_id) {
-    case PB_Tbytes: case PB_Tstring:
-        if (f->default_value)
-            ret = 1, lua_pushstring(L, (const char*)f->default_value);
-        else if (is_proto3)
-            ret = 1, lua_pushliteral(L, "");
-        break;
     case PB_Tenum:
         if ((type = f ? f->type : NULL) == NULL) return 0;
-        if ((f = pb_fname(type, f->default_value)) != NULL) {
-            if (LS->enum_as_value)
-                ret = 1, lpb_pushinteger(L, f->number, LS->int64_mode);
-            else
-                ret = 1, lua_pushstring(L, (const char*)f->name);
-        } else if (is_proto3) {
-            if ((f = pb_field(type, 0)) == NULL || LS->enum_as_value)
-                ret = 1, lua_pushinteger(L, 0);
-            else
-                ret = 1, lua_pushstring(L, (const char*)f->name);
-        }
+        if ((f = pb_fname(type, f->default_value)) != NULL)
+            ret = LS->enum_as_value ?
+                (lpb_pushinteger(L, f->number, LS->int64_mode), 1) :
+                (lua_pushstring(L, (const char*)f->name), 1);
+        else if (is_proto3)
+            ret = (f = pb_field(type, 0)) == NULL || LS->enum_as_value ?
+                (lua_pushinteger(L, 0), 1) :
+                (lua_pushstring(L, (const char*)f->name), 1);
         break;
     case PB_Tmessage:
         ret = (lpb_pushtypetable(L, LS, f->type), 1);
         break;
+    case PB_Tbytes: case PB_Tstring:
+        if (f->default_value)
+            ret = (lua_pushstring(L, (const char*)f->default_value), 1);
+        else if (is_proto3) ret = (lua_pushliteral(L, ""), 1);
+        break;
     case PB_Tbool:
         if (f->default_value) {
             if (f->default_value == lpb_name(LS, pb_slice("true")))
-                ret = 1, lua_pushboolean(L, 1);
+                ret = (lua_pushboolean(L, 1), 1);
             else if (f->default_value == lpb_name(LS, pb_slice("false")))
-                ret = 1, lua_pushboolean(L, 0);
-        } else if (is_proto3) ret = 1, lua_pushboolean(L, 0);
+                ret = (lua_pushboolean(L, 0), 1);
+        } else if (is_proto3) ret = (lua_pushboolean(L, 0), 1);
         break;
     case PB_Tdouble: case PB_Tfloat:
         if (f->default_value) {
             lua_Number ln = (lua_Number)strtod((const char*)f->default_value, &end);
             if ((const char*)f->default_value == end) return 0;
-            ret = 1, lua_pushnumber(L, ln);
-        } else if (is_proto3) ret = 1, lua_pushnumber(L, 0.0);
+            ret = (lua_pushnumber(L, ln), 1);
+        } else if (is_proto3) ret = (lua_pushnumber(L, 0.0), 1);
         break;
 
     default:
         if (f->default_value) {
             lua_Integer li = (lua_Integer)strtol((const char*)f->default_value, &end, 10);
             if ((const char*)f->default_value == end) return 0;
-            ret = 1, lpb_pushinteger(L, li, LS->int64_mode);
-        } else if (is_proto3) ret = 1, lua_pushinteger(L, 0);
+            ret = (lpb_pushinteger(L, li, LS->int64_mode), 1);
+        } else if (is_proto3) ret = (lua_pushinteger(L, 0), 1);
     }
     return ret;
 }
