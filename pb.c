@@ -1891,27 +1891,27 @@ static int Lpb_decode(lua_State *L) {
 
 static int Lpb_option(lua_State *L) {
 #define OPTS(X) \
-    X(0, enum_as_name,          LS->enum_as_value = 0)             \
-    X(1, enum_as_value,         LS->enum_as_value = 1)             \
-    X(2, int64_as_number,       LS->int64_mode = LPB_NUMBER)       \
-    X(3, int64_as_string,       LS->int64_mode = LPB_STRING)       \
-    X(4, int64_as_hexstring,    LS->int64_mode = LPB_HEXSTRING)    \
-    X(5, auto_default_values,   LS->default_mode = LPB_DEFDEF)     \
-    X(6, no_default_values,     LS->default_mode = LPB_NODEF)      \
-    X(7, use_default_values,    LS->default_mode = LPB_COPYDEF)    \
-    X(8, use_default_metatable, LS->default_mode = LPB_METADEF)    \
-    X(9, enable_hooks,          LS->use_dec_hooks = 1)                 \
-    X(10, disable_hooks,        LS->use_dec_hooks = 0)                 \
-    X(11, enable_enchooks,      LS->use_enc_hooks = 1)                 \
-    X(12, disable_enchooks,     LS->use_enc_hooks = 0)                 \
-    X(13, encode_default_values,LS->encode_default_values = 1)     \
-    X(14, no_encode_default_values,LS->encode_default_values = 0)  \
-    X(15, decode_default_array, LS->decode_default_array = 1)      \
-    X(16, no_decode_default_array, LS->decode_default_array = 0)   \
-    X(17, encode_order,         LS->encode_order = 1)             \
-    X(18, no_encode_order,      LS->encode_order = 0)             \
-    X(19, decode_default_message, LS->decode_default_message = 1)      \
-    X(20, no_decode_default_message, LS->decode_default_message = 0)   \
+    X(0,  enum_as_name,         LS->enum_as_value = 0)               \
+    X(1,  enum_as_value,        LS->enum_as_value = 1)               \
+    X(2,  int64_as_number,      LS->int64_mode = LPB_NUMBER)         \
+    X(3,  int64_as_string,      LS->int64_mode = LPB_STRING)         \
+    X(4,  int64_as_hexstring,   LS->int64_mode = LPB_HEXSTRING)      \
+    X(5,  encode_order,         LS->encode_order = 1)                \
+    X(6,  no_encode_order,      LS->encode_order = 0)                \
+    X(7,  encode_default_values, LS->encode_default_values = 1)      \
+    X(8,  no_encode_default_values, LS->encode_default_values = 0)   \
+    X(9,  auto_default_values,  LS->default_mode = LPB_DEFDEF)       \
+    X(10, no_default_values,    LS->default_mode = LPB_NODEF)        \
+    X(11, use_default_values,   LS->default_mode = LPB_COPYDEF)      \
+    X(12, use_default_metatable, LS->default_mode = LPB_METADEF)     \
+    X(13, decode_default_array, LS->decode_default_array = 1)        \
+    X(14, no_decode_default_array, LS->decode_default_array = 0)     \
+    X(15, decode_default_message, LS->decode_default_message = 1)    \
+    X(16, no_decode_default_message, LS->decode_default_message = 0) \
+    X(17, enable_hooks,         LS->use_dec_hooks = 1)               \
+    X(18, disable_hooks,        LS->use_dec_hooks = 0)               \
+    X(19, enable_enchooks,      LS->use_enc_hooks = 1)               \
+    X(20, disable_enchooks,     LS->use_enc_hooks = 0)               \
 
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,
