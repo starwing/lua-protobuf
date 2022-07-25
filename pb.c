@@ -1715,6 +1715,7 @@ static void lpb_usedechooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
     int mode = LS->default_mode;
+    luaL_checkstack(L, 2, "too many levels");
     lpb_newmsgtable(L, t);
     switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
