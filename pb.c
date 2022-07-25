@@ -128,7 +128,7 @@ static const pb_State *global_state = NULL;
 static const char state_name[] = PB_STATE;
 
 enum lpb_Int64Mode { LPB_NUMBER, LPB_STRING, LPB_HEXSTRING };
-enum lpb_DefMode   { LPB_DEFDEF, LPB_COPYDEF, LPB_METADEF, LPB_NODEF };
+enum lpb_EncodeMode   { LPB_DEFDEF, LPB_COPYDEF, LPB_METADEF, LPB_NODEF };
 
 typedef struct lpb_State {
     const pb_State *state;
@@ -141,7 +141,7 @@ typedef struct lpb_State {
     unsigned use_dec_hooks : 1;
     unsigned use_enc_hooks : 1;
     unsigned enum_as_value : 1;
-    unsigned default_mode  : 2; /* lpb_DefMode */
+    unsigned encode_mode   : 2; /* lpb_EncodeMode */
     unsigned int64_mode    : 2; /* lpb_Int64Mode */
     unsigned encode_default_values  : 1;
     unsigned decode_default_array   : 1;
@@ -1710,7 +1710,7 @@ static void lpb_usedechooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
 }
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
-    int mode = LS->default_mode;
+    int mode = LS->encode_mode;
     luaL_checkstack(L, 2, "too many levels");
     lpb_newmsgtable(L, t);
     switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
@@ -1897,10 +1897,10 @@ static int Lpb_option(lua_State *L) {
     X(6,  no_encode_order,      LS->encode_order = 0)                \
     X(7,  encode_default_values, LS->encode_default_values = 1)      \
     X(8,  no_encode_default_values, LS->encode_default_values = 0)   \
-    X(9,  auto_default_values,  LS->default_mode = LPB_DEFDEF)       \
-    X(10, no_default_values,    LS->default_mode = LPB_NODEF)        \
-    X(11, use_default_values,   LS->default_mode = LPB_COPYDEF)      \
-    X(12, use_default_metatable, LS->default_mode = LPB_METADEF)     \
+    X(9,  auto_default_values,  LS->encode_mode = LPB_DEFDEF)        \
+    X(10, no_default_values,    LS->encode_mode = LPB_NODEF)         \
+    X(11, use_default_values,   LS->encode_mode = LPB_COPYDEF)       \
+    X(12, use_default_metatable, LS->encode_mode = LPB_METADEF)      \
     X(13, decode_default_array, LS->decode_default_array = 1)        \
     X(14, no_decode_default_array, LS->decode_default_array = 0)     \
     X(15, decode_default_message, LS->decode_default_message = 1)    \
