@@ -1492,6 +1492,9 @@ function _G.test_pack_unpack_msg()
          f2.friends = {}
       end
    end
+   local default_contacts = {name = "", phonenumber=0, type=0}
+   local default_map = {key = ""}
+   local default_friend = {friends = {}, name = ""}
 
    local b1 = pb.pack_msg("Person", name, age, address, contacts, map, friends)
 
@@ -1511,9 +1514,9 @@ function _G.test_pack_unpack_msg()
    eq(n2, "")
    eq(a2, 0)
    eq(e2, "")
-   eq(c2, {})
-   eq(m2, {})
-   eq(f2, {})
+   eq(c2, default_contacts)
+   eq(m2, default_map)
+   eq(f2, default_friend)
 
    local b3 = pb.pack_msg("Person", nil, age, nil, contacts, nil)
    local n3, a3, e3, c3, m3, f3 = pb.unpack_msg("Person", b3)
@@ -1521,8 +1524,8 @@ function _G.test_pack_unpack_msg()
    eq(a3, person.age)
    eq(e3, "")
    eq(c3, person.contacts)
-   eq(m3, {})
-   eq(f3, {})
+   eq(m3, default_map)
+   eq(f3, default_friend)
 
    fail("integer format error: 'abc'",
             function() pb.pack_msg("Person", nil, "abc") end)
@@ -1530,6 +1533,18 @@ function _G.test_pack_unpack_msg()
             function() pb.pack_msg("Person", 100, "abc") end)
    fail("type mismatch for field 'name' at offset 2, bytes expected for type string, got 32bit",
             function() pb.unpack_msg("Person", "\13\1") end)
+
+   local ub = buffer.new()
+   local b3 = pb.pack_msg("Person", ub, nil, age, nil, contacts, nil)
+
+   local us = slice.new(ub:result())
+   local n5, a5, e5, c5, m5, f5 = pb.unpack_msg("Person", us)
+   eq(n5, "")
+   eq(a5, person.age)
+   eq(e5, "")
+   eq(c5, person.contacts)
+   eq(m5, default_map)
+   eq(f5, default_friend)
 
    pb.option "no_default_values"
    local n4, a4, e4, c4, m4, f4 = pb.unpack_msg("Person", b2)
@@ -1567,6 +1582,44 @@ function _G.test_pack_unpack_msg()
    local n5, a5 = pb.unpack_msg("Person", b5)
 
    eq(hook_count, 2)
+   pb.option "disable_hooks"
+   pb.option "disable_enchooks"
+
+   pb.option "auto_default_values"
+   pb.clear()
+   protoc.reload()
+   check_load [[
+      syntax = "proto3";
+      enum Type {
+         HOME = 1;
+         WORK = 2;
+      }
+      message Phone {
+         string name        = 1;
+         int64  phonenumber = 2;
+         Type   type        = 3;
+      }
+      message Friend {
+         string name = 1;
+         repeated Friend friends = 2;
+      }
+      message Person {
+         // will be sorted by field number
+
+         map<string, Phone> map = 100;
+
+         string name     = 1;
+         int32  age      = 2;
+         repeated Phone  contacts = 4;
+      } ]]
+
+      local n1, a1, c1, m1, f1 = pb.unpack_msg("Person", b1)
+      eq(n1, person.name)
+      eq(a1, person.age)
+      -- eq(e1, person.address) -- no address field anymore
+      eq(c1, person.contacts)
+      eq(m1, person.map)
+      -- eq(f1, person.friends) -- no friend field anymore
 
    end)
 end

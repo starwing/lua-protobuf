@@ -1928,7 +1928,7 @@ static int Lpb_decode(lua_State *L) {
 
 void lpb_pushunpackdef(lua_State* L, lpb_State* LS, const pb_Type* t, pb_Field** l, int top) {
     unsigned int i;
-    int mode = LS->default_mode;
+    int mode = LS->encode_mode;
     mode = t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode;
     if (mode != LPB_COPYDEF && mode != LPB_METADEF) return;
 
