@@ -128,7 +128,7 @@ static const pb_State *global_state = NULL;
 static const char state_name[] = PB_STATE;
 
 enum lpb_Int64Mode { LPB_NUMBER, LPB_STRING, LPB_HEXSTRING };
-enum lpb_DefMode   { LPB_DEFDEF, LPB_COPYDEF, LPB_METADEF, LPB_NODEF };
+enum lpb_EncodeMode   { LPB_DEFDEF, LPB_COPYDEF, LPB_METADEF, LPB_NODEF };
 
 typedef struct lpb_State {
     const pb_State *state;
@@ -141,7 +141,7 @@ typedef struct lpb_State {
     unsigned use_dec_hooks : 1;
     unsigned use_enc_hooks : 1;
     unsigned enum_as_value : 1;
-    unsigned default_mode  : 2; /* lpb_DefMode */
+    unsigned encode_mode   : 2; /* lpb_EncodeMode */
     unsigned int64_mode    : 2; /* lpb_Int64Mode */
     unsigned encode_default_values  : 1;
     unsigned decode_default_array   : 1;
@@ -1171,7 +1171,12 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
 
 /* high level typeinfo/encode/decode routines */
 
-static int lpb_pushdeffield(lua_State *L, lpb_State *LS, const pb_Field *f, int is_proto3);
+typedef enum {USE_FIELD = 1, USE_REPEAT = 2, USE_MESSAGE = 4} lpb_DefFlags;
+
+static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t);
+
+static void lpb_newmsgtable(lua_State *L, const pb_Type *t)
+{ lua_createtable(L, 0, t->field_count - t->oneof_field + t->oneof_count*2); }
 
 LUALIB_API const pb_Type *lpb_type(lpb_State *LS, pb_Slice s) {
     const pb_Type *t;
@@ -1318,98 +1323,77 @@ static int Lpb_enum(lua_State *L) {
     return 1;
 }
 
-static void lpb_newtypetable(lua_State *L, const pb_Type *t, int with_repeat) {
-    const pb_Field *f = NULL;
-    if (t == NULL) { lua_newtable(L); return; }
-    lua_createtable(L, 0, t->field_count - t->oneof_field + t->oneof_count*2);
-    if (!with_repeat) return;
-    while (pb_nextfield(t, &f)) {
-        if (f->repeated) {
-            lua_newtable(L);
-            lua_setfield(L, -2, (const char*)f->name);
-        }
-    }
-}
-
-static int lpb_pushdefmsg(lua_State *L, lpb_State *LS, const pb_Type *t) {
-    const pb_Field *f = NULL;
-    if (t == NULL) return 0;
-    lpb_newtypetable(L, t, 0);
-    while (pb_nextfield(t, &f))
-        if (!f->oneof_idx && lpb_pushdeffield(L, LS, f, t->is_proto3))
-            lua_setfield(L, -2, (const char*)f->name);
-    return 1;
-}
-
 static int lpb_pushdeffield(lua_State *L, lpb_State *LS, const pb_Field *f, int is_proto3) {
     int ret = 0;
     const pb_Type *type;
     char *end;
     if (f == NULL) return 0;
-    if (f->repeated) return is_proto3 ? (lua_newtable(L), 1) : 0;
     switch (f->type_id) {
-    case PB_Tbytes: case PB_Tstring:
-        if (f->default_value)
-            ret = 1, lua_pushstring(L, (const char*)f->default_value);
-        else if (is_proto3)
-            ret = 1, lua_pushliteral(L, "");
-        break;
     case PB_Tenum:
         if ((type = f ? f->type : NULL) == NULL) return 0;
-        if ((f = pb_fname(type, f->default_value)) != NULL) {
-            if (LS->enum_as_value)
-                ret = 1, lpb_pushinteger(L, f->number, LS->int64_mode);
-            else
-                ret = 1, lua_pushstring(L, (const char*)f->name);
-        } else if (is_proto3) {
-            if ((f = pb_field(type, 0)) == NULL || LS->enum_as_value)
-                ret = 1, lua_pushinteger(L, 0);
-            else
-                ret = 1, lua_pushstring(L, (const char*)f->name);
-        }
+        if ((f = pb_fname(type, f->default_value)) != NULL)
+            ret = LS->enum_as_value ?
+                (lpb_pushinteger(L, f->number, LS->int64_mode), 1) :
+                (lua_pushstring(L, (const char*)f->name), 1);
+        else if (is_proto3)
+            ret = (f = pb_field(type, 0)) == NULL || LS->enum_as_value ?
+                (lua_pushinteger(L, 0), 1) :
+                (lua_pushstring(L, (const char*)f->name), 1);
         break;
     case PB_Tmessage:
-        if (LS->decode_default_message)
-            return lpb_pushdefmsg(L, LS, f->type);
-        return 0;
+        ret = (lpb_pushtypetable(L, LS, f->type), 1);
+        break;
+    case PB_Tbytes: case PB_Tstring:
+        if (f->default_value)
+            ret = (lua_pushstring(L, (const char*)f->default_value), 1);
+        else if (is_proto3) ret = (lua_pushliteral(L, ""), 1);
+        break;
     case PB_Tbool:
         if (f->default_value) {
             if (f->default_value == lpb_name(LS, pb_slice("true")))
-                ret = 1, lua_pushboolean(L, 1);
+                ret = (lua_pushboolean(L, 1), 1);
             else if (f->default_value == lpb_name(LS, pb_slice("false")))
-                ret = 1, lua_pushboolean(L, 0);
-        } else if (is_proto3) ret = 1, lua_pushboolean(L, 0);
+                ret = (lua_pushboolean(L, 0), 1);
+        } else if (is_proto3) ret = (lua_pushboolean(L, 0), 1);
         break;
     case PB_Tdouble: case PB_Tfloat:
         if (f->default_value) {
             lua_Number ln = (lua_Number)strtod((const char*)f->default_value, &end);
             if ((const char*)f->default_value == end) return 0;
-            ret = 1, lua_pushnumber(L, ln);
-        } else if (is_proto3) ret = 1, lua_pushnumber(L, 0.0);
+            ret = (lua_pushnumber(L, ln), 1);
+        } else if (is_proto3) ret = (lua_pushnumber(L, 0.0), 1);
         break;
 
     default:
         if (f->default_value) {
             lua_Integer li = (lua_Integer)strtol((const char*)f->default_value, &end, 10);
             if ((const char*)f->default_value == end) return 0;
-            ret = 1, lpb_pushinteger(L, li, LS->int64_mode);
-        } else if (is_proto3) ret = 1, lua_pushinteger(L, 0);
+            ret = (lpb_pushinteger(L, li, LS->int64_mode), 1);
+        } else if (is_proto3) ret = (lua_pushinteger(L, 0), 1);
     }
     return ret;
+}
+
+static void lpb_setdeffields(lua_State *L, lpb_State *LS, const pb_Type *t, lpb_DefFlags flags) {
+    const pb_Field *f = NULL;
+    while (pb_nextfield(t, &f)) {
+        int has_field = f->repeated ?
+            (flags & USE_REPEAT) && (t->is_proto3 || LS->decode_default_array)
+            && (lua_newtable(L), 1) :
+            !f->oneof_idx && (f->type_id != PB_Tmessage ?
+                    (flags & USE_FIELD) :
+                    (flags & USE_MESSAGE) && LS->decode_default_message)
+            && lpb_pushdeffield(L, LS, f, t->is_proto3);
+        if (has_field) lua_setfield(L, -2, (const char*)f->name);
+    }
 }
 
 static void lpb_pushdefmeta(lua_State *L, lpb_State *LS, const pb_Type *t) {
     lpb_pushdeftable(L, LS);
     if (lua53_rawgetp(L, -1, t) != LUA_TTABLE) {
-        const pb_Field *f = NULL;
         lua_pop(L, 1);
-        lpb_newtypetable(L, t, 0);
-        while (pb_nextfield(t, &f))
-            if (!f->oneof_idx                    /* not oneof */
-                    && f->type_id != PB_Tmessage /* not message */
-                    && !f->repeated              /* not repeated */
-                    && lpb_pushdeffield(L, LS, f, t->is_proto3))
-                lua_setfield(L, -2, (const char*)f->name);
+        lpb_newmsgtable(L, t);
+        lpb_setdeffields(L, LS, t, USE_FIELD);
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
         lua_pushvalue(L, -1);
@@ -1642,7 +1626,7 @@ static void lpbE_repeated(lpb_Env *e, const pb_Field *f, int idx) {
             lpbE_field(e, f, NULL, top + 1);
             lua_pop(L, 1);
         }
-        if (i == 1)
+        if (i == 1 && !e->LS->encode_default_values)
             pb_bufflen(b) = bufflen;
         else
             lpb_addlength(L, b, len);
@@ -1768,18 +1752,21 @@ static void lpb_usedechooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
 }
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
-    int mode = LS->default_mode;
+    int mode = LS->encode_mode;
+    luaL_checkstack(L, 2, "too many levels");
+    lpb_newmsgtable(L, t);
     switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
-        lpb_pushdefmsg(L, LS, t);
+        lpb_setdeffields(L, LS, t, USE_FIELD|USE_REPEAT|USE_MESSAGE);
         break;
     case LPB_METADEF:
-        lpb_newtypetable(L, t, t->is_proto3);
+        lpb_setdeffields(L, LS, t, USE_REPEAT|USE_MESSAGE);
         lpb_pushdefmeta(L, LS, t);
         lua_setmetatable(L, -2);
         break;
-    default: /* no default value */
-        lpb_newtypetable(L, t, LS->decode_default_array);
+    default:
+        if (LS->decode_default_array || LS->decode_default_message)
+            lpb_setdeffields(L, LS, t, USE_REPEAT|USE_MESSAGE);
         break;
     }
 }
@@ -2027,27 +2014,27 @@ static int Lpb_unpack_msg(lua_State* L) {
 
 static int Lpb_option(lua_State *L) {
 #define OPTS(X) \
-    X(0, enum_as_name,          LS->enum_as_value = 0)             \
-    X(1, enum_as_value,         LS->enum_as_value = 1)             \
-    X(2, int64_as_number,       LS->int64_mode = LPB_NUMBER)       \
-    X(3, int64_as_string,       LS->int64_mode = LPB_STRING)       \
-    X(4, int64_as_hexstring,    LS->int64_mode = LPB_HEXSTRING)    \
-    X(5, auto_default_values,   LS->default_mode = LPB_DEFDEF)     \
-    X(6, no_default_values,     LS->default_mode = LPB_NODEF)      \
-    X(7, use_default_values,    LS->default_mode = LPB_COPYDEF)    \
-    X(8, use_default_metatable, LS->default_mode = LPB_METADEF)    \
-    X(9, enable_hooks,          LS->use_dec_hooks = 1)                 \
-    X(10, disable_hooks,        LS->use_dec_hooks = 0)                 \
-    X(11, enable_enchooks,      LS->use_enc_hooks = 1)                 \
-    X(12, disable_enchooks,     LS->use_enc_hooks = 0)                 \
-    X(13, encode_default_values,LS->encode_default_values = 1)     \
-    X(14, no_encode_default_values,LS->encode_default_values = 0)  \
-    X(15, decode_default_array, LS->decode_default_array = 1)      \
-    X(16, no_decode_default_array, LS->decode_default_array = 0)   \
-    X(17, encode_order,         LS->encode_order = 1)             \
-    X(18, no_encode_order,      LS->encode_order = 0)             \
-    X(19, decode_default_message, LS->decode_default_message = 1)      \
-    X(20, no_decode_default_message, LS->decode_default_message = 0)   \
+    X(0,  enum_as_name,         LS->enum_as_value = 0)               \
+    X(1,  enum_as_value,        LS->enum_as_value = 1)               \
+    X(2,  int64_as_number,      LS->int64_mode = LPB_NUMBER)         \
+    X(3,  int64_as_string,      LS->int64_mode = LPB_STRING)         \
+    X(4,  int64_as_hexstring,   LS->int64_mode = LPB_HEXSTRING)      \
+    X(5,  encode_order,         LS->encode_order = 1)                \
+    X(6,  no_encode_order,      LS->encode_order = 0)                \
+    X(7,  encode_default_values, LS->encode_default_values = 1)      \
+    X(8,  no_encode_default_values, LS->encode_default_values = 0)   \
+    X(9,  auto_default_values,  LS->encode_mode = LPB_DEFDEF)        \
+    X(10, no_default_values,    LS->encode_mode = LPB_NODEF)         \
+    X(11, use_default_values,   LS->encode_mode = LPB_COPYDEF)       \
+    X(12, use_default_metatable, LS->encode_mode = LPB_METADEF)      \
+    X(13, decode_default_array, LS->decode_default_array = 1)        \
+    X(14, no_decode_default_array, LS->decode_default_array = 0)     \
+    X(15, decode_default_message, LS->decode_default_message = 1)    \
+    X(16, no_decode_default_message, LS->decode_default_message = 0) \
+    X(17, enable_hooks,         LS->use_dec_hooks = 1)               \
+    X(18, disable_hooks,        LS->use_dec_hooks = 0)               \
+    X(19, enable_enchooks,      LS->use_enc_hooks = 1)               \
+    X(20, disable_enchooks,     LS->use_enc_hooks = 0)               \
 
     static const char *opts[] = {
 #define X(ID,NAME,CODE) #NAME,
