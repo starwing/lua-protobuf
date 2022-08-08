@@ -1255,6 +1255,13 @@ PB_API pb_Type *pb_newtype(pb_State *S, pb_Name *tname) {
     return te->value = t;
 }
 
+PB_API void pb_delsort(pb_Type *t) {
+    if (t->field_sort) {
+        free(t->field_sort);
+        t->field_sort = NULL;
+    }
+}
+
 PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     pb_FieldEntry *nf = NULL;
     pb_OneofEntry *ne = NULL;
@@ -1277,8 +1284,7 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     pb_freetable(&t->oneof_index);
     t->oneof_field = 0, t->field_count = 0;
     t->is_dead = 1;
-    free(t->field_sort);
-    t->field_sort = NULL;
+    pb_delsort(t);
     /*pb_delname(S, t->name); */
     /*pb_poolfree(&S->typepool, t); */
 }
@@ -1305,6 +1311,7 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t nu
     if (tf->value && pb_fname(t, tf->value->name) != tf->value)
         pbT_freefield(S, tf->value), --t->field_count;
     ++t->field_count;
+    pb_delsort(t);
     return nf->value = tf->value = f;
 }
 
@@ -1317,6 +1324,7 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
     if (nf && nf->value == f) nf->entry.key = 0, nf->value = NULL, ++count;
     if (tf && tf->value == f) tf->entry.key = 0, tf->value = NULL, ++count;
     if (count) pbT_freefield(S, f), --t->field_count;
+    pb_delsort(t);
 }
 
 

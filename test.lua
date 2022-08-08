@@ -1620,10 +1620,42 @@ function _G.test_pack_unpack_msg()
       eq(c1, person.contacts)
       eq(m1, person.map)
       -- eq(f1, person.friends) -- no friend field anymore
-
    end)
 end
 
+function _G.test_extend_pack()
+   local P = protoc.new()
+
+   assert(P:load([[
+      syntax = "proto3";
+      message ExtendPackTest {
+         int32 id = 200;
+         extensions 100 to 199;
+      }
+   ]], "extend_pack_test.proto"))
+
+   local i = 123456789
+   local s = "abcdefghijklmn"
+   local b = pb.pack_msg("ExtendPackTest", i)
+
+   assert(P:load([[
+      syntax = "proto3";
+      import "extend_pack_test.proto"
+
+      extend ExtendPackTest {
+         string ext_name = 100;
+      }
+   ]]))
+   local s1, i1 = pb.unpack_msg("ExtendPackTest", b)
+   eq(s1, "")
+   eq(i1, i)
+
+   local b2 = pb.pack_msg("ExtendPackTest", s, i)
+   pb.clear("ExtendPackTest", "ext_name")
+   local v1, v2 = pb.unpack_msg("ExtendPackTest", b2)
+   eq(v1, i)
+   eq(v2, nil)
+end
 
 if _VERSION == "Lua 5.1" and not _G.jit then
    lu.LuaUnit.run()
