@@ -663,12 +663,13 @@ function toplevel:message(lex, info)
 end
 
 function toplevel:enum(lex, info)
-   local name = lex:ident 'enum name'
+   local name, pos = lex:ident 'enum name'
    local enum = { name = name }
+   self.locmap[enum] = pos
    register_type(self, lex, name, types.enum)
    lex:expected "{"
    while not lex:test "}" do
-      local ident = lex:ident 'enum constant name'
+      local ident, pos = lex:ident 'enum constant name'
       if ident == 'option' then
          toplevel.option(self, lex, enum)
       elseif ident == 'reserved' then
@@ -676,11 +677,13 @@ function toplevel:enum(lex, info)
       else
          local values  = default(enum, 'value')
          local number  = lex:expected '=' :integer()
-         insert_tab(values, {
+         local value = {
             name    = ident,
             number  = number,
             options = inline_option(lex)
-         })
+         }
+         self.locmap[value] = pos
+         insert_tab(values, value)
       end
       lex:line_end 'opt'
    end
@@ -760,8 +763,9 @@ end
 end
 
 function toplevel:service(lex, info)
-   local name = lex:ident 'service name'
+   local name, pos = lex:ident 'service name'
    local svr = { name = name }
+   self.locmap[svr] = pos
    lex:expected "{"
    while not lex:test "}" do
       local ident = lex:type_name()
@@ -929,11 +933,9 @@ end
 local function check_enum(self, lex, info)
    local names, numbers = {}, {}
    for _, v in iter(info, 'value') do
-      lex.pos = self.locmap[v]
+      lex.pos = assert(self.locmap[v])
       check_dup(self, lex, 'enum name', names, 'name', v)
-      if not (info.options
-              and info.options.options
-              and info.options.options.allow_alias) then
+      if not (info.options and info.options.allow_alias) then
           check_dup(self, lex, 'enum number', numbers, 'number', v)
       end
    end
