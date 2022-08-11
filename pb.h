@@ -324,6 +324,7 @@ struct pb_Field {
     pb_Type *type;
     pb_Name *default_value;
     int32_t  number;
+    int32_t  sort_index;
     unsigned oneof_idx : 24;
     unsigned type_id   : 5; /* PB_T* enum */
     unsigned repeated  : 1;
@@ -334,6 +335,7 @@ struct pb_Field {
 struct pb_Type {
     pb_Name    *name;
     const char *basename;
+    pb_Field **field_sort;
     pb_Table field_tags;
     pb_Table field_names;
     pb_Table oneof_index;
@@ -1157,6 +1159,33 @@ PB_API const pb_Field *pb_field(const pb_Type *t, int32_t number) {
     return fe ? fe->value : NULL;
 }
 
+
+static int comp_field(const void* a, const void* b) {
+    return (*(const pb_Field**)a)->number - (*(const pb_Field**)b)->number;
+}
+
+PB_API pb_Field** pb_sortfield(pb_Type* t) {
+    if (!t->field_sort && t->field_count) {
+        int index = 0;
+        unsigned int i = 0;
+        const pb_Field* f = NULL;
+        pb_Field** list = malloc(sizeof(pb_Field*) * t->field_count);
+
+        assert(list);
+        while (pb_nextfield(t, &f)) {
+            list[index++] = (pb_Field*)f;
+        }
+
+        qsort(list, index, sizeof(pb_Field*), comp_field);
+        for (i = 0; i < t->field_count; i++) {
+            list[i]->sort_index = i + 1;
+        }
+        t->field_sort = list;
+    }
+
+    return t->field_sort;
+}
+
 PB_API const pb_Name *pb_oneofname(const pb_Type *t, int idx) {
     pb_OneofEntry *oe = NULL;
     if (t != NULL) oe = (pb_OneofEntry*)pb_gettable(&t->oneof_index, idx);
@@ -1226,6 +1255,13 @@ PB_API pb_Type *pb_newtype(pb_State *S, pb_Name *tname) {
     return te->value = t;
 }
 
+PB_API void pb_delsort(pb_Type *t) {
+    if (t->field_sort) {
+        free(t->field_sort);
+        t->field_sort = NULL;
+    }
+}
+
 PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     pb_FieldEntry *nf = NULL;
     pb_OneofEntry *ne = NULL;
@@ -1248,6 +1284,7 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
     pb_freetable(&t->oneof_index);
     t->oneof_field = 0, t->field_count = 0;
     t->is_dead = 1;
+    pb_delsort(t);
     /*pb_delname(S, t->name); */
     /*pb_poolfree(&S->typepool, t); */
 }
@@ -1274,6 +1311,7 @@ PB_API pb_Field *pb_newfield(pb_State *S, pb_Type *t, pb_Name *fname, int32_t nu
     if (tf->value && pb_fname(t, tf->value->name) != tf->value)
         pbT_freefield(S, tf->value), --t->field_count;
     ++t->field_count;
+    pb_delsort(t);
     return nf->value = tf->value = f;
 }
 
@@ -1286,6 +1324,7 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
     if (nf && nf->value == f) nf->entry.key = 0, nf->value = NULL, ++count;
     if (tf && tf->value == f) tf->entry.key = 0, tf->value = NULL, ++count;
     if (count) pbT_freefield(S, f), --t->field_count;
+    pb_delsort(t);
 }
 
 
