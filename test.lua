@@ -832,14 +832,14 @@ end
 
 function _G.test_buffer()
    eq(buffer.pack("vvv", 1,2,3), "\1\2\3")
-   eq(buffer.tohex(pb.pack("d", 4294967295)), "FF FF FF FF")
+   eq(buffer.tohex(buffer.pack("d", 4294967295)), "FF FF FF FF")
    if _VERSION == "Lua 5.3" then
-      eq(buffer.tohex(pb.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
+      eq(buffer.tohex(buffer.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
    else
-      eq(buffer.tohex(pb.pack("q", "#9223372036854775807")), "FF FF FF FF FF FF FF 7F")
+      eq(buffer.tohex(buffer.pack("q", "#9223372036854775807")), "FF FF FF FF FF FF FF 7F")
    end
-   eq(pb.pack("s", "foo"), "\3foo")
-   eq(pb.pack("cc", "foo", "bar"), "foobar")
+   eq(buffer.pack("s", "foo"), "\3foo")
+   eq(buffer.pack("cc", "foo", "bar"), "foobar")
    eq(buffer():pack("vvv", 1,2,3):result(), "\1\2\3")
 
    eq(buffer("foo", "bar"):result(), "foobar")
@@ -883,11 +883,11 @@ function _G.test_buffer()
    b = buffer.new()
    eq(b:pack("(vvv)", 1,2,3):tohex(-4), "03 01 02 03")
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
-   fail("unmatch '(' in format", function() pb.pack "(" end)
-   fail("unexpected ')' in format", function() pb.pack ")" end)
-   fail("integer format error: 'foo'", function() pb.pack("i", "foo") end)
-   fail("number expected for type 'int32', got boolean", function() pb.pack("i", true) end)
-   fail("invalid formater: '!'", function() pb.pack '!' end)
+   fail("unmatch '(' in format", function() buffer.pack "(" end)
+   fail("unexpected ')' in format", function() buffer.pack ")" end)
+   fail("integer format error: 'foo'", function() buffer.pack("i", "foo") end)
+   fail("number expected for type 'int32', got boolean", function() buffer.pack("i", true) end)
+   fail("invalid formater: '!'", function() buffer.pack '!' end)
 
    b = buffer.new()
    eq(b:pack("c", ("a"):rep(1025)):result(), ("a"):rep(1025))
@@ -896,11 +896,11 @@ function _G.test_buffer()
    b:reset("foo", "bar")
    eq(#b, 6)
 
-   fail("integer format error: 'foo'", function() pb.pack("v", "foo") end)
+   fail("integer format error: 'foo'", function() buffer.pack("v", "foo") end)
    if _VERSION == "Lua 5.3" or _VERSION == "Lua 5.4" then
-      fail("integer format error", function() pb.pack("v", 1e308) end)
+      fail("integer format error", function() buffer.pack("v", 1e308) end)
    else
-      fail("number has no integer representation", function() pb.pack("v", 1e308) end)
+      fail("number has no integer representation", function() buffer.pack("v", 1e308) end)
    end
 
    b = buffer.new()
@@ -949,35 +949,35 @@ function _G.test_slice()
    eq(#s:reset(), 0)
    eq(#s:reset"foo", 3)
 
-   eq({pb.unpack("\255\1", "v@")}, { 255, 3 })
-   eq({pb.unpack("\1", "v*v", 1)}, { 1, 1 })
-   fail("invalid formater: '!'", function() pb.unpack("\1", '!') end)
+   eq({slice.unpack("\255\1", "v@")}, { 255, 3 })
+   eq({slice.unpack("\1", "v*v", 1)}, { 1, 1 })
+   fail("invalid formater: '!'", function() slice.unpack("\1", '!') end)
 
    table_eq({slice.unpack("\1\2\3", "vvv")}, {1,2,3})
-   eq(pb.unpack("\255\255\255\255", "d"), 4294967295)
+   eq(slice.unpack("\255\255\255\255", "d"), 4294967295)
    if _VERSION == "Lua 5.3" then
-      eq(pb.unpack("\255\255\255\255\255\255\255\127", "q"), 9223372036854775807)
+      eq(slice.unpack("\255\255\255\255\255\255\255\127", "q"), 9223372036854775807)
    else
       pb.option 'int64_as_string'
-      eq(pb.unpack("\255\255\255\255\255\255\255\127", "q"), '#9223372036854775807')
+      eq(slice.unpack("\255\255\255\255\255\255\255\127", "q"), '#9223372036854775807')
       pb.option 'int64_as_number'
    end
-   eq(pb.unpack("\3foo", "s"), "foo")
-   eq({pb.unpack("foobar", "cc", 3, 3)}, {"foo", "bar"})
+   eq(slice.unpack("\3foo", "s"), "foo")
+   eq({slice.unpack("foobar", "cc", 3, 3)}, {"foo", "bar"})
 
-   eq(pb.unpack("\255\255\255\127\255", "v"), 0xFFFFFFF)
+   eq(slice.unpack("\255\255\255\127\255", "v"), 0xFFFFFFF)
    fail("invalid varint value at offset 1", function()
-      pb.unpack(("\255"):rep(10), "v") end)
-   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "v") end)
-   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "v") end)
-   fail("invalid bytes value at offset 1", function() pb.unpack("\3\1\2", "s") end)
-   fail("invalid fixed32 value at offset 1", function() pb.unpack("\1\2\3", "d") end)
-   fail("invalid fixed64 value at offset 1", function() pb.unpack("\1\2\3", "q") end)
-   fail("invalid sub string at offset 1", function() pb.unpack("\3\1\2", "c", 5) end)
-   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "i") end)
-   fail("invalid fixed32 value at offset 1", function() pb.unpack("\255\255\255", "x") end)
-   fail("invalid fixed64 value at offset 1", function() pb.unpack("\255\255\255", "X") end)
-   fail("string/buffer/slice expected, got boolean", function() pb.unpack(true, "v") end)
+      slice.unpack(("\255"):rep(10), "v") end)
+   fail("invalid varint value at offset 1", function() slice.unpack("\255\255\255", "v") end)
+   fail("invalid varint value at offset 1", function() slice.unpack("\255\255\255", "v") end)
+   fail("invalid bytes value at offset 1", function() slice.unpack("\3\1\2", "s") end)
+   fail("invalid fixed32 value at offset 1", function() slice.unpack("\1\2\3", "d") end)
+   fail("invalid fixed64 value at offset 1", function() slice.unpack("\1\2\3", "q") end)
+   fail("invalid sub string at offset 1", function() slice.unpack("\3\1\2", "c", 5) end)
+   fail("invalid varint value at offset 1", function() slice.unpack("\255\255\255", "i") end)
+   fail("invalid fixed32 value at offset 1", function() slice.unpack("\255\255\255", "x") end)
+   fail("invalid fixed64 value at offset 1", function() slice.unpack("\255\255\255", "X") end)
+   fail("string/buffer/slice expected, got boolean", function() slice.unpack(true, "v") end)
    fail("bytes wireformat expected at offset 1", function() slice"\1":enter() end)
 
    fail("level (3) exceed max level 2", function()
@@ -1411,7 +1411,7 @@ function _G.test_order()
    end)
 end
 
-function _G.test_pack_unpack_msg()
+function _G.test_pack_unpack()
    withstate(function()
    protoc.reload()
    check_load [[
@@ -1496,12 +1496,12 @@ function _G.test_pack_unpack_msg()
    local default_map = {key = ""}
    local default_friend = {friends = {}, name = ""}
 
-   local b1 = pb.pack_msg("Person", name, age, address, contacts, map, friends)
+   local b1 = pb.pack("Person", name, age, address, contacts, map, friends)
 
    local p = pb.decode("Person", b1)
    eq(person, p)
 
-   local n1, a1, e1, c1, m1, f1 = pb.unpack_msg("Person", b1)
+   local n1, a1, e1, c1, m1, f1 = pb.unpack("Person", b1)
    eq(n1, person.name)
    eq(a1, person.age)
    eq(e1, person.address)
@@ -1509,8 +1509,8 @@ function _G.test_pack_unpack_msg()
    eq(m1, person.map)
    eq(f1, person.friends)
 
-   local b2 = pb.pack_msg("Person")
-   local n2, a2, e2, c2, m2, f2 = pb.unpack_msg("Person", b2)
+   local b2 = pb.pack("Person")
+   local n2, a2, e2, c2, m2, f2 = pb.unpack("Person", b2)
    eq(n2, "")
    eq(a2, 0)
    eq(e2, "")
@@ -1518,8 +1518,8 @@ function _G.test_pack_unpack_msg()
    eq(m2, default_map)
    eq(f2, default_friend)
 
-   local b3 = pb.pack_msg("Person", nil, age, nil, contacts, nil)
-   local n3, a3, e3, c3, m3, f3 = pb.unpack_msg("Person", b3)
+   local b3 = pb.pack("Person", nil, age, nil, contacts, nil)
+   local n3, a3, e3, c3, m3, f3 = pb.unpack("Person", b3)
    eq(n3, "")
    eq(a3, person.age)
    eq(e3, "")
@@ -1528,17 +1528,17 @@ function _G.test_pack_unpack_msg()
    eq(f3, default_friend)
 
    fail("integer format error: 'abc'",
-            function() pb.pack_msg("Person", nil, "abc") end)
-   fail("bad argument #2 to 'pack_msg' (string expected for field 'name', got number)",
-            function() pb.pack_msg("Person", 100, "abc") end)
+            function() pb.pack("Person", nil, "abc") end)
+   fail("bad argument #2 to 'pack' (string expected for field 'name', got number)",
+            function() pb.pack("Person", 100, "abc") end)
    fail("type mismatch for field 'name' at offset 2, bytes expected for type string, got 32bit",
-            function() pb.unpack_msg("Person", "\13\1") end)
+            function() pb.unpack("Person", "\13\1") end)
 
    local ub = buffer.new()
-   local b3 = pb.pack_msg("Person", ub, nil, age, nil, contacts, nil)
+   pb.pack("Person", ub, nil, age, nil, contacts, nil)
 
    local us = slice.new(ub:result())
-   local n5, a5, e5, c5, m5, f5 = pb.unpack_msg("Person", us)
+   local n5, a5, e5, c5, m5, f5 = pb.unpack("Person", us)
    eq(n5, "")
    eq(a5, person.age)
    eq(e5, "")
@@ -1547,7 +1547,7 @@ function _G.test_pack_unpack_msg()
    eq(f5, default_friend)
 
    pb.option "no_default_values"
-   local n4, a4, e4, c4, m4, f4 = pb.unpack_msg("Person", b2)
+   local n4, a4, e4, c4, m4, f4 = pb.unpack("Person", b2)
    eq(n4, nil)
    eq(a4, nil)
    eq(e4, nil)
@@ -1578,8 +1578,8 @@ function _G.test_pack_unpack_msg()
       hook_count = hook_count + 1
       eq(v, hook_contacts[1])
    end)
-   local b5 = pb.pack_msg("Person", nil, age, nil, hook_contacts)
-   local n5, a5 = pb.unpack_msg("Person", b5)
+   local b5 = pb.pack("Person", nil, age, nil, hook_contacts)
+   local n5, a5 = pb.unpack("Person", b5)
 
    eq(hook_count, 2)
    pb.option "disable_hooks"
@@ -1613,7 +1613,7 @@ function _G.test_pack_unpack_msg()
          repeated Phone  contacts = 4;
       } ]]
 
-      local n1, a1, c1, m1, f1 = pb.unpack_msg("Person", b1)
+      local n1, a1, c1, m1, f1 = pb.unpack("Person", b1)
       eq(n1, person.name)
       eq(a1, person.age)
       -- eq(e1, person.address) -- no address field anymore
@@ -1636,7 +1636,7 @@ function _G.test_extend_pack()
 
    local i = 123456789
    local s = "abcdefghijklmn"
-   local b = pb.pack_msg("ExtendPackTest", i)
+   local b = pb.pack("ExtendPackTest", i)
 
    assert(P:load([[
       syntax = "proto3";
@@ -1646,13 +1646,13 @@ function _G.test_extend_pack()
          string ext_name = 100;
       }
    ]]))
-   local s1, i1 = pb.unpack_msg("ExtendPackTest", b)
+   local s1, i1 = pb.unpack("ExtendPackTest", b)
    eq(s1, "")
    eq(i1, i)
 
-   local b2 = pb.pack_msg("ExtendPackTest", s, i)
+   local b2 = pb.pack("ExtendPackTest", s, i)
    pb.clear("ExtendPackTest", "ext_name")
-   local v1, v2 = pb.unpack_msg("ExtendPackTest", b2)
+   local v1, v2 = pb.unpack("ExtendPackTest", b2)
    eq(v1, i)
    eq(v2, nil)
 end
