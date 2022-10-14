@@ -294,10 +294,23 @@ function _G.test_type()
    check_load [[
       message test_type {
          optional uint32 r = 1;
+         repeated uint64 r64 = 2;
       }
       message test2 {
         optional test_type test_type = 1;
       } ]]
+
+   pb.option "int64_as_string"
+   local data = {
+      r64 = {
+         1231234123,
+         "#45645674567",
+         "#18446744073709551615"
+      }
+   }
+   check_msg(".test_type", data)
+   pb.option "int64_as_number"
+
    check_msg("test_type", {r = 1})
    pb.clear "test_type"
    pb.clear "test2"
@@ -317,6 +330,7 @@ function _G.test_default()
          // some fields here
          optional int32 foo = 1;
 
+         optional uint32 defaulted_uint = 18 [ default = 666 ];
          optional int32 defaulted_int = 10 [ default = 777 ];
          optional bool defaulted_bool = 11 [ default = true ];
          optional string defaulted_str = 12 [ default = "foo" ];
@@ -339,6 +353,7 @@ function _G.test_default()
    end
    pb.option "enum_as_value"
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
+            defaulted_uint = 666,
             defaulted_int = 777,
             defaulted_bool = true,
             defaulted_str = "foo",
@@ -350,6 +365,7 @@ function _G.test_default()
    pb.option "enum_as_name"
    pb.defaults("TestDefault", "clear")
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
+            defaulted_uint = 666,
             defaulted_int = 777,
             defaulted_bool = true,
             defaulted_str = "foo",
@@ -516,6 +532,10 @@ function _G.test_enum()
 
    pb.option "enum_as_value"
    check_msg("TestEnum", data, { color = 0 })
+
+   pb.option "int64_as_string"
+   check_msg("TestEnum", { color = "#18446744073709551615" })
+   pb.option "int64_as_number"
 
    pb.option "enum_as_name"
    check_msg("TestEnum", data, { color = "Red" })
@@ -776,6 +796,10 @@ function _G.test_conv()
    eq(conv.decode_uint32(0xFFFFFFFF), 0xFFFFFFFF)
    eq(conv.decode_uint32(conv.encode_uint32(-1)), 0xFFFFFFFF)
 
+   pb.option "int64_as_string"
+   eq(conv.encode_int32(-1), "#18446744073709551615")
+   pb.option "int64_as_number"
+
    eq(conv.encode_int32(0x12300000123), 0x123)
    eq(conv.encode_int32(0xFFFFFFFF), -1)
    eq(conv.encode_int32(0x123FFFFFFFF), -1)
@@ -885,7 +909,7 @@ function _G.test_buffer()
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
    fail("unmatch '(' in format", function() buffer.pack "(" end)
    fail("unexpected ')' in format", function() buffer.pack ")" end)
-   fail("integer format error: 'foo'", function() buffer.pack("i", "foo") end)
+   fail("number expected for type 'int32', got string", function() buffer.pack("i", "foo") end)
    fail("number expected for type 'int32', got boolean", function() buffer.pack("i", true) end)
    fail("invalid formater: '!'", function() buffer.pack '!' end)
 
@@ -1527,7 +1551,7 @@ function _G.test_pack_unpack()
    eq(m3, default_map)
    eq(f3, default_friend)
 
-   fail("integer format error: 'abc'",
+   fail("number expected for field 'age', got string",
             function() pb.pack("Person", nil, "abc") end)
    fail("bad argument #2 to 'pack' (string expected for field 'name', got number)",
             function() pb.pack("Person", 100, "abc") end)
