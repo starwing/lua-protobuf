@@ -59,7 +59,7 @@ static void lua_rawsetp(lua_State *L, int idx, const void *p) {
     lua_rawset(L, lpb_relindex(idx, 1));
 }
 
-#ifndef luaL_newlib /* not LuaJIT 2.1 */
+#ifndef LUA_GCISRUNNING /* not LuaJIT 2.1 */
 #define luaL_newlib(L,l) (lua_newtable(L), luaL_register(L,NULL,l))
 
 static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isint) {
