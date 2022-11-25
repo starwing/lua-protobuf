@@ -172,7 +172,7 @@ p.unknown_type = "Foo.*"
 ```lua
 function p:unknown_import(name)
   -- 如果找不到 "foo.proto" 文件而调用了这个函数，那就自己手动载入 "my_foo.proto" 文件并返回信息
-  return p:load("my_"..name)
+  return p:parsefile("my_"..name)
 end
 
 function p:unknown_type(name)
@@ -361,15 +361,21 @@ end
 | `int64_as_number`       | 如果值的大小小于uint32允许的最大值，则存储整数，否则存储Lua浮点数类型（$\le$ Lua 5.2，可能会导致不精确）或者64位整数类型（$\ge$ Lua 5.3，这个版本开始才支持64位整数类型） **(默认)** |
 | `int64_as_string`       | 同上，但返回一个前缀`"#"`的字符串以避免精度损失 |
 | `int64_as_hexstring`    | 同上，但返回一个16进制的字符串 |
-| `no_default_values`     | 忽略默认值设置 **(默认)** |
-| `use_default_values`    | set default values by copy values from default table before decode |
+| `auto_default_values`   | 对于 proto3，采取 `use_default_values` 的设置；对于其他 protobuf 格式，则采取 `no_default_values` 的设置 **(默认)** |
+| `no_default_values`     | 忽略默认值设置 |
+| `use_default_values`    | 将默认值表复制到解码目标表中来 |
 | `use_default_metatable` | 将默认值表作为解码目标表的元表使用 |
 | `enable_hooks`          | `pb.decode` 启用钩子功能      |
 | `disable_hooks`         | `pb.decode` 禁用钩子功能 **(默认)**            |
 | `encode_default_values` | 默认值也参与编码 |
 | `no_encode_default_values` | 默认值不参与编码 **(默认)** |
-| `decode_default_array`  | 配合`no_default_values`选项,对于数组,将空值解码为空表 |
-| `no_decode_default_array`  | 配合`no_default_values`选项,对于数组,将空值解码为nil **(默认)** |
+| `decode_default_array`  | 配合`no_default_values`选项，对于数组，将空值解码为空表 |
+| `no_decode_default_array`  | 配合`no_default_values`选项，对于数组，将空值解码为nil **(默认)** |
+| `encode_order`          | 保证对相同的schema和data，`pb.encode`编码出的结果一致。注意这个选项会损失效率 |
+| `no_encode_order`       | 不保证对相同输入，`pb.encode`编码出的结果一致。**(默认)** |
+| `decode_default_message`  | 将空子消息解析成默认值表 |
+| `no_decode_default_message`  | 将空子消息解析成 `nil`  **(default)** |
+
 
  *注意*： `int64_as_string` 或 `int64_as_hexstring` 返回的字符串会带一个 `'#'` 字符前缀，因为Lua会自动把数字表示的字符串当作数字使用，从而导致精度损失。带一个前缀会让Lua认为这个字符串并不是数字，从而避免了Lua的自动转换。
 

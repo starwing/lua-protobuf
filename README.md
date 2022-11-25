@@ -121,7 +121,7 @@ print(require "serpent".block(data2))
 | `p:compile(string)` | string        | transform schema to binary *.pb format data          |
 | `p:load(string)`    | true          | load schema into `pb` module                         |
 | `p.loaded`          | table         | contains all parsed `DescriptorProto` table          |
-| `p.unknown_module`  | see below     | handle schema import error                           |
+| `p.unknown_import`  | see below     | handle schema import error                           |
 | `p.unknown_type`    | see below     | handle unknown type in schema                        |
 | `p.include_imports` | bool          | auto load imported proto                             |
 
@@ -135,13 +135,13 @@ Then, set some options to the compiler, e.g. the unknown handlers:
 
 ```lua
 -- set some hooks
-p.unknown_module = function(self, module_name) ... end
+p.unknown_import = function(self, module_name) ... end
 p.unknown_type   = function(self, type_name) ... end
 -- ... and options
 p.include_imports = true
 ```
 
-The `unknwon_module` and `unknown_type` handle could be `true`, string or a function.  Seting it to `true` means all *non-exist* modules and types are given a default value without triggering an error;  A string means a Lua pattern that indicates whether an unknown module or type should raise an error, e.g.
+The `unknown_import` and `unknown_type` handle could be `true`, string or a function.  Seting it to `true` means all *non-exist* modules and types are given a default value without triggering an error;  A string means a Lua pattern that indicates whether an unknown module or type should raise an error, e.g.
 
 ```lua
 p.unknown_type = "Foo.*"
@@ -152,9 +152,9 @@ means all types prefixed by `Foo` will be treat as existing type and do not trig
 If these are functions, the unknown type and module name will be passed to functions.  For module handler, it should return a `DescriptorProto` Table produced by `p:load()` functions, for type handler, it should return a type name and type, such as `message` or `enum`, e.g.
 
 ```lua
-function p:unknown_module(name)
+function p:unknown_import(name)
   -- if can not find "foo.proto", load "my_foo.proto" instead
-  return p:load("my_"..name)
+  return p:parsefile("my_"..name)
 end
 
 function p:unknown_type(name)
@@ -326,7 +326,8 @@ These options are supported currently:
 | `int64_as_number`       | set value to integer when it fit into uint32, otherwise return a number **(default)** |
 | `int64_as_string`       | same as above, but return a string instead |
 | `int64_as_hexstring`    | same as above, but return a hexadigit string instead         |
-| `no_default_values`     | do not default values for decoded message table **(default)** |
+| `auto_default_values`   | act as `use_default_values` for proto3 and act as `no_default_values` for the others **(default)** |
+| `no_default_values`     | do not default values for decoded message table |
 | `use_default_values`    | set default values by copy values from default table before decode |
 | `use_default_metatable` | set default values by set table from `pb.default()` as the metatable |
 | `enable_hooks`          | `pb.decode` will call `pb.hooks()` hook functions            |
@@ -335,6 +336,10 @@ These options are supported currently:
 | `no_encode_default_values` | do not encode default values **(default)** |
 | `decode_default_array`  | work with `no_default_values`,decode null to empty table for array |
 | `no_decode_default_array`  | work with `no_default_values`,decode null to nil for array **(default)** |
+| `encode_order`          | guarantees the same message will be encoded into the same result with the same schema and the same data (but the order itself is not specified) |
+| `no_encode_order`       | do not have guarantees about encode orders **(default)** |
+| `decode_default_message`  | decode null message to default message table |
+| `no_decode_default_message`  | decode null message to null  **(default)** |
 
  *Note*: The string returned by `int64_as_string` or `int64_as_hexstring` will prefix a `'#'` character. Because Lua may convert between string with number, prefix a `'#'` makes Lua return the string as-is.
 

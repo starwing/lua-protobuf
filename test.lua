@@ -11,6 +11,7 @@ local protoc = require "protoc"
 local eq       = lu.assertEquals
 local table_eq = lu.assertItemsEquals
 local fail     = lu.assertErrorMsgContains
+local is_true  = lu.assertIsTrue
 
 local types = 0
 for _ in pb.types() do
@@ -112,7 +113,7 @@ function _G.test_io.test()
    fail("invalid bytes length: 0 (at offset 2)",
         function() pb.decode("Person", "\10\255") end)
 
-   fail("un-finished bytes (len 10 at offset 3)",
+   fail("unfinished bytes (len 10 at offset 3)",
         function() pb.decode("Person", "\10\10") end)
 
    local data = {
@@ -293,10 +294,23 @@ function _G.test_type()
    check_load [[
       message test_type {
          optional uint32 r = 1;
+         repeated uint64 r64 = 2;
       }
       message test2 {
         optional test_type test_type = 1;
       } ]]
+
+   pb.option "int64_as_string"
+   local data = {
+      r64 = {
+         1231234123,
+         "#45645674567",
+         "#18446744073709551615"
+      }
+   }
+   check_msg(".test_type", data)
+   pb.option "int64_as_number"
+
    check_msg("test_type", {r = 1})
    pb.clear "test_type"
    pb.clear "test2"
@@ -304,6 +318,8 @@ function _G.test_type()
 end
 
 function _G.test_default()
+   withstate(function()
+   protoc.reload()
    check_load [[
       enum TestDefaultColor {
          RED = 0;
@@ -314,6 +330,7 @@ function _G.test_default()
          // some fields here
          optional int32 foo = 1;
 
+         optional uint32 defaulted_uint = 18 [ default = 666 ];
          optional int32 defaulted_int = 10 [ default = 777 ];
          optional bool defaulted_bool = 11 [ default = true ];
          optional string defaulted_str = 12 [ default = "foo" ];
@@ -336,6 +353,7 @@ function _G.test_default()
    end
    pb.option "enum_as_value"
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
+            defaulted_uint = 666,
             defaulted_int = 777,
             defaulted_bool = true,
             defaulted_str = "foo",
@@ -347,6 +365,7 @@ function _G.test_default()
    pb.option "enum_as_name"
    pb.defaults("TestDefault", "clear")
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
+            defaulted_uint = 666,
             defaulted_int = 777,
             defaulted_bool = true,
             defaulted_str = "foo",
@@ -368,6 +387,15 @@ function _G.test_default()
          BLUE = 2;
       }
       message TestNest{}
+      message TestNest1 {
+         TestNest nest = 1;
+      }
+      message TestNest2 {
+         TestNest1 nest = 1;
+      }
+      message TestNest3 {
+         TestNest2 nest = 1;
+      }
       message TestDefault {
          // some fields here
          int32 foo = 1;
@@ -383,6 +411,11 @@ function _G.test_default()
          TestNest nest = 17;
          repeated int32 array = 18;
       } ]]
+
+   pb.option "decode_default_message"
+   local dt = pb.decode("TestNest3", "")
+   table_eq(dt, {nest={nest={nest={}}}})
+   pb.option "no_decode_default_message"
 
    local _, _, _, _, rep = pb.field("TestDefault", "foo")
    eq(rep, "optional")
@@ -447,9 +480,7 @@ function _G.test_default()
    pb.option "decode_default_array"
    local dt = pb.decode("TestDefault", "")
    eq(getmetatable(dt), nil)
-   table_eq(dt,{
-      array = {},
-   })
+   table_eq(dt,{ array = {} })
    local chunk2, _ = pb.encode("TestDefault", {defaulted_int = 0,defaulted_bool = true})
    local dt = pb.decode("TestDefault", chunk2)
    eq(dt.defaulted_int, 0)
@@ -469,7 +500,7 @@ function _G.test_default()
    pb.clear "TestDefault"
    pb.clear "TestNest"
    pb.option "auto_default_values"
-   assert(pb.type ".google.protobuf.FileDescriptorSet")
+   end)
 end
 
 function _G.test_enum()
@@ -501,6 +532,10 @@ function _G.test_enum()
 
    pb.option "enum_as_value"
    check_msg("TestEnum", data, { color = 0 })
+
+   pb.option "int64_as_string"
+   check_msg("TestEnum", { color = "#18446744073709551615" })
+   pb.option "int64_as_number"
 
    pb.option "enum_as_name"
    check_msg("TestEnum", data, { color = "Red" })
@@ -542,6 +577,9 @@ function _G.test_packed()
    check_msg(".TestPacked", data)
    fail("table expected at field 'packs', got boolean",
         function() pb.encode("TestPacked", { packs = true }) end)
+
+   local data = {packs = {}}
+   check_msg(".TestPacked", data, {})
 
    local hasEmpty
    for _, name in pb.types() do
@@ -620,6 +658,9 @@ function _G.test_map()
    check_load [[
    syntax = "proto3";
    message TestEmpty {}
+   message TestNum {
+      int32 f = 1;
+   }
    message TestMap {
        map<string, int32> map = 1;
        map<string, int32> packed_map = 2 [packed=true];
@@ -646,7 +687,16 @@ function _G.test_map()
                msg_map = {},
             })
    end)
-   --eq(pb.decode("TestMap", "\10\4\3\10\1\1"), { map = {} })
+   fail("type mismatch for repeated field 'map' at offset 2,"..
+        " bytes expected for type message, got varint", function()
+      local chunk = pb.encode("TestNum", {f = 123})
+      pb.decode("TestMap", chunk)
+   end)
+   eq(pb.decode("TestMap", "\10\4\3\10\1\1"), {
+      map = {["\1"] = 0},
+      packed_map = {},
+      msg_map = {},
+   })
    eq(pb.decode("TestMap", "\10\0"), {
       map = { [""] = 0 },
       packed_map = {},
@@ -655,7 +705,7 @@ function _G.test_map()
    eq(pb.decode("TestMap", "\26\0"), {
       map = {},
       packed_map = {},
-      msg_map = {}
+      msg_map = {[""] = {}}
    })
 
    check_load [[
@@ -684,10 +734,10 @@ function _G.test_oneof()
        }
    } ]]
    check_msg("TestOneof", {})
-   check_msg("TestOneof", { m1 = {} })
-   check_msg("TestOneof", { m2 = {} })
-   check_msg("TestOneof", { m3 = { value = 0 } })
-   check_msg("TestOneof", { m3 = { value = 10 } })
+   check_msg("TestOneof", { m1 = {}, body_oneof = "m1" })
+   check_msg("TestOneof", { m2 = {}, body_oneof = "m2" })
+   check_msg("TestOneof", { m3 = { value = 0 }, body_oneof = "m3" })
+   check_msg("TestOneof", { m3 = { value = 10 }, body_oneof = "m3" })
    pb.clear "TestOneof"
 
    check_load [[
@@ -702,12 +752,17 @@ function _G.test_oneof()
       TestOneof msg = 1;
    }
    ]]
-   check_msg("TestOneof", { foo = 0 })
-   check_msg("TestOneof", { bar = "" })
-   check_msg("TestOneof", { foo = 0, bar = "" })
-   check_msg("Outter", { msg = { foo = 0 }})
-   check_msg("Outter", { msg = { bar = "" }})
-   check_msg("Outter", { msg = { foo = 0, bar = "" }})
+
+   check_msg("TestOneof", { foo = 0, body = "foo" })
+   check_msg("TestOneof", { bar = "", body = "bar" })
+   local chunk = pb.encode("TestOneof", { foo = 0, bar = "" })
+   local data = pb.decode("TestOneof", chunk)
+   is_true(data.body == "foo" or data.body == "bar")
+   check_msg("Outter", { msg = { foo = 0, body = "foo" }})
+   check_msg("Outter", { msg = { bar = "", body = "bar" }})
+   local chunk = pb.encode("Outter", {msg = { foo = 0, bar = "" }})
+   local data = pb.decode("Outter", chunk)
+   is_true(data.msg.body == "foo" or data.msg.body == "bar")
    pb.clear "TestOneof"
    pb.clear "Outter"
 
@@ -720,12 +775,12 @@ function _G.test_oneof()
        }
    } ]]
 
-   check_msg("TestOneof", { name = "foo" })
-   check_msg("TestOneof", { value = 0 })
-   check_msg("TestOneof", { name = "foo", value = 0 })
+   check_msg("TestOneof", { name = "foo", test_oneof = "name" })
+   check_msg("TestOneof", { value = 0, test_oneof = "value" })
+   local chunk = pb.encode("TestOneof", { name = "foo", value = 0 })
+   local data = pb.decode("TestOneof", chunk)
+   is_true(data.test_oneof == "name" or data.test_oneof == "value")
 
-   local data = { name = "foo", value = 5 }
-   check_msg("TestOneof", data)
    eq(pb.field("TestOneof", "name"), "name")
    pb.clear("TestOneof", "name")
    eq(pb.field("TestOneof", "name"), nil)
@@ -740,6 +795,10 @@ function _G.test_conv()
    eq(conv.encode_uint32(-1), 0xFFFFFFFF)
    eq(conv.decode_uint32(0xFFFFFFFF), 0xFFFFFFFF)
    eq(conv.decode_uint32(conv.encode_uint32(-1)), 0xFFFFFFFF)
+
+   pb.option "int64_as_string"
+   eq(conv.encode_int32(-1), "#18446744073709551615")
+   pb.option "int64_as_number"
 
    eq(conv.encode_int32(0x12300000123), 0x123)
    eq(conv.encode_int32(0xFFFFFFFF), -1)
@@ -797,14 +856,14 @@ end
 
 function _G.test_buffer()
    eq(buffer.pack("vvv", 1,2,3), "\1\2\3")
-   eq(buffer.tohex(pb.pack("d", 4294967295)), "FF FF FF FF")
+   eq(buffer.tohex(buffer.pack("d", 4294967295)), "FF FF FF FF")
    if _VERSION == "Lua 5.3" then
-      eq(buffer.tohex(pb.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
+      eq(buffer.tohex(buffer.pack("q", 9223372036854775807)), "FF FF FF FF FF FF FF 7F")
    else
-      eq(buffer.tohex(pb.pack("q", "#9223372036854775807")), "FF FF FF FF FF FF FF 7F")
+      eq(buffer.tohex(buffer.pack("q", "#9223372036854775807")), "FF FF FF FF FF FF FF 7F")
    end
-   eq(pb.pack("s", "foo"), "\3foo")
-   eq(pb.pack("cc", "foo", "bar"), "foobar")
+   eq(buffer.pack("s", "foo"), "\3foo")
+   eq(buffer.pack("cc", "foo", "bar"), "foobar")
    eq(buffer():pack("vvv", 1,2,3):result(), "\1\2\3")
 
    eq(buffer("foo", "bar"):result(), "foobar")
@@ -848,11 +907,11 @@ function _G.test_buffer()
    b = buffer.new()
    eq(b:pack("(vvv)", 1,2,3):tohex(-4), "03 01 02 03")
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
-   fail("unmatch '(' in format", function() pb.pack "(" end)
-   fail("unexpected ')' in format", function() pb.pack ")" end)
-   fail("integer format error: 'foo'", function() pb.pack("i", "foo") end)
-   fail("number expected for type 'int32', got boolean", function() pb.pack("i", true) end)
-   fail("invalid formater: '!'", function() pb.pack '!' end)
+   fail("unmatch '(' in format", function() buffer.pack "(" end)
+   fail("unexpected ')' in format", function() buffer.pack ")" end)
+   fail("number expected for type 'int32', got string", function() buffer.pack("i", "foo") end)
+   fail("number expected for type 'int32', got boolean", function() buffer.pack("i", true) end)
+   fail("invalid formater: '!'", function() buffer.pack '!' end)
 
    b = buffer.new()
    eq(b:pack("c", ("a"):rep(1025)):result(), ("a"):rep(1025))
@@ -861,11 +920,11 @@ function _G.test_buffer()
    b:reset("foo", "bar")
    eq(#b, 6)
 
-   fail("integer format error: 'foo'", function() pb.pack("v", "foo") end)
+   fail("integer format error: 'foo'", function() buffer.pack("v", "foo") end)
    if _VERSION == "Lua 5.3" or _VERSION == "Lua 5.4" then
-      fail("integer format error", function() pb.pack("v", 1e308) end)
+      fail("integer format error", function() buffer.pack("v", 1e308) end)
    else
-      fail("number has no integer representation", function() pb.pack("v", 1e308) end)
+      fail("number has no integer representation", function() buffer.pack("v", 1e308) end)
    end
 
    b = buffer.new()
@@ -914,35 +973,35 @@ function _G.test_slice()
    eq(#s:reset(), 0)
    eq(#s:reset"foo", 3)
 
-   eq({pb.unpack("\255\1", "v@")}, { 255, 3 })
-   eq({pb.unpack("\1", "v*v", 1)}, { 1, 1 })
-   fail("invalid formater: '!'", function() pb.unpack("\1", '!') end)
+   eq({slice.unpack("\255\1", "v@")}, { 255, 3 })
+   eq({slice.unpack("\1", "v*v", 1)}, { 1, 1 })
+   fail("invalid formater: '!'", function() slice.unpack("\1", '!') end)
 
    table_eq({slice.unpack("\1\2\3", "vvv")}, {1,2,3})
-   eq(pb.unpack("\255\255\255\255", "d"), 4294967295)
+   eq(slice.unpack("\255\255\255\255", "d"), 4294967295)
    if _VERSION == "Lua 5.3" then
-      eq(pb.unpack("\255\255\255\255\255\255\255\127", "q"), 9223372036854775807)
+      eq(slice.unpack("\255\255\255\255\255\255\255\127", "q"), 9223372036854775807)
    else
       pb.option 'int64_as_string'
-      eq(pb.unpack("\255\255\255\255\255\255\255\127", "q"), '#9223372036854775807')
+      eq(slice.unpack("\255\255\255\255\255\255\255\127", "q"), '#9223372036854775807')
       pb.option 'int64_as_number'
    end
-   eq(pb.unpack("\3foo", "s"), "foo")
-   eq({pb.unpack("foobar", "cc", 3, 3)}, {"foo", "bar"})
+   eq(slice.unpack("\3foo", "s"), "foo")
+   eq({slice.unpack("foobar", "cc", 3, 3)}, {"foo", "bar"})
 
-   eq(pb.unpack("\255\255\255\127\255", "v"), 0xFFFFFFF)
+   eq(slice.unpack("\255\255\255\127\255", "v"), 0xFFFFFFF)
    fail("invalid varint value at offset 1", function()
-      pb.unpack(("\255"):rep(10), "v") end)
-   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "v") end)
-   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "v") end)
-   fail("invalid bytes value at offset 1", function() pb.unpack("\3\1\2", "s") end)
-   fail("invalid fixed32 value at offset 1", function() pb.unpack("\1\2\3", "d") end)
-   fail("invalid fixed64 value at offset 1", function() pb.unpack("\1\2\3", "q") end)
-   fail("invalid sub string at offset 1", function() pb.unpack("\3\1\2", "c", 5) end)
-   fail("invalid varint value at offset 1", function() pb.unpack("\255\255\255", "i") end)
-   fail("invalid fixed32 value at offset 1", function() pb.unpack("\255\255\255", "x") end)
-   fail("invalid fixed64 value at offset 1", function() pb.unpack("\255\255\255", "X") end)
-   fail("string/buffer/slice expected, got boolean", function() pb.unpack(true, "v") end)
+      slice.unpack(("\255"):rep(10), "v") end)
+   fail("invalid varint value at offset 1", function() slice.unpack("\255\255\255", "v") end)
+   fail("invalid varint value at offset 1", function() slice.unpack("\255\255\255", "v") end)
+   fail("invalid bytes value at offset 1", function() slice.unpack("\3\1\2", "s") end)
+   fail("invalid fixed32 value at offset 1", function() slice.unpack("\1\2\3", "d") end)
+   fail("invalid fixed64 value at offset 1", function() slice.unpack("\1\2\3", "q") end)
+   fail("invalid sub string at offset 1", function() slice.unpack("\3\1\2", "c", 5) end)
+   fail("invalid varint value at offset 1", function() slice.unpack("\255\255\255", "i") end)
+   fail("invalid fixed32 value at offset 1", function() slice.unpack("\255\255\255", "x") end)
+   fail("invalid fixed64 value at offset 1", function() slice.unpack("\255\255\255", "X") end)
+   fail("string/buffer/slice expected, got boolean", function() slice.unpack(true, "v") end)
    fail("bytes wireformat expected at offset 1", function() slice"\1":enter() end)
 
    fail("level (3) exceed max level 2", function()
@@ -1262,6 +1321,7 @@ function _G.test_encode_hook()
          repeated Phone  contacts = 4;
       } ]]
    pb.option "enable_hooks"
+   pb.option "enable_enchooks"
    assert(pb.encode_hook "Phone" == nil)
    fail("function expected, got boolean",
         function() pb.encode_hook("Phone", true) end)
@@ -1339,6 +1399,286 @@ function _G.test_unsafe()
    pb.clear "TestType"
    eq((unsafe.use "global"), true)
    eq((unsafe.use "local"), true)
+end
+
+function _G.test_order()
+   withstate(function()
+   protoc.reload()
+   check_load [[
+      enum Type {
+         HOME = 1;
+         WORK = 2;
+      }
+      message Phone {
+         optional string name        = 1;
+         optional int64  phonenumber = 2;
+         optional Type   type        = 3;
+      }
+      message Person {
+         optional string name     = 1;
+         optional int32  age      = 2;
+         optional string address  = 3;
+         repeated Phone  contacts = 4;
+      } ]]
+   pb.option "encode_order"
+   local data = {
+      name = "ilse",
+      age  = 18,
+      contacts = {
+         { name = "alice", phonenumber = 12312341234 },
+         { name = "bob",   phonenumber = 45645674567 }
+      }
+   }
+   local b1 = pb.encode("Person", data)
+   local b2 = pb.encode("Person", data)
+   eq(b1, b2)
+   end)
+end
+
+function _G.test_pack_unpack()
+   withstate(function()
+   protoc.reload()
+   check_load [[
+      syntax = "proto3";
+      enum Type {
+         HOME = 1;
+         WORK = 2;
+      }
+      message Phone {
+         string name        = 1;
+         int64  phonenumber = 2;
+         Type   type        = 3;
+      }
+      message Friend {
+         string name = 1;
+         repeated Friend friends = 2;
+      }
+      message Person {
+         // will be sorted by field number
+
+         repeated Friend friends = 200;
+         map<string, Phone> map = 100;
+
+         string name     = 1;
+         int32  age      = 2;
+         string address  = 3;
+         repeated Phone  contacts = 4;
+      } ]]
+
+   local function __copy(src)
+      if "table" ~= type(src) then return src end
+
+      local dst = {}
+      for k, v in pairs(src) do
+         dst[k] = __copy(v)
+      end
+
+      return dst
+   end
+
+   local name = "ilse"
+   local age  = 18
+   local address = "earth"
+   local contacts = {
+      { name = "alice", phonenumber = 12312341234 },
+      { name = "bob",   phonenumber = 45645674567 }
+   }
+   local map = {
+      ["m111111111"] = contacts[1],
+      ["m222222222"] = contacts[2]
+   }
+   local friends = {
+      { name = "f10", friends = {
+         { name = "f11"}, { name = "f12" }
+      }},
+      { name = "f20", friends = {
+         { name = "f21"}, { name = "f22" }
+      }}
+   }
+
+   local person = {
+      name = name,
+      age = age,
+      address = address,
+      contacts = __copy(contacts),
+      map = __copy(map),
+      friends = __copy(friends)
+   }
+   -- fill default value for eq
+   for _, m in pairs(person.map) do
+      m.type = 0
+   end
+   for _, m in pairs(person.contacts) do
+      m.type = 0
+   end
+   for _, f in pairs(person.friends) do
+      for _, f2 in pairs(f.friends) do
+         f2.friends = {}
+      end
+   end
+   local default_contacts = {name = "", phonenumber=0, type=0}
+   local default_map = {key = ""}
+   local default_friend = {friends = {}, name = ""}
+
+   local b1 = pb.pack("Person", name, age, address, contacts, map, friends)
+
+   local p = pb.decode("Person", b1)
+   eq(person, p)
+
+   local n1, a1, e1, c1, m1, f1 = pb.unpack("Person", b1)
+   eq(n1, person.name)
+   eq(a1, person.age)
+   eq(e1, person.address)
+   eq(c1, person.contacts)
+   eq(m1, person.map)
+   eq(f1, person.friends)
+
+   local b2 = pb.pack("Person")
+   local n2, a2, e2, c2, m2, f2 = pb.unpack("Person", b2)
+   eq(n2, "")
+   eq(a2, 0)
+   eq(e2, "")
+   eq(c2, default_contacts)
+   eq(m2, default_map)
+   eq(f2, default_friend)
+
+   local b3 = pb.pack("Person", nil, age, nil, contacts, nil)
+   local n3, a3, e3, c3, m3, f3 = pb.unpack("Person", b3)
+   eq(n3, "")
+   eq(a3, person.age)
+   eq(e3, "")
+   eq(c3, person.contacts)
+   eq(m3, default_map)
+   eq(f3, default_friend)
+
+   fail("number expected for field 'age', got string",
+            function() pb.pack("Person", nil, "abc") end)
+   fail("bad argument #2 to 'pack' (string expected for field 'name', got number)",
+            function() pb.pack("Person", 100, "abc") end)
+   fail("type mismatch for field 'name' at offset 2, bytes expected for type string, got 32bit",
+            function() pb.unpack("Person", "\13\1") end)
+
+   local ub = buffer.new()
+   pb.pack("Person", ub, nil, age, nil, contacts, nil)
+
+   local us = slice.new(ub:result())
+   local n5, a5, e5, c5, m5, f5 = pb.unpack("Person", us)
+   eq(n5, "")
+   eq(a5, person.age)
+   eq(e5, "")
+   eq(c5, person.contacts)
+   eq(m5, default_map)
+   eq(f5, default_friend)
+
+   pb.option "no_default_values"
+   local n4, a4, e4, c4, m4, f4 = pb.unpack("Person", b2)
+   eq(n4, nil)
+   eq(a4, nil)
+   eq(e4, nil)
+   eq(c4, nil)
+   eq(m4, nil)
+   eq(f4, nil)
+
+   pb.option "enable_hooks"
+   pb.option "enable_enchooks"
+
+   local hook_contacts = {
+      { name = "alice", phonenumber = 123456789 },
+   }
+   local hook_count = 0
+   pb.encode_hook("Person", function(v)
+      hook_count = hook_count + 1
+      eq(true, false) -- won't be called
+   end)
+   pb.encode_hook("Phone", function(v)
+      hook_count = hook_count + 1
+      eq(v, hook_contacts[1])
+   end)
+   pb.hook("Person", function(v)
+      hook_count = hook_count + 1
+      eq(true, false) -- won't be called
+   end)
+   pb.hook("Phone", function(v)
+      hook_count = hook_count + 1
+      eq(v, hook_contacts[1])
+   end)
+   local b5 = pb.pack("Person", nil, age, nil, hook_contacts)
+   local n5, a5 = pb.unpack("Person", b5)
+
+   eq(hook_count, 2)
+   pb.option "disable_hooks"
+   pb.option "disable_enchooks"
+
+   pb.option "auto_default_values"
+   pb.clear()
+   protoc.reload()
+   check_load [[
+      syntax = "proto3";
+      enum Type {
+         HOME = 1;
+         WORK = 2;
+      }
+      message Phone {
+         string name        = 1;
+         int64  phonenumber = 2;
+         Type   type        = 3;
+      }
+      message Friend {
+         string name = 1;
+         repeated Friend friends = 2;
+      }
+      message Person {
+         // will be sorted by field number
+
+         map<string, Phone> map = 100;
+
+         string name     = 1;
+         int32  age      = 2;
+         repeated Phone  contacts = 4;
+      } ]]
+
+      local n1, a1, c1, m1, f1 = pb.unpack("Person", b1)
+      eq(n1, person.name)
+      eq(a1, person.age)
+      -- eq(e1, person.address) -- no address field anymore
+      eq(c1, person.contacts)
+      eq(m1, person.map)
+      -- eq(f1, person.friends) -- no friend field anymore
+   end)
+end
+
+function _G.test_extend_pack()
+   local P = protoc.new()
+
+   assert(P:load([[
+      syntax = "proto3";
+      message ExtendPackTest {
+         int32 id = 200;
+         extensions 100 to 199;
+      }
+   ]], "extend_pack_test.proto"))
+
+   local i = 123456789
+   local s = "abcdefghijklmn"
+   local b = pb.pack("ExtendPackTest", i)
+
+   assert(P:load([[
+      syntax = "proto3";
+      import "extend_pack_test.proto"
+
+      extend ExtendPackTest {
+         string ext_name = 100;
+      }
+   ]]))
+   local s1, i1 = pb.unpack("ExtendPackTest", b)
+   eq(s1, "")
+   eq(i1, i)
+
+   local b2 = pb.pack("ExtendPackTest", s, i)
+   pb.clear("ExtendPackTest", "ext_name")
+   local v1, v2 = pb.unpack("ExtendPackTest", b2)
+   eq(v1, i)
+   eq(v2, nil)
 end
 
 if _VERSION == "Lua 5.1" and not _G.jit then
