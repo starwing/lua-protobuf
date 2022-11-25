@@ -2019,10 +2019,18 @@ static int Lpb_option(lua_State *L) {
         NULL
     };
     lpb_State *LS = lpb_lstate(L);
-    switch (luaL_checkoption(L, 1, NULL, opts)) {
+    int opt = luaL_checkoption(L, 1, NULL, opts);
+    switch (opt) {
 #define X(ID,NAME,CODE) case ID: CODE; break;
         OPTS(X)
 #undef  X
+    }
+    if (opt == 7) {
+        // encode_default_values
+        LS->local.repeated_packed = 1;
+    } else if (opt == 8) {
+        // no_encode_default_values
+        LS->local.repeated_packed = 0;
     }
     return 0;
 #undef  OPTS

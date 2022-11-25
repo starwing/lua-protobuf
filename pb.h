@@ -317,6 +317,7 @@ struct pb_State {
     pb_Table     types;
     pb_Pool      typepool;
     pb_Pool      fieldpool;
+    unsigned repeated_packed    : 1;
 };
 
 struct pb_Field {
@@ -1126,6 +1127,7 @@ PB_API void pb_init(pb_State *S) {
     S->types.entry_size = sizeof(pb_TypeEntry);
     pb_initpool(&S->typepool, sizeof(pb_Type));
     pb_initpool(&S->fieldpool, sizeof(pb_Field));
+    S->repeated_packed = 0;
 }
 
 PB_API void pb_free(pb_State *S) {
@@ -1674,7 +1676,9 @@ static int pbL_loadField(pb_State *S, pbL_FieldInfo *info, pb_Loader *L, pb_Type
     f->type_id   = info->type;
     f->repeated  = info->label == 3; /* repeated */
     f->packed    = info->packed >= 0 ? info->packed : L->is_proto3 && f->repeated;
-    if (f->type_id >= 9 && f->type_id <= 12) f->packed = 0;
+    if (!(L->is_proto3 && f->repeated && S->repeated_packed)) {
+        if (f->type_id >= 9 && f->type_id <= 12) f->packed = 0;
+    }
     f->scalar = (f->type == NULL);
     return PB_OK;
 }
