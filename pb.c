@@ -1169,8 +1169,10 @@ typedef enum {USE_FIELD = 1, USE_REPEAT = 2, USE_MESSAGE = 4} lpb_DefFlags;
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t);
 
-static void lpb_newmsgtable(lua_State *L, const pb_Type *t)
-{ lua_createtable(L, 0, t->field_count - t->oneof_field + t->oneof_count*2); }
+static void lpb_newmsgtable(lua_State *L, const pb_Type *t) {
+    int fieldcnt = t->field_count - t->oneof_field + t->oneof_count*2;
+    lua_createtable(L, 0, fieldcnt > 0 ? fieldcnt : 0);
+}
 
 LUALIB_API const pb_Type *lpb_type(lpb_State *LS, pb_Slice s) {
     const pb_Type *t;

@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Install LCov
         run: |
-          sudo apt install libperlio-gzip-perl libjson-perl
+          sudo apt install libperlio-gzip-perl libjson-perl libcapture-tiny-perl
           wget "https://github.com/linux-test-project/lcov/archive/master.zip"
           unzip "master.zip"
           cd "lcov-master"

@@ -1323,7 +1323,10 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
     tf = (pb_FieldEntry*)pb_gettable(&t->field_tags, (pb_Key)f->number);
     if (nf && nf->value == f) nf->entry.key = 0, nf->value = NULL, ++count;
     if (tf && tf->value == f) tf->entry.key = 0, tf->value = NULL, ++count;
-    if (count) pbT_freefield(S, f), --t->field_count;
+    if (count) {
+        if (f->oneof_idx) --t->oneof_field; 
+        pbT_freefield(S, f), --t->field_count;
+    }
     pb_delsort(t);
 }
 
