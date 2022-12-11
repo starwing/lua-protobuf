@@ -332,8 +332,9 @@ function Parser:parsefile(name)
       end
       insert_tab(errors, err or fn..": ".."unknown error")
    end
-   if self.import_fallback then
-      info = self.import_fallback(name)
+   local import_fallback = self.unknown_import
+   if import_fallback then
+      info = import_fallback(self, name)
    end
    if not info then
       error("module load error: "..name.."\n\t"..table.concat(errors, "\n\t"))
@@ -793,39 +794,15 @@ local function make_context(self, lex)
       locmap  = {};
       prefix  = ".";
       lex     = lex;
-      parser  = self;
    }
    ctx.loaded  = self.loaded
    ctx.typemap = self.typemap
    ctx.paths   = self.paths
    ctx.proto3_optional =
       self.proto3_optional or self.experimental_allow_proto3_optional
-
-   function ctx.import_fallback(import_name)
-      if self.unknown_import == true then
-         return true
-      elseif type(self.unknown_import) == 'string' then
-         return import_name:match(self.unknown_import) and true or nil
-      elseif self.unknown_import then
-         return self:unknown_import(import_name)
-      end
-   end
-
-   function ctx.type_fallback(type_name)
-      if self.unknown_type == true then
-         return true
-      elseif type(self.unknown_type) == 'string' then
-         return type_name:match(self.unknown_type) and true
-      elseif self.unknown_type then
-         return self:unknown_type(type_name)
-      end
-   end
-
-   function ctx.on_import(info)
-      if self.on_import then
-         return self.on_import(info)
-      end
-   end
+   ctx.unknown_type = self.unknown_type
+   ctx.unknown_import = self.unknown_import
+   ctx.on_import = self.on_import
 
    return setmetatable(ctx, Parser)
 end
@@ -904,8 +881,15 @@ local function check_type(self, lex, tname)
       if t then return t, tn end
    end
    local tn, t
-   if self.type_fallback then
-      tn, t = self.type_fallback(tname)
+   local type_fallback = self.unknown_type
+   if type_fallback then
+      if type_fallback == true then
+         tn = true
+      elseif type(type_fallback) == 'string' then
+         tn = type_name:match(type_fallback) and true
+      else
+         tn = type_fallback(self, tname)
+      end
    end
    if tn then
       t = types[t or "message"]
