@@ -333,7 +333,9 @@ function Parser:parsefile(name)
       insert_tab(errors, err or fn..": ".."unknown error")
    end
    local import_fallback = self.unknown_import
-   if import_fallback then
+   if import_fallback == true then
+      info = import_fallback
+   elseif import_fallback then
       info = import_fallback(self, name)
    end
    if not info then
