@@ -936,30 +936,30 @@ static int lpb_unpackscalar(lua_State *L, int *pidx, int top, int fmt, pb_Slice 
     lpb_Value v;
     switch (fmt) {
     case 'v':
-        if (pb_readvarint64(s, &v.u64) == 0)
-            luaL_error(L, "invalid varint value at offset %d", pb_pos(*s)+1);
+        if (pb_readvarint64(s, &v.u64) == 0) return luaL_error(L,
+                "invalid varint value at offset %d", pb_pos(*s)+1);
         lpb_pushinteger(L, v.u64, 1, mode);
         break;
     case 'd':
-        if (pb_readfixed32(s, &v.u32) == 0)
-            luaL_error(L, "invalid fixed32 value at offset %d", pb_pos(*s)+1);
+        if (pb_readfixed32(s, &v.u32) == 0) return luaL_error(L,
+                "invalid fixed32 value at offset %d", pb_pos(*s)+1);
         lpb_pushinteger(L, v.u32, 1, mode);
         break;
     case 'q':
-        if (pb_readfixed64(s, &v.u64) == 0)
-            luaL_error(L, "invalid fixed64 value at offset %d", pb_pos(*s)+1);
+        if (pb_readfixed64(s, &v.u64) == 0) return luaL_error(L,
+                "invalid fixed64 value at offset %d", pb_pos(*s)+1);
         lpb_pushinteger(L, v.u64, 1, mode);
         break;
     case 's':
-        if (pb_readbytes(s, v.s) == 0)
-            luaL_error(L, "invalid bytes value at offset %d", pb_pos(*s)+1);
+        if (pb_readbytes(s, v.s) == 0) return luaL_error(L,
+                "invalid bytes value at offset %d", pb_pos(*s)+1);
         push_slice(L, *v.s);
         break;
     case 'c':
         argcheck(L, *pidx <= top, 1, "format argument exceed");
         v.lint = luaL_checkinteger(L, (*pidx)++);
-        if (pb_readslice(s, (size_t)v.lint, v.s) == 0)
-            luaL_error(L, "invalid sub string at offset %d", pb_pos(*s)+1);
+        if (pb_readslice(s, (size_t)v.lint, v.s) == 0) return luaL_error(L,
+                "invalid sub string at offset %d", pb_pos(*s)+1);
         push_slice(L, *v.s);
         break;
     default:

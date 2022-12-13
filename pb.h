@@ -1129,10 +1129,12 @@ PB_API void pb_init(pb_State *S) {
 }
 
 PB_API void pb_free(pb_State *S) {
-    const pb_TypeEntry *te = NULL;
+    const pb_Entry *e = NULL;
     if (S == NULL) return;
-    while (pb_nextentry(&S->types, (const pb_Entry**)&te))
+    while (pb_nextentry(&S->types, &e)) {
+        pb_TypeEntry *te = (pb_TypeEntry*)e;
         if (te->value != NULL) pb_deltype(S, te->value);
+    }
     pb_freetable(&S->types);
     pb_freepool(&S->typepool);
     pb_freepool(&S->fieldpool);
@@ -1263,10 +1265,10 @@ PB_API void pb_delsort(pb_Type *t) {
 }
 
 PB_API void pb_deltype(pb_State *S, pb_Type *t) {
-    pb_FieldEntry *nf = NULL;
-    pb_OneofEntry *ne = NULL;
+    const pb_Entry *e = NULL;
     if (S == NULL || t == NULL) return;
-    while (pb_nextentry(&t->field_names, (const pb_Entry**)&nf)) {
+    while (pb_nextentry(&t->field_names, &e)) {
+        const pb_FieldEntry *nf = (const pb_FieldEntry*)e;
         if (nf->value != NULL) {
             pb_FieldEntry *of = (pb_FieldEntry*)pb_gettable(
                     &t->field_tags, nf->value->number);
@@ -1275,10 +1277,14 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
             pbT_freefield(S, nf->value);
         }
     }
-    while (pb_nextentry(&t->field_tags, (const pb_Entry**)&nf))
+    while (pb_nextentry(&t->field_tags, &e)) {
+        pb_FieldEntry *nf = (pb_FieldEntry*)e;
         if (nf->value != NULL) pbT_freefield(S, nf->value);
-    while (pb_nextentry(&t->oneof_index, (const pb_Entry**)&ne))
-        pb_delname(S, ne->name);
+    }
+    while (pb_nextentry(&t->oneof_index, &e)) {
+        pb_OneofEntry *oe = (pb_OneofEntry*)e;
+        pb_delname(S, oe->name);
+    }
     pb_freetable(&t->field_tags);
     pb_freetable(&t->field_names);
     pb_freetable(&t->oneof_index);

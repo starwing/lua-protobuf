@@ -888,7 +888,7 @@ local function check_type(self, lex, tname)
       if type_fallback == true then
          tn = true
       elseif type(type_fallback) == 'string' then
-         tn = type_name:match(type_fallback) and true
+         tn = tname:match(type_fallback) and true
       else
          tn = type_fallback(self, tname)
       end
