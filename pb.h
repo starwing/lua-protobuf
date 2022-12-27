@@ -1090,7 +1090,7 @@ PB_API pb_Name *pb_newname(pb_State *S, pb_Slice s, pb_Cache *cache) {
 PB_API const pb_Name *pb_name(const pb_State *S, pb_Slice s, pb_Cache *cache) {
     pb_NameEntry *entry = NULL;
     pb_CacheSlot *slot;
-    if (s.p == NULL) return NULL;
+    if (S == NULL || s.p == NULL) return NULL;
     if (cache == NULL)
         entry = pbN_getname(S, s, pbN_calchash(s));
     else {
