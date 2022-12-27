@@ -1377,6 +1377,9 @@ function _G.test_unsafe()
    assert(type(unsafe.decode) == "function")
    assert(type(unsafe.use) == "function")
    fail("userdata expected, got boolean",
+      function() unsafe.load(true, 1)
+   end)
+   fail("userdata expected, got boolean",
       function() unsafe.decode("", true, 1)
    end)
    fail("userdata expected, got boolean",
@@ -1396,6 +1399,7 @@ function _G.test_unsafe()
    eq(len, 0)
    table_eq(unsafe.decode("TestType", s, len), {})
    table_eq(pb.decode("TestType", unsafe.slice(s, len)), {})
+   table_eq({unsafe.load(s, len)}, {true , 1})
    pb.clear "TestType"
    eq((unsafe.use "global"), true)
    eq((unsafe.use "local"), true)

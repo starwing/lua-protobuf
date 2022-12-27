@@ -1207,6 +1207,20 @@ static int Lpb_load(lua_State *L) {
     return 2;
 }
 
+static int Lpb_load_unsafe(lua_State *L) {
+    lpb_State *LS = lpb_lstate(L);
+    const char *data = (const char *)lua_touserdata(L, 1);
+    size_t size = (size_t)luaL_checkinteger(L, 2);
+    pb_Slice s = pb_lslice(data, size);
+    int r;
+    if (data == NULL) typeerror(L, 1, "userdata");
+    r = pb_load(&LS->local, &s);
+    if (r == PB_OK) global_state = &LS->local;
+    lua_pushboolean(L, r == PB_OK);
+    lua_pushinteger(L, pb_pos(s)+1);
+    return 2;
+}
+
 static int Lpb_loadfile(lua_State *L) {
     lpb_State *LS = lpb_lstate(L);
     const char *filename = luaL_checkstring(L, 1);
@@ -2106,6 +2120,7 @@ static int Lpb_use(lua_State *L) {
 
 LUALIB_API int luaopen_pb_unsafe(lua_State *L) {
     luaL_Reg libs[] = {
+        { "load",       Lpb_load_unsafe   },
         { "decode",     Lpb_decode_unsafe },
         { "slice",      Lpb_slice_unsafe  },
         { "touserdata", Lpb_touserdata    },
