@@ -14,7 +14,6 @@ PB_NS_BEGIN
 
 
 #define LUA_LIB
-#include <lua.h>
 #include <lauxlib.h>
 
 
@@ -524,6 +523,8 @@ static void lpb_readtype(lua_State *L, lpb_State *LS, int type, pb_Slice *s) {
 # define setmode(a,b)  ((void)0)
 #endif
 
+#if BP_IO
+
 static int io_read(lua_State *L) {
     FILE *fp = (FILE*)lua_touserdata(L, 1);
     size_t nr;
@@ -598,6 +599,7 @@ LUALIB_API int luaopen_pb_io(lua_State *L) {
     return 1;
 }
 
+#endif /* BP_IO */
 
 /* protobuf integer conversion */
 
@@ -882,7 +884,7 @@ typedef struct lpb_Slice {
 
 static void lpb_resetslice(lua_State *L, lpb_Slice *s, size_t size) {
     if (size == sizeof(lpb_Slice)) {
-        if (s->buff != s->init_buff) free(s->buff);
+        if (s->buff != s->init_buff) PB_FREE(s->buff);
         memset(s, 0, sizeof(lpb_Slice));
         s->buff = s->init_buff;
         s->size = LPB_INITSTACKLEN;
@@ -906,7 +908,7 @@ static void lpb_enterview(lua_State *L, lpb_Slice *s, pb_Slice view) {
     if (s->used >= s->size) {
         size_t newsize = s->size * 2;
         pb_Slice *oldp = s->buff != s->init_buff ? s->buff : NULL;
-        pb_Slice *newp = (pb_Slice*)realloc(oldp, newsize*sizeof(pb_Slice));
+        pb_Slice *newp = (pb_Slice*)PB_REALLOC(oldp, newsize*sizeof(pb_Slice));
         if (newp == NULL) { luaL_error(L, "out of memory"); return; }
         if (oldp == NULL) memcpy(newp, s->buff, s->used*sizeof(pb_Slice));
         s->buff = newp;
@@ -1221,6 +1223,7 @@ static int Lpb_load_unsafe(lua_State *L) {
     return 2;
 }
 
+#if BP_IO
 static int Lpb_loadfile(lua_State *L) {
     lpb_State *LS = lpb_lstate(L);
     const char *filename = luaL_checkstring(L, 1);
@@ -1247,6 +1250,7 @@ static int Lpb_loadfile(lua_State *L) {
     lua_pushinteger(L, pb_pos(s)+1);
     return 2;
 }
+#endif
 
 static int lpb_pushtype(lua_State *L, const pb_Type *t) {
     if (t == NULL) return 0;
@@ -2049,7 +2053,9 @@ LUALIB_API int luaopen_pb(lua_State *L) {
 #define ENTRY(name) { #name, Lpb_##name }
         ENTRY(clear),
         ENTRY(load),
+#if BP_IO
         ENTRY(loadfile),
+#endif
         ENTRY(encode),
         ENTRY(decode),
         ENTRY(types),
