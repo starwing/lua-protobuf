@@ -1,6 +1,6 @@
 # Google protobuf support for Lua
 
-[![Build Status](https://img.shields.io/github/workflow/status/starwing/lua-protobuf/CI)](https://github.com/starwing/lua-protobuf/actions?query=branch%3Amaster)[![Coverage Status](https://img.shields.io/coveralls/github/starwing/lua-protobuf)](https://coveralls.io/github/starwing/lua-protobuf?branch=master)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/starwing/lua-protobuf/test.yml?branch=master)](https://github.com/starwing/lua-protobuf/actions?query=branch%3Amaster)[![Coverage Status](https://img.shields.io/coveralls/github/starwing/lua-protobuf)](https://coveralls.io/github/starwing/lua-protobuf?branch=master)
 
 English | [中文](https://github.com/starwing/lua-protobuf/blob/master/README.zh.md)
 
