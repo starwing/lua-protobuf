@@ -909,8 +909,8 @@ function _G.test_buffer()
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
    fail("unmatch '(' in format", function() buffer.pack "(" end)
    fail("unexpected ')' in format", function() buffer.pack ")" end)
-   fail("number expected for type 'int32', got string", function() buffer.pack("i", "foo") end)
-   fail("number expected for type 'int32', got boolean", function() buffer.pack("i", true) end)
+   fail("number/'#number' expected for type 'int32', got string", function() buffer.pack("i", "foo") end)
+   fail("number/'#number' expected for type 'int32', got boolean", function() buffer.pack("i", true) end)
    fail("invalid formater: '!'", function() buffer.pack '!' end)
 
    b = buffer.new()
@@ -1555,7 +1555,7 @@ function _G.test_pack_unpack()
    eq(m3, default_map)
    eq(f3, default_friend)
 
-   fail("number expected for field 'age', got string",
+   fail("number/'#number' expected for field 'age', got string",
             function() pb.pack("Person", nil, "abc") end)
    fail("bad argument #2 to 'pack' (string expected for field 'name', got number)",
             function() pb.pack("Person", 100, "abc") end)
