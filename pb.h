@@ -218,7 +218,7 @@ PB_API size_t pb_addfixed64  (pb_Buffer *b, uint64_t v);
 
 PB_API size_t pb_addslice  (pb_Buffer *b, pb_Slice s);
 PB_API size_t pb_addbytes  (pb_Buffer *b, pb_Slice s);
-PB_API size_t pb_addlength (pb_Buffer *b, size_t len);
+PB_API size_t pb_addlength (pb_Buffer *b, size_t len, size_t prealloc);
 
 
 /* type info database state and name table */
@@ -767,18 +767,22 @@ PB_API size_t pb_addslice(pb_Buffer *b, pb_Slice s) {
     return len;
 }
 
-PB_API size_t pb_addlength(pb_Buffer *b, size_t len) {
+PB_API size_t pb_addlength(pb_Buffer *b, size_t len, size_t prealloc) {
     char buff[10], *s;
-    size_t bl, ml;
+    size_t bl, ml, rl = 0;
     if ((bl = pb_bufflen(b)) < len)
         return 0;
     ml = pb_write64(buff, bl - len);
-    if (pb_prepbuffsize(b, ml) == NULL) return 0;
-    s = pb_buffer(b) + len;
-    memmove(s+ml, s, bl - len);
+    s = pb_buffer(b) + len - prealloc;
+    assert(ml >= prealloc);
+    if (ml > prealloc) {
+        if (pb_prepbuffsize(b, (rl = ml - prealloc)) == NULL) return 0;
+        s = pb_buffer(b) + len - prealloc;
+        memmove(s+ml, s+prealloc, bl - len);
+    }
     memcpy(s, buff, ml);
-    pb_addsize(b, ml);
-    return ml;
+    pb_addsize(b, rl);
+    return ml + (bl - len);
 }
 
 PB_API size_t pb_addbytes(pb_Buffer *b, pb_Slice s) {
