@@ -221,8 +221,13 @@ In below table of functions, we have several types that have special means:
 | `int64`, `uint64`, `fixed64`, `sfixed64`, `sint64` | `number` or `"#"` prefixed `string` or `integer` in Lua 5.3+ |
 | `bool`                                             | `boolean`                                                    |
 | `string`, `bytes`                                  | `string`                                                     |
-| `message`                                          | `table`                                                      |
+| `message`                                          | `table` with metatable `pb.map_meta`                         |
+| `repeated <type>`                                  | `table` with metatable `pb.array_meta`                       |
 | `enum`                                             | `string` or `number`                                         |
+
+`pb.map_meta` and `pb.array_meta` have the field `__pbtype` with value `"map"` and `"array"` respectively.
+
+Note that the metatable may be changed by hook functions, more reliable way to check if an empty table is representing an empty message instead of an array is to test with `getmetatable(v) ~= pb.array_meta`.
 
 #### Type Information
 

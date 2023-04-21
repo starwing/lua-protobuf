@@ -28,6 +28,11 @@ PB_NS_BEGIN
 #define PB_BUFFER    "pb.Buffer"
 #define PB_SLICE     "pb.Slice"
 
+/* Lua types */
+/* So we can tell empty array from empty map */
+#define PB_MAP       "pb.Map"
+#define PB_ARRAY     "pb.Array"
+
 #define check_buffer(L,idx) ((pb_Buffer*)luaL_checkudata(L,idx,PB_BUFFER))
 #define test_buffer(L,idx)  ((pb_Buffer*)luaL_testudata(L,idx,PB_BUFFER))
 #define check_slice(L,idx)  ((pb_Slice*)luaL_checkudata(L,idx,PB_SLICE))
@@ -1986,11 +1991,17 @@ static int lpb_unpackfield(lpb_Env *e, const pb_Field* f, uint32_t tag, int last
     }
     if (f->type && f->type->is_map) {
         lpbD_checktype(e, f, tag);
-        if (!last) lua_newtable(e->L);
+        if (!last) {
+            lua_newtable(e->L);
+            luaL_setmetatable(L, PB_MAP)
+        }
         lpbD_map(e, f);
     }
     else if (f->repeated) {
-        if (!last) lua_newtable(e->L);
+        if (!last) {
+            lua_newtable(e->L);
+            luaL_setmetatable(L, PB_ARRAY)
+        }
         lpbD_repeated(e, f, tag);
     }
     else {
@@ -2114,7 +2125,17 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
     }
+    if (luaL_newmetatable(L, PB_MAP)) {
+        lua_pushstring(L, "map");
+        lua_setfield(L, -2, "__pbtype");
+    }
+    if (luaL_newmetatable(L, PB_ARRAY)) {
+        lua_pushstring(L, "array");
+        lua_setfield(L, -2, "__pbtype");
+    }
     luaL_newlib(L, libs);
+    luaL_getmetatable(L, PB_ARRAY);
+    lua_setfield(L, -2, "array_meta");
     return 1;
 }
 

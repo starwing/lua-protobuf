@@ -244,8 +244,13 @@ end
 | `int64`, `uint64`, `fixed64`, `sfixed64`, `sint64` | `number` 或 `"#"` 打头的 `string` 或 `integer` （Lua 5.3+） |
 | `bool`                                             | `boolean`                                                  |
 | `string`, `bytes`                                  | `string`                                                   |
-| `message`                                          | `table`                                                    |
+| `message`                                          | `table`, 其 metatable 为 `pb.map_meta`                     |
+| `repeated <type>`                                  | `table`, 其 metatable 为 `pb.array_meta`                   |
 | `enum`                                             | `string` 或 `number`                                       |
+
+`pb.map_meta` 与 `pb.array_meta` 都有成员 `__pbtype`，其值分别为 `"map"`、 `"array"`.
+
+注意，由于钩子函数可能修改 metatable，检查一个空表是否是空的 message 较为可靠的方式是 `getmetatable(v) ~= pb.array_meta`.
 
 #### 内存数据库信息获取
 
