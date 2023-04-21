@@ -2127,11 +2127,11 @@ LUALIB_API int luaopen_pb(lua_State *L) {
     }
     if (luaL_newmetatable(L, PB_MAP)) {
         lua_pushstring(L, "map");
-        lua_setfield(L, -2, "__pbtype");
+        lua_setfield(L, -2, "__type");
     }
     if (luaL_newmetatable(L, PB_ARRAY)) {
         lua_pushstring(L, "array");
-        lua_setfield(L, -2, "__pbtype");
+        lua_setfield(L, -2, "__type");
     }
     luaL_newlib(L, libs);
     luaL_getmetatable(L, PB_ARRAY);

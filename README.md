@@ -225,7 +225,7 @@ In below table of functions, we have several types that have special means:
 | `repeated <type>`                                  | `table` with metatable `pb.array_meta`                       |
 | `enum`                                             | `string` or `number`                                         |
 
-`pb.map_meta` and `pb.array_meta` have the field `__pbtype` with value `"map"` and `"array"` respectively.
+`pb.map_meta` and `pb.array_meta` have the field `__type` with value `"map"` and `"array"` respectively.
 
 Note that the metatable may be changed by hook functions, more reliable way to check if an empty table is representing an empty message instead of an array is to test with `getmetatable(v) ~= pb.array_meta`.
 
