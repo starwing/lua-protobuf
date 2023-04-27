@@ -245,7 +245,12 @@ end
 | `bool`                                             | `boolean`                                                  |
 | `string`, `bytes`                                  | `string`                                                   |
 | `message`                                          | `table`                                                    |
+| `repeated <type>`                                  | `table`, 其元表为 `pb.array_meta`                           |
 | `enum`                                             | `string` 或 `number`                                       |
+
+当与 OpenResty 的 [lua-cjson](https://github.com/openresty/lua-cjson) 分支一起使用, `pb.array_meta` 与 `lua-cjson` 的 `empty_array_mt` 为同一个 Lua 表.
+
+要检查一个空表是否是数组，可以这样判断： `getmetatable(tbl) == pb.array_meta`.
 
 #### 内存数据库信息获取
 

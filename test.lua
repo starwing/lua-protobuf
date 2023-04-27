@@ -657,14 +657,14 @@ end
 function _G.test_map()
    check_load [[
    syntax = "proto3";
-   message TestEmpty {}
+   message TestMapArray {}
    message TestNum {
       int32 f = 1;
    }
    message TestMap {
        map<string, int32> map = 1;
        map<string, int32> packed_map = 2 [packed=true];
-       map<string, TestEmpty> msg_map = 3;
+       map<string, TestMapArray> msg_map = 3;
    } ]]
 
    check_msg("TestMap", { map = {}, packed_map = {}, msg_map = {} })
@@ -1683,6 +1683,33 @@ function _G.test_extend_pack()
    local v1, v2 = pb.unpack("ExtendPackTest", b2)
    eq(v1, i)
    eq(v2, nil)
+end
+
+function _G.test_map_array_decode()
+   check_load [[
+   syntax = "proto3";
+   message MAP {
+      optional uint32 id = 1;
+   }
+   message TestMapArray {
+      MAP map = 1;
+      repeat MAP array = 2;
+   } ]]
+
+   local simple = { {}, {} }
+   local complex = { map = { id = 1 }, array = { { id = 1 }, {} } }
+   
+   local chunk = pb.encode("TestMapArray", simple)
+   local data = pb.decode("TestMapArray", chunk)
+   is_true(getmetatable(data.array) == pb.array_meta)
+   eq(data, simple)
+
+   chunk = pb.encode("TestMapArray", complex)
+   data = pb.decode("TestMapArray", chunk)
+   is_true(getmetatable(data.array) == pb.array_meta)
+   eq(data, complex)
+   
+   pb.clear "TestOneof"
 end
 
 if _VERSION == "Lua 5.1" and not _G.jit then

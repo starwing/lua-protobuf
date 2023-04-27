@@ -35,6 +35,8 @@ PB_NS_BEGIN
 #define push_slice(L,s)     lua_pushlstring((L), (s).p, pb_len((s)))
 #define lpb_returnself(L)  { return lua_settop(L, 1), 1; }
 
+static const char array_meta_key = 'k';
+
 static int lpb_relindex(int idx, int offset) {
     return idx < 0 && idx > LUA_REGISTRYINDEX ? idx - offset : idx;
 }
@@ -187,6 +189,32 @@ static int Lpb_delete(lua_State *L) {
         luaL_unref(L, LUA_REGISTRYINDEX, LS->dec_hooks_index);
     }
     return 0;
+}
+
+/* get metatable for array */
+/* will be used as _M.array_mt */
+/* if we are using openresty/cjson, the cjson.empty_array_mt is used */
+/* we use empty_array_mt to avoid surprise if later the user use it as a map */
+static void Lpb_init_array_meta(lua_State *L) {
+    /* local cjson = pcall(require, "json") */
+    lua_getglobal(L, "require");
+    lua_pushliteral(L, "cjson");
+    local err = lua_pcall(L, 2, 1, 0);
+    
+    /* if cjson and cjson.empty_array_mt then return cjson.empty_array_mt end */
+    if (!err) {
+        lua_getfield(L, -1, "empty_array_mt");
+        if (!lua_isnil(L, -1)) {
+            return;
+        }
+    }
+    /* pop the error of pcall or the nil got from index */
+    lua_pop(L, 1);
+
+    /* return {} */
+    lua_newtable(L);
+
+    return;
 }
 
 LUALIB_API lpb_State *lpb_lstate(lua_State *L) {
@@ -1990,7 +2018,12 @@ static int lpb_unpackfield(lpb_Env *e, const pb_Field* f, uint32_t tag, int last
         lpbD_map(e, f);
     }
     else if (f->repeated) {
-        if (!last) lua_newtable(e->L);
+        if (!last) {
+            lua_newtable(e->L);
+            lua_pushlightuserdata(L, (void *)&array_meta_key);
+            lua_gettable(L, LUA_REGISTRYINDEX);
+            lua_setmetatable(L, -2)
+        }
         lpbD_repeated(e, f, tag);
     }
     else {
@@ -2115,6 +2148,20 @@ LUALIB_API int luaopen_pb(lua_State *L) {
         lua_setfield(L, -2, "__index");
     }
     luaL_newlib(L, libs);
+
+    /* local array_meta = init_array_meta() */
+    Lpb_init_array_meta(L);
+
+    /* register array_meta */
+    lua_pushlightuserdata(L, (void *)&array_meta_key);
+    lua_pushvalue(L, -2)
+    lua_settable(L, LUA_REGISTRYINDEX);
+
+    /* _M.array_meta = array_meta */
+    lua_settable(L, "array_meta");
+
+    luaL_getmetatable(L, PB_ARRAY);
+    lua_setfield(L, -2, "array_meta");
     return 1;
 }
 

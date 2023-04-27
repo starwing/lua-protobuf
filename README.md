@@ -222,7 +222,12 @@ In below table of functions, we have several types that have special means:
 | `bool`                                             | `boolean`                                                    |
 | `string`, `bytes`                                  | `string`                                                     |
 | `message`                                          | `table`                                                      |
+| `repeated <type>`                                  | `table` with metatable `pb.array_meta`                       |
 | `enum`                                             | `string` or `number`                                         |
+
+When used with OpenResty's branch of [lua-cjson](https://github.com/openresty/lua-cjson), `pb.array_meta` will be the same table to the `cjson`'s `empty_array_mt`.
+
+To check if an empty table is an array, you can test with `getmetatable(tbl) == pb.array_meta`.
 
 #### Type Information
 
