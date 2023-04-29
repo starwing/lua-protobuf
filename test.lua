@@ -363,7 +363,7 @@ function _G.test_default()
             bool2 = nil
          })
    pb.option "enum_as_name"
-   pb.defaults("TestDefault", "clear")
+   pb.defaults("TestDefault", nil)
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
             defaulted_uint = 666,
             defaulted_int = 777,
@@ -429,7 +429,7 @@ function _G.test_default()
             bool2 = false,
          })
    pb.option "enum_as_value"
-   pb.defaults("TestDefault", "clear")
+   pb.defaults("TestDefault", nil)
    table_eq(copy_no_meta(pb.defaults "TestDefault"), {
             defaulted_int = 0,
             defaulted_bool = false,
@@ -721,8 +721,8 @@ function _G.test_map()
    local data = pb.decode("TestMap2", "")
    eq(getmetatable(data.map), map_meta)
    eq(getmetatable(data.arr), arr_meta)
-   pb.defaults("*map", "clear")
-   pb.defaults("*arr", "clear")
+   pb.defaults("*map", nil)
+   pb.defaults("*arr", nil)
    data = pb.decode("TestMap2", "")
    eq(getmetatable(data.map), nil)
    eq(getmetatable(data.arr), nil)
@@ -740,8 +740,8 @@ function _G.test_map()
    data = pb.decode("TestMap2", "\10\0\18\0", t)
    eq(getmetatable(data.map), own_map_meta)
    eq(getmetatable(data.arr), own_arr_meta)
-   pb.defaults("*map", "clear")
-   pb.defaults("*arr", "clear")
+   pb.defaults("*map", nil)
+   pb.defaults("*arr", nil)
    data = pb.decode("TestMap2", "\10\0")
    eq(getmetatable(data.map), nil)
    eq(getmetatable(data.arr), nil)

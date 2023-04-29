@@ -202,7 +202,7 @@ In below table of functions, we have several types that have special means:
 | `pb.typefmt(type)`             | String          | transform type name of field into pack/unpack formatter |
 | `pb.enum(type, string)`        | number          | get the value of a enum by name                         |
 | `pb.enum(type, number)`        | string          | get the name of a enum by value                         |
-| `pb.defaults(type[, table])`   | table           | get the default table of type                           |
+| `pb.defaults(type[, table|nil])`   | table           | get the default table of type                           |
 | `pb.hook(type[, function])`    | function        | get or set hook functions                               |
 | `pb.option(string)`            | string          | set options to decoder/encoder                          |
 | `pb.state()`                   | `pb.State`      | retrieve current pb state                               |
@@ -277,11 +277,11 @@ print(pb.enum("Color", 2)) --> "Green"
 
 #### Default Values
 
-Using `pb.defaults()` to get a table with all default values from a message. this table will be used as the metatable of the corresponding decoded message table when setting `use_default_metatable` option.
+Using `pb.defaults()` to get or set a table with all default values from a message. this table will be used as the metatable of the corresponding decoded message table when setting `use_default_metatable` option.
 
 You could also call `pb.defaults` with `"*map"` or `"*array"` to get the default metatable for map and array when decode a message. This settings will bepass `use_default_metatable` option.
 
-To clear a default metatable, just pass a truly second argument to `pb.defaults()`.
+To clear a default metatable, just pass `nil` as second argument to `pb.defaults()`.
 
 ```lua
    check_load [[

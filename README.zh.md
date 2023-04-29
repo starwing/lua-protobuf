@@ -222,7 +222,7 @@ end
 | `pb.typefmt(type)`             | String          | 得到 protobuf 数据类型名对应的 pack/unpack 的格式字符串 |
 | `pb.enum(type, string)`        | number          | 提供特定枚举里的名字，返回枚举数字 |
 | `pb.enum(type, number)`        | string          | 提供特定枚举里的数字，返回枚举名字 |
-| `pb.defaults(type[, boolean])` | table           | 获得或设置特定消息类型的默认表 |
+| `pb.defaults(type[, table|nil])` | table           | 获得或设置特定消息类型的默认表 |
 | `pb.hook(type[, function])`    | function        | 获得或设置特定消息类型的解码钩子 |
 | `pb.option(string)`            | string          | 设置编码或解码的具体选项 |
 | `pb.state()`                   | `pb.State`      | 返回当前的内存数据库 |
@@ -309,11 +309,11 @@ print(pb.enum("Color", 2)) --> "Green"
 
 你可以调用`pb.defaults()`	函数得到对应一个消息类型的一张Lua表，这张表存储了该消息类型所有域的默认值。
 
-`pb.defaults()`函数的第一个参数是指定的消息类型名称，如果可选的第二个参数为true，那么该缓存的默认表会被从内存数据库中清除。
+`pb.defaults()`函数的第一个参数是指定的消息类型名称，如果有可选的第二个参数，那么该参数会被指定为该类型的默认值。
 
-其实通过`pb.decode("Type")`本身就能得到一张填充了默认值的Lua表。这个函数的目的是，它提供的表会被内存数据库记住，如果你设置了`use_default_metatable`这个选项，那么这个默认值表就会成为对应类型被解码时被自动设置的原表——也就是说，可以支持解码一个空表，但是你能通过元表取得所有域的默认值。
+其实通过`pb.decode("Type")`本身就能得到一张填充了默认值的Lua表。而`pb.defaults`不同的是，他提供的表会被内存数据库记住，如果你设置了`use_default_metatable`这个选项，那么这个默认值表就会成为对应类型被解码时被自动设置的元表—也就是说，可以支持解码一个空表，但是你能通过元表取得所有域的默认值。
 
-另外，你可以传递`"*array"`或者`"*map"`作为特殊的类型名给`pb.defaults()`函数，效果是给解码出来的map/repeated设置元表。这个特性和`use_default_metatable`无关，如果不想要这个元表，不要调用`pb.defaults "*map"`（举例）就行。如果已经获取过这两个元表了，只要删掉对应元表就可以禁用这个特性 了。
+另外，你可以传递`"*array"`或者`"*map"`作为特殊的类型名给`pb.defaults()`函数，效果是给解码出来的map/repeated设置元表。这个特性和`use_default_metatable`无关，如果不想设置元表了，只要删掉对应元表就可以禁用这个特性了。
 
 示例如下：
 

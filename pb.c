@@ -1475,7 +1475,7 @@ static void lpb_cleardefmeta(lua_State *L, lpb_State *LS, const pb_Type *t) {
 static int Lpb_defaults(lua_State *L) {
     lpb_State *LS = lpb_lstate(L);
     pb_Slice tn = lpb_checkslice(L, 1);
-    int clear = !lua_istable(L, 2) && lua_toboolean(L, 2);
+    int clear = !lua_toboolean(L, 2) && !lua_isnone(L, 2);
     pb_Type *t = NULL;
     if (pb_len(tn) < 2 || tn.p[0] != '*')
         t = (pb_Type*)lpb_type(L, LS, tn);
@@ -1484,14 +1484,13 @@ static int Lpb_defaults(lua_State *L) {
     else if (tn.p[1] == 'm' || tn.p[1] == 'M')
         (t = &LS->map_type)->is_dead = clear;
     if (t == NULL) luaL_argerror(L, 1, "type not found");
-    if (lua_istable(L, 2)) {
+    if (lua_isnone(L, 2))
+        lpb_pushdefmeta(L, LS, t);
+    else {
         lpb_pushdeftable(L, LS);
         lua_rawgetp(L, -1, t);
         lua_pushvalue(L, 2);
         lua_rawsetp(L, -3, t);
-    } else {
-        lpb_pushdefmeta(L, LS, t);
-        if (clear) lpb_cleardefmeta(L, LS, t);
     }
     return 1;
 }
