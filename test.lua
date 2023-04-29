@@ -712,8 +712,39 @@ function _G.test_map()
    syntax = "proto2";
    message TestMap2 {
        map<string, int32> map = 1;
+       repeated uint32 arr = 2;
    } ]]
    check_msg("TestMap2", { map = { one = 1, two = 2, three = 3 } })
+   local map_meta = assert(pb.defaults "*map")
+   local arr_meta = assert(pb.defaults "*arr")
+   pb.option "decode_default_array"
+   local data = pb.decode("TestMap2", "")
+   eq(getmetatable(data.map), map_meta)
+   eq(getmetatable(data.arr), arr_meta)
+   pb.defaults("*map", "clear")
+   pb.defaults("*arr", "clear")
+   data = pb.decode("TestMap2", "")
+   eq(getmetatable(data.map), nil)
+   eq(getmetatable(data.arr), nil)
+   pb.option "no_decode_default_array"
+   map_meta = assert(pb.defaults "*map")
+   arr_meta = assert(pb.defaults "*arr")
+   data = pb.decode("TestMap2", "\10\0\18\0")
+   eq(getmetatable(data.map), map_meta)
+   eq(getmetatable(data.arr), arr_meta)
+   local own_arr_meta, own_map_meta = {}, {}
+   local t = {
+      arr=setmetatable({},own_arr_meta),
+      map=setmetatable({},own_map_meta)
+   }
+   data = pb.decode("TestMap2", "\10\0\18\0", t)
+   eq(getmetatable(data.map), own_map_meta)
+   eq(getmetatable(data.arr), own_arr_meta)
+   pb.defaults("*map", "clear")
+   pb.defaults("*arr", "clear")
+   data = pb.decode("TestMap2", "\10\0")
+   eq(getmetatable(data.map), nil)
+   eq(getmetatable(data.arr), nil)
 end
 
 function _G.test_oneof()

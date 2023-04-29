@@ -139,6 +139,8 @@ typedef struct lpb_State {
     pb_State  local;
     pb_Cache  cache;
     pb_Buffer buffer;
+    pb_Type   array_type;
+    pb_Type   map_type;
     int defs_index;
     int enc_hooks_index;
     int dec_hooks_index;
@@ -198,6 +200,7 @@ LUALIB_API lpb_State *lpb_lstate(lua_State *L) {
         lua_pop(L, 1);
         LS = (lpb_State*)lua_newuserdata(L, sizeof(lpb_State));
         memset(LS, 0, sizeof(lpb_State));
+        LS->array_type.is_dead = LS->map_type.is_dead = 1;
         LS->defs_index = LUA_NOREF;
         LS->enc_hooks_index = LUA_NOREF;
         LS->dec_hooks_index = LUA_NOREF;
@@ -1196,6 +1199,7 @@ LUALIB_API int luaopen_pb_slice(lua_State *L) {
 typedef enum {USE_FIELD = 1, USE_REPEAT = 2, USE_MESSAGE = 4} lpb_DefFlags;
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t);
+static void lpb_pushdefmeta(lua_State *L, lpb_State *LS, const pb_Type *t);
 
 static void lpb_newmsgtable(lua_State *L, const pb_Type *t) {
     int fieldcnt = t->field_count - t->oneof_field + t->oneof_count*2;
@@ -1415,12 +1419,30 @@ static int lpb_pushdeffield(lua_State *L, lpb_State *LS, const pb_Field *f, int 
     return ret;
 }
 
+static void lpb_fetchtable(lua_State *L, lpb_State *LS, const pb_Field *f, const pb_Type *t) {
+    if (lua53_getfield(L, -1, (const char*)f->name) == LUA_TNIL) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, (const char*)f->name);
+    }
+    if (t->is_dead) return;
+    if (lua_getmetatable(L, -1))
+        lua_pop(L, 1);
+    else {
+        lpb_pushdefmeta(L, LS, t);
+        lua_setmetatable(L, -2);
+    }
+}
+
 static void lpb_setdeffields(lua_State *L, lpb_State *LS, const pb_Type *t, lpb_DefFlags flags) {
     const pb_Field *f = NULL;
     while (pb_nextfield(t, &f)) {
+        const pb_Type *fetch_type = f->type && f->type->is_map ?
+            &LS->map_type : &LS->array_type;
         int has_field = f->repeated ?
             (flags & USE_REPEAT) && (t->is_proto3 || LS->decode_default_array)
-            && (lua_newtable(L), 1) :
+            && (lpb_fetchtable(L, LS, f, fetch_type), 1) :
             !f->oneof_idx && (f->type_id != PB_Tmessage ?
                     (flags & USE_FIELD) :
                     (flags & USE_MESSAGE) && LS->decode_default_message)
@@ -1452,8 +1474,15 @@ static void lpb_cleardefmeta(lua_State *L, lpb_State *LS, const pb_Type *t) {
 
 static int Lpb_defaults(lua_State *L) {
     lpb_State *LS = lpb_lstate(L);
-    const pb_Type *t = lpb_type(L, LS, lpb_checkslice(L, 1));
+    pb_Slice tn = lpb_checkslice(L, 1);
     int clear = lua_toboolean(L, 2);
+    pb_Type *t = NULL;
+    if (pb_len(tn) < 2 || tn.p[0] != '*')
+        t = (pb_Type*)lpb_type(L, LS, tn);
+    else if (tn.p[1] == 'a' || tn.p[1] == 'A')
+        (t = &LS->array_type)->is_dead = clear;
+    else if (tn.p[1] == 'm' || tn.p[1] == 'M')
+        (t = &LS->map_type)->is_dead = clear;
     if (t == NULL) luaL_argerror(L, 1, "type not found");
     lpb_pushdefmeta(L, LS, t);
     if (clear) lpb_cleardefmeta(L, LS, t);
@@ -1811,16 +1840,6 @@ static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
     }
 }
 
-static void lpb_fetchtable(lpb_Env *e, const pb_Field *f) {
-    lua_State *L = e->L;
-    if (lua53_getfield(L, -1, (const char*)f->name) == LUA_TNIL) {
-        lua_pop(L, 1);
-        lua_newtable(L);
-        lua_pushvalue(L, -1);
-        lua_setfield(L, -3, (const char*)f->name);
-    }
-}
-
 static void lpbD_rawfield(lpb_Env *e, const pb_Field *f) {
     lua_State *L = e->L;
     pb_Slice sv, *s = e->s;
@@ -1921,12 +1940,12 @@ static int lpbD_message(lpb_Env *e, const pb_Type *t) {
         if (f == NULL)
             pb_skipvalue(s, tag);
         else if (f->type && f->type->is_map) {
-            lpb_fetchtable(e, f);
+            lpb_fetchtable(L, e->LS, f, &e->LS->map_type);
             lpbD_checktype(e, f, tag);
             lpbD_map(e, f);
             lua_pop(L, 1);
         } else if (f->repeated) {
-            lpb_fetchtable(e, f);
+            lpb_fetchtable(L, e->LS, f, &e->LS->array_type);
             lpbD_repeated(e, f, tag);
             lua_pop(L, 1);
         } else {
