@@ -1175,7 +1175,7 @@ PB_API pb_Field** pb_sortfield(pb_Type* t) {
         int index = 0;
         unsigned int i = 0;
         const pb_Field* f = NULL;
-        pb_Field** list = malloc(sizeof(pb_Field*) * t->field_count);
+        pb_Field** list = (pb_Field**)malloc(sizeof(pb_Field*) * t->field_count);
 
         assert(list);
         while (pb_nextfield(t, &f)) {

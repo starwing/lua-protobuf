@@ -1832,16 +1832,17 @@ static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
     lpb_newmsgtable(L, t);
     switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
-        lpb_setdeffields(L, LS, t, USE_FIELD|USE_REPEAT|USE_MESSAGE);
+        lpb_setdeffields(L, LS, t,
+                (lpb_DefFlags)(USE_FIELD|USE_REPEAT|USE_MESSAGE));
         break;
     case LPB_METADEF:
-        lpb_setdeffields(L, LS, t, USE_REPEAT|USE_MESSAGE);
+        lpb_setdeffields(L, LS, t, (lpb_DefFlags)(USE_REPEAT|USE_MESSAGE));
         lpb_pushdefmeta(L, LS, t);
         lua_setmetatable(L, -2);
         break;
     default:
         if (LS->decode_default_array || LS->decode_default_message)
-            lpb_setdeffields(L, LS, t, USE_REPEAT|USE_MESSAGE);
+            lpb_setdeffields(L, LS, t, (lpb_DefFlags)(USE_REPEAT|USE_MESSAGE));
         break;
     }
 }
