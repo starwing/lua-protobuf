@@ -279,7 +279,7 @@ print(pb.enum("Color", 2)) --> "Green"
 
 Using `pb.defaults()` to get or set a table with all default values from a message. this table will be used as the metatable of the corresponding decoded message table when setting `use_default_metatable` option.
 
-You could also call `pb.defaults` with `"*map"` or `"*array"` to get the default metatable for map and array when decode a message. This settings will bepass `use_default_metatable` option.
+You could also call `pb.defaults` with `"*map"` or `"*array"` to get the default metatable for map and array when decoding a message. These settings will bypass `use_default_metatable` option.
 
 To clear a default metatable, just pass `nil` as second argument to `pb.defaults()`.
 
