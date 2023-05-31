@@ -202,7 +202,7 @@ In below table of functions, we have several types that have special means:
 | `pb.typefmt(type)`             | String          | transform type name of field into pack/unpack formatter |
 | `pb.enum(type, string)`        | number          | get the value of a enum by name                         |
 | `pb.enum(type, number)`        | string          | get the name of a enum by value                         |
-| `pb.defaults(type[, table|nil])`   | table           | get the default table of type                           |
+| `pb.defaults(type[, table/nil])` | table           | get the default table of type                           |
 | `pb.hook(type[, function])`    | function        | get or set hook functions                               |
 | `pb.option(string)`            | string          | set options to decoder/encoder                          |
 | `pb.state()`                   | `pb.State`      | retrieve current pb state                               |
@@ -515,7 +515,6 @@ All routines in `pb.buffer` module:
 | `b:tohex([i[, j]])` | string        | return the string of hexadigit represent of the data, `i` and `j` are ranges in encoded data, includes. Omit it means the whole range |
 | `b:result([i[,j]])` | string        | return the raw data, `i` and `j` are ranges in encoded data, includes,. Omit it means the whole range |
 | `b:pack(fmt, ...)`  | self          | encode the values passed to `b:pack()`, use `fmt` to indicate how to encode value |
-
 
 
 
