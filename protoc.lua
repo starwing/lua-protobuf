@@ -965,7 +965,10 @@ local function check_service(self, lex, info)
 end
 
 function Parser:resolve(lex, info)
-   self.prefix = { "", info.package }
+   self.prefix = { "" }
+   for token in string.gmatch(info.package, "[^.]+") do
+      insert_tab(self.prefix, token)
+   end
    for _, v in iter(info, 'message_type') do
       check_message(self, lex, v)
    end
