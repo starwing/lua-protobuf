@@ -605,9 +605,12 @@ function _G.test_packed()
       message MyMessage
       {
           repeated int32 intList = 1;
+          repeated int32 nopacks = 2 [packed=false];
       } ]]
    local b = pb.encode("MyMessage", { intList = { 1,2,3 } })
    eq(pb.tohex(b), "0A 03 01 02 03")
+   local b = pb.encode("MyMessage", { nopacks = { 1,2,3 } })
+   eq(pb.tohex(b), "10 01 10 02 10 03")
 
    check_load [[
       syntax="proto3";

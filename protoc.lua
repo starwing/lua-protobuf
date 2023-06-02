@@ -255,12 +255,16 @@ function Lexer:array(opt)
 end
 
 function Lexer:constant(opt)
-   local c = self:full_ident('constant', 'opt') or
-             self:number('opt') or
-             self:quote('opt') or
-             self:structure('opt') or
-             self:array('opt')
-   if not c and not opt then
+   local c = self:full_ident('constant', 'opt')
+   if c == "true"  then return true  end
+   if c == "false" then return false end
+   if c == "none"  then return nil   end
+   if c            then return c     end
+   c = self:number('opt') or
+       self:quote('opt') or
+       self:structure('opt') or
+       self:array('opt')
+   if c == nil and not opt then
       return self:error "constant expected"
    end
    return c
@@ -459,9 +463,6 @@ local function field(self, lex, ident)
    if options then
       info.default_value, options.default = tostring(options.default), nil
       info.json_name, options.json_name = options.json_name, nil
-      if options.packed and options.packed == "false" then
-         options.packed = false
-      end
       info.options = options
    end
    if info.number <= 0 then
