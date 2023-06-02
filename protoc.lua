@@ -10,6 +10,7 @@ local assert = assert
 local tostring = tostring
 local type = type
 local insert_tab = table.insert
+local str_gmatch = string.gmatch
 
 local function meta(name, t)
    t = t or {}
@@ -966,7 +967,7 @@ end
 
 function Parser:resolve(lex, info)
    self.prefix = { "" }
-   for token in string.gmatch(info.package, "[^.]+") do
+   for token in str_gmatch(info.package or "", "[^.]+") do
       insert_tab(self.prefix, token)
    end
    for _, v in iter(info, 'message_type') do
