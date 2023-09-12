@@ -1208,7 +1208,7 @@ static void lpb_newmsgtable(lua_State *L, const pb_Type *t) {
 
 LUALIB_API const pb_Type *lpb_type(lua_State *L, lpb_State *LS, pb_Slice s) {
     const pb_Type *t;
-    if (s.p == NULL || *s.p == '.')
+    if (s.p == NULL || *s.p == '\0' || *s.p == '.')
         t = pb_type(lpbS_state(LS), lpb_name(LS, s));
     else {
         pb_Buffer b;

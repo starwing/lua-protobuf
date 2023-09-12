@@ -251,6 +251,11 @@ end
 
 function _G.test_type()
    pb.clear "not-exists"
+
+   fail("type '' does not exists", function()
+      pb.decode("", "")
+   end)
+
    check_load [[
    message TestTypes {
       optional double   dv    = 1;
