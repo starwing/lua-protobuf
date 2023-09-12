@@ -28,9 +28,9 @@ jobs:
       - name: Install LCov
         run: |
           sudo apt install libperlio-gzip-perl libjson-perl libcapture-tiny-perl libdatetime-perl
-          wget "https://github.com/linux-test-project/lcov/archive/master.zip"
-          unzip "master.zip"
-          cd "lcov-master"
+          wget "https://github.com/linux-test-project/lcov/releases/download/v1.16/lcov-1.16.tar.gz"
+          tar zxf "lcov-1.16.tar.gz"
+          cd "lcov-1.16"
           sudo make install
       - uses: actions/checkout@master
       - name: Install Lua ${{ matrix.luaVersion }}
