@@ -1925,7 +1925,7 @@ static void lpbD_repeated(lpb_Env *e, const pb_Field *f, uint32_t tag) {
     if (pb_gettype(tag) != PB_TBYTES
             || (!f->packed && pb_wtypebytype(f->type_id) == PB_TBYTES)) {
         lpbD_field(e, f, tag);
-        lua_rawseti(L, -2, (lua_Integer)lua_rawlen(L, -2) + 1);
+        lua_rawseti(L, -2, (int)lua_rawlen(L, -2) + 1);
     } else {
         int len = (int)lua_rawlen(L, -1);
         pb_Slice p, *s = e->s;

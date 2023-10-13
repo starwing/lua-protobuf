@@ -147,7 +147,7 @@ end
 
 function Lexer:full_ident(name, opt)
    self:whitespace()
-   local b, ident, pos = self "^()([%a_][%w_.]*)%s*()"
+   local b, ident, pos = self "^()([%a_.][%w_.]*)%s*()"
    if not ident or ident:match "%.%.+" then
       return self:opterror(opt, (name or 'name')..' expected')
    end
