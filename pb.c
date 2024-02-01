@@ -1031,7 +1031,7 @@ static int lpb_unpackfmt(lua_State *L, int idx, const char *fmt, pb_Slice *s) {
         if (lpb_unpackloc(L, &idx, top, *fmt, s, &rets))
             continue;
         if (s->p >= s->end) return lua_pushnil(L), rets + 1;
-        luaL_checkstack(L, 1, "too many values");
+        luaL_checkstack(L, 5, "too many values");
         if (!lpb_unpackscalar(L, &idx, top, *fmt, s)) {
             argcheck(L, (type = lpb_typefmt(*fmt)) >= 0,
                     1, "invalid formater: '%c'", *fmt);
@@ -1733,7 +1733,7 @@ static void lpb_encode_onefield(lpb_Env *e, const pb_Type *t, const pb_Field *f,
 
 static void lpbE_encode(lpb_Env *e, const pb_Type *t, int idx) {
     lua_State *L = e->L;
-    luaL_checkstack(L, 3, "message too many levels");
+    luaL_checkstack(L, 5, "message too many levels");
     if (e->LS->encode_order) {
         const pb_Field *f = NULL;
         while (pb_nextfield(t, &f)) {
@@ -1828,7 +1828,7 @@ static void lpb_usedechooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
 
 static void lpb_pushtypetable(lua_State *L, lpb_State *LS, const pb_Type *t) {
     int mode = LS->encode_mode;
-    luaL_checkstack(L, 2, "too many levels");
+    luaL_checkstack(L, 5, "too many levels");
     lpb_newmsgtable(L, t);
     switch (t->is_proto3 && mode == LPB_DEFDEF ? LPB_COPYDEF : mode) {
     case LPB_COPYDEF:
@@ -1941,7 +1941,7 @@ static int lpbD_message(lpb_Env *e, const pb_Type *t) {
     lua_State *L = e->L;
     pb_Slice *s = e->s;
     uint32_t tag;
-    luaL_checkstack(L, t->field_count * 2, "not enough stack space for fields");
+    luaL_checkstack(L, 5, "not enough stack space for fields");
     while (pb_readvarint32(s, &tag)) {
         const pb_Field *f = pb_field(t, pb_gettag(tag));
         if (f == NULL)
@@ -2193,7 +2193,7 @@ LUALIB_API int luaopen_pb_unsafe(lua_State *L) {
 
 PB_NS_END
 
-/* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra --coverage'
+/* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra'
  * maccc: flags+='-ggdb -shared -undefined dynamic_lookup' output='pb.so'
  * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua54' */
 
