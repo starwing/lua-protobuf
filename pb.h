@@ -1199,26 +1199,36 @@ PB_API const pb_Name *pb_oneofname(const pb_Type *t, int idx) {
 }
 
 PB_API int pb_nexttype(const pb_State *S, const pb_Type **ptype) {
-    const pb_TypeEntry *e = NULL;
     if (S != NULL) {
-        if (*ptype != NULL)
-            e = (pb_TypeEntry*)pb_gettable(&S->types, (pb_Key)(*ptype)->name);
-        while (pb_nextentry(&S->types, (const pb_Entry**)&e))
+        const pb_Entry *ent = NULL;
+        if (*ptype != NULL) {
+            const pb_TypeEntry *e = (const pb_TypeEntry*)
+                pb_gettable(&S->types, (pb_Key)(*ptype)->name);
+            ent = &e->entry;
+        }
+        while (pb_nextentry(&S->types, &ent)) {
+            const pb_TypeEntry *e = (const pb_TypeEntry*)ent;
             if ((*ptype = e->value) != NULL && !(*ptype)->is_dead)
                 return 1;
+        }
     }
     *ptype = NULL;
     return 0;
 }
 
 PB_API int pb_nextfield(const pb_Type *t, const pb_Field **pfield) {
-    const pb_FieldEntry *e = NULL;
     if (t != NULL) {
-        if (*pfield != NULL)
-            e = (pb_FieldEntry*)pb_gettable(&t->field_tags, (*pfield)->number);
-        while (pb_nextentry(&t->field_tags, (const pb_Entry**)&e))
+        const pb_Entry *ent = NULL;
+        if (*pfield != NULL) {
+            const pb_FieldEntry *e = (const pb_FieldEntry*)
+                pb_gettable(&t->field_tags, (*pfield)->number);
+            ent = &e->entry;
+        }
+        while (pb_nextentry(&t->field_tags, &ent)) {
+            const pb_FieldEntry *e = (const pb_FieldEntry*)ent;
             if ((*pfield = e->value) != NULL)
                 return 1;
+        }
     }
     *pfield = NULL;
     return 0;
