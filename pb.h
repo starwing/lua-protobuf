@@ -1372,7 +1372,7 @@ typedef struct pb_ArrayHeader {
 #define pbL_rawh(A)   ((pb_ArrayHeader*)(A) - 1)
 #define pbL_delete(A) ((A) ? (void)free(pbL_rawh(A)) : (void)0)
 #define pbL_count(A)  ((A) ? pbL_rawh(A)->count    : 0)
-#define pbL_add(A)    (pbL_grow((void**)&(A),sizeof(*(A)))==PB_OK ?\
+#define pbL_add(A)    (pbL_grow((void*)&(A),sizeof(*(A)))==PB_OK ?\
                        &(A)[pbL_rawh(A)->count++] : NULL)
 
 struct pb_Loader {
@@ -1432,8 +1432,9 @@ static int pbL_beginmsg(pb_Loader *L, pb_Slice *pv)
 static void pbL_endmsg(pb_Loader *L, pb_Slice *pv)
 { L->s = *pv; }
 
-static int pbL_grow(void **pp, size_t objs) {
-    pb_ArrayHeader *nh, *h = *pp ? pbL_rawh(*pp) : NULL;
+static int pbL_grow(void *p, size_t objs) {
+    union { void *p; void **pp; } up;
+    pb_ArrayHeader *nh, *h = (up.p = p, *up.pp) ? pbL_rawh(*up.pp) : NULL;
     if (h == NULL || h->capacity <= h->count) {
         size_t used = (h ? h->count : 0);
         size_t size = used + 4, nsize = size + (size >> 1);
@@ -1442,8 +1443,8 @@ static int pbL_grow(void **pp, size_t objs) {
         if (nh == NULL) return PB_ENOMEM;
         nh->count    = (unsigned)used;
         nh->capacity = (unsigned)nsize;
-        *pp = nh + 1;
-        memset((char*)*pp + used*objs, 0, (nsize - used)*objs);
+        *up.pp = nh + 1;
+        memset((char*)*up.pp + used*objs, 0, (nsize - used)*objs);
     }
     return PB_OK;
 }
