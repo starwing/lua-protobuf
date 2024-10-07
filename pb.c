@@ -1624,17 +1624,18 @@ static size_t lpbE_enum(lpb_Env *e, const pb_Field *f, int *pexist, int idx) {
                     lpb_name(e->LS, lpb_toslice(L, idx)))) != NULL) {
         if (pexist) *pexist = (ev->number != 0);
         return lpb_checkmem(L, pb_addvarint32(b, ev->number));
-    } else if (type != LUA_TSTRING) {
-        argcheck(L, 0, 2, "number/string expected at field '%s', got %s",
-                (const char*)f->name, luaL_typename(L, idx));
-        return 0;
-    } else {
+    } else if (type == LUA_TSTRING) {
         uint64_t v = lpb_tointegerx(L, idx, &type);
         if (pexist) *pexist = (v != 0);
         if (!type)
             argcheck(L, 0, 2, "can not encode unknown enum '%s' at field '%s'",
                     lua_tostring(L, -1), (const char*)f->name);
         return lpb_checkmem(L, pb_addvarint64(b, v)); 
+    } else {
+        argcheck(L, 0, 2, "number/string expected at field '%s', got %s",
+                (const char*)f->name, luaL_typename(L, idx));
+        if (pexist) *pexist = 0;
+        return 0;
     }
 }
 
