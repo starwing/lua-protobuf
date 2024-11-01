@@ -409,8 +409,10 @@ static size_t lpb_addtype(lua_State *L, pb_Buffer *b, int idx, int type, int *pe
     size_t len = 0;
     switch (type) {
     case PB_Tbool:
-        len = pb_addvarint32(b, ret = lua_toboolean(L, idx));
+        v.u32 = lua_toboolean(L, idx);
+        len = pb_addvarint32(b, v.u32);
         ret = 1;
+        if (v.u32 == 0) has_data = 0;
         break;
     case PB_Tdouble:
         v.lnum = lua_tonumberx(L, idx, &ret);
