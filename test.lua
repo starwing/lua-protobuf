@@ -547,7 +547,7 @@ function _G.test_enum()
 
    fail("invalid varint value at offset 2",
         function() pb.decode("TestEnum", "\8\255") end)
-   fail("number/string expected at field 'color', got boolean",
+   fail("number/string expected at enum field 'color', got boolean",
         function() pb.encode("TestEnum", { color = true }) end)
    fail("can not encode unknown enum 'foo' at field 'color'",
         function() pb.encode("TestEnum", { color = "foo" }) end)
