@@ -391,7 +391,7 @@ static const char *lpb_expected(int type) {
     case PB_Tbytes:    case PB_Tstring:   case PB_Tmessage:
         return "string";
     }
-    return "unknown";
+    return assert(!!"unknown expected type"), "unknown"; /* LCOV_EXCL_LINE */
 }
 
 static int lpb_readvalue(lua_State *L, int idx, int type, lpb_Value *out) {
@@ -447,7 +447,7 @@ static size_t lpb_writevalue(pb_Buffer *b, int type, lpb_Value v) {
         return pb_addvarint64(b, pb_encode_sint64(v.u64));
     case PB_Tbytes: case PB_Tstring:
         return pb_addbytes(b, *v.s);
-    default: assert(!!"unknown type"); return 0;
+    default: assert(!!"unknown type"); return 0; /* LCOV_EXCL_LINE */
     }
 }
 
@@ -706,7 +706,6 @@ static int lpb_packfmt(lua_State *L, int idx, pb_Buffer *b, const char **pfmt, i
             if (level == 0) luaL_argerror(L, 1, "unexpected ')' in format");
             *pfmt = fmt;
             return idx;
-        case '\0':
         default:
             argcheck(L, (type = lpb_typefmt(*fmt)) >= 0,
                     1, "invalid formater: '%c'", *fmt);
@@ -1607,11 +1606,9 @@ static uint64_t lpbE_readenum(lpb_Env *e, int idx, const pb_Field *f) {
                 "can not encode unknown enum '%s' at field '%s'",
                 lua_tostring(L, -1), (const char*)f->name);
         return v;
-    } else {
-        argcheck(L, 0, 2, "number/string expected at enum field '%s', got %s",
+    } else
+        return argcheck(L, 0, 2, "number/string expected at enum field '%s', got %s",
                 (const char*)f->name, luaL_typename(L, idx));
-        return 0;
-    }
 }
 
 static void lpbE_field(lpb_Env *e, int idx, const pb_Field *f, lpbE_Mode m) {
@@ -1661,16 +1658,13 @@ static void lpbE_map(lpb_Env *e, int idx, const pb_Field *f) {
     lpb_checktable(L, idx, f);
     lua_pushnil(L);
     while (lua_next(L, lpb_relindex(idx, 1))) {
-        size_t oldlen = pb_bufflen(e->b), len;
+        size_t len;
         lpb_checkmem(L, pb_addvarint32(e->b, pb_pair(f->number, PB_TBYTES)));
         lpb_checkmem(L, pb_addvarint32(e->b, 0));
         len = pb_bufflen(e->b);
         lpbE_field(e, -2, kf, lpbE_NoZero);
         lpbE_field(e, -1, vf, lpbE_NoZero);
-        if (pb_bufflen(e->b) == len)
-            pb_bufflen(e->b) = oldlen;
-        else
-            lpb_checkmem(L, pb_addlength(e->b, len, 1));
+        lpb_checkmem(L, pb_addlength(e->b, len, 1));
         lua_pop(L, 1);
     }
 }

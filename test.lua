@@ -612,6 +612,7 @@ function _G.test_packed()
           repeated int32 intList = 1;
           repeated int32 nopacks = 2 [packed=false];
       } ]]
+   check_msg(".MyMessage", {intList={}}, {intList={}, nopacks={}})
    local b = pb.encode("MyMessage", { intList = { 1,2,3 } })
    eq(pb.tohex(b), "0A 03 01 02 03")
    local b = pb.encode("MyMessage", { nopacks = { 1,2,3 } })
@@ -676,6 +677,7 @@ function _G.test_map()
    } ]]
 
    check_msg("TestMap", { map = {}, packed_map = {}, msg_map = {} })
+   check_msg("TestMap", { map = {}, packed_map = {}, msg_map = { [""] = {} } })
 
    check_msg(".TestMap", {
              map = { one = 1, two = 2, three = 3 };
@@ -1730,5 +1732,5 @@ else
    os.exit(lu.LuaUnit.run(), true)
 end
 
--- unixcc: run='rm -f *.gcda; lua test.lua; gcov pb.c'
+-- unixcc: run='rm -f *.gcda; lua test.lua; gcov pb.so-pb.c'
 -- win32cc: run='del *.gcda & lua test.lua & gcov pb.c'

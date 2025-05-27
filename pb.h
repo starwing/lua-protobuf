@@ -527,8 +527,7 @@ PB_API size_t pb_readgroup(pb_Slice *s, uint32_t tag, pb_Slice *pv) {
     assert(pb_gettype(tag) == PB_TGSTART);
     while ((count = pb_readvarint32(s, &newtag)) != 0) {
         if (pb_gettype(newtag) == PB_TGEND) {
-            if (pb_gettag(newtag) != pb_gettag(tag))
-                break;
+            if (pb_gettag(newtag) != pb_gettag(tag)) break;
             pv->start = s->start;
             pv->p = p;
             pv->end = s->p - count;
@@ -692,7 +691,7 @@ static int pb_write64(char *buff, uint64_t n) {
 PB_API char *pb_prepbuffsize_(pb_Buffer *b, size_t len) {
     char *newp, *oldp = b->buff;
     size_t expected = pb_bufflen(b) + len;
-    size_t newsize  = 4096;
+    size_t newsize  = sizeof(pb_Buffer)*2;
     while (newsize < PB_MAX_SIZET/2 && newsize < expected)
         newsize += newsize >> 1;
     if (newsize < expected) return NULL;
