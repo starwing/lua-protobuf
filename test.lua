@@ -584,7 +584,7 @@ function _G.test_packed()
         function() pb.encode("TestPacked", { packs = true }) end)
 
    local data = {packs = {}}
-   check_msg(".TestPacked", data, {})
+   check_msg(".TestPacked", data, {packs = {}})
 
    local hasEmpty
    for _, name in pb.types() do
@@ -967,7 +967,7 @@ function _G.test_buffer()
    end
 
    b = buffer.new()
-   fail("encode bytes fail", function() b:pack("#", 10) end)
+   fail("encode bytes failed", function() b:pack("#", 10) end)
    check_load [[
    message Test { optional int32 value = 1 }
    ]]
