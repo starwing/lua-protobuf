@@ -1576,14 +1576,15 @@ static void lpb_checktable(lua_State *L, int idx, const pb_Field *f) {
             (const char*)f->name, luaL_typename(L, idx));
 }
 
-static void lpb_useenchooks(lua_State *L, lpb_State *LS, const pb_Type *t) {
-    lpb_pushenchooktable(L, LS);
+static void lpb_useenchooks(lpb_Env *e, int idx, const pb_Type *t) {
+    lua_State *L = e->L;
+    lpb_pushenchooktable(L, e->LS);
     if (lua53_rawgetp(L, -1, t) != LUA_TNIL) {
-        lua_pushvalue(L, -3);
+        lua_pushvalue(L, lpb_relindex(idx, 2));
         lua_call(L, 1, 1);
         if (!lua_isnil(L, -1)) {
             lua_pushvalue(L, -1);
-            lua_replace(L, -4);
+            lua_replace(L, lpb_relindex(idx, 3));
         }
     }
     lua_pop(L, 2);
@@ -1618,14 +1619,14 @@ static void lpbE_field(lpb_Env *e, int idx, const pb_Field *f, lpbE_Mode m) {
     int r;
     switch (f->type_id) {
     case PB_Tenum:
-        if (e->LS->use_enc_hooks) lpb_useenchooks(L, e->LS, f->type);
+        if (e->LS->use_enc_hooks) lpb_useenchooks(e, idx, f->type);
         v.u64 = lpbE_readenum(e, idx, f);
         if (m == lpbE_NoZero && v.u64 == 0) return;
         else if (m != lpbE_Raw) lpbE_writetag(e, f);
         len = pb_addvarint64(e->b, v.u64);
         break;
     case PB_Tmessage:
-        if (e->LS->use_enc_hooks) lpb_useenchooks(L, e->LS, f->type);
+        if (e->LS->use_enc_hooks) lpb_useenchooks(e, idx, f->type);
         lpb_checktable(L, idx, f);
         oldlen = pb_bufflen(e->b);
         assert(m != lpbE_Raw);
@@ -1732,9 +1733,8 @@ static int Lpb_encode(lua_State *L) {
     luaL_checktype(L, 2, LUA_TTABLE);
     e.L = L, e.LS = LS, e.b = test_buffer(L, 3);
     if (e.b == NULL) e.b = &LS->buffer, pb_bufflen(e.b) = 0;
-    lua_pushvalue(L, 2);
-    if (e.LS->use_enc_hooks) lpb_useenchooks(L, e.LS, t);
-    lpbE_encode(&e, -1, t);
+    if (e.LS->use_enc_hooks) lpb_useenchooks(&e, 2, t);
+    lpbE_encode(&e, 2, t);
     if (e.b != &LS->buffer)
         lua_settop(L, 3);
     else

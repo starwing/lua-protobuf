@@ -193,20 +193,22 @@ In below table of functions, we have several types that have special means:
 | `pb.encode(type, table, b)`    | buffer          | encode a message table into binary form to buffer       |
 | `pb.decode(type, data)`        | table           | decode a binary message into Lua table                  |
 | `pb.decode(type, data, table)` | table           | decode a binary message into a given Lua table          |
-| `pb.pack(fmt, ...)`            | string          | same as `buffer.pack()` but return string               |
-| `pb.unpack(data, fmt, ...)`    | values...       | same as `slice.unpack()` but accept data                |
+| `pb.pack(type, ...)`         | string          | encode a message with flatten fields (ordered by field number) |
+| `pb.unpack(data, type, ...)` | values...       | decode a message with flatten fields (just like above) |
 | `pb.types()`                   | iterator        | iterate all types in `pb` module                        |
 | `pb.type(type)`                | see below       | return informations for specific type                   |
 | `pb.fields(type)`              | iterator        | iterate all fields in a message                         |
 | `pb.field(type, string)`       | see below       | return informations for specific field of type          |
-| `pb.typefmt(type)`             | String          | transform type name of field into pack/unpack formatter |
+| `pb.typefmt(type)`             | string    | transform type name of field into pack/unpack formatter |
 | `pb.enum(type, string)`        | number          | get the value of a enum by name                         |
 | `pb.enum(type, number)`        | string          | get the name of a enum by value                         |
 | `pb.defaults(type[, table/nil])` | table           | get the default table of type                           |
 | `pb.hook(type[, function])`    | function        | get or set hook functions                               |
+| `pb.encode_hook(type[, function])` | function | get or set encode hook functions |
 | `pb.option(string)`            | string          | set options to decoder/encoder                          |
 | `pb.state()`                   | `pb.State`      | retrieve current pb state                               |
 | `pb.state(newstate \| nil)`    | `pb.State`      | set new pb state and retrieve the old one               |
+| `pb.tohex(string)` | string | encode string as hexadigits, for debug purposes |
 
 #### Schema loading
 
@@ -318,6 +320,10 @@ local function make_hook(name, func)
 end
 ```
 
+You could enable “encode hooking” function by call `pb.option “enable_enchooks”`. encode hooks will be called **before** any message or enum value been encoded. The hook caller only accepts one value, the comming encoding value, and can returns a new value that instead to be encoded.  The hook could returns `nil` or just not return anything to makes `pb.encode` just encode the original value.
+
+You could setup encode hooks by `pb.encode_hook()` routine, it’s just as same as `pb.hook()`, but for getting/setting the encode hooks.
+
 #### Options
 
 Setting options to change the behavior of other routines.
@@ -335,15 +341,17 @@ These options are supported currently:
 | `use_default_values`    | set default values by copy values from default table before decode |
 | `use_default_metatable` | set default values by set table from `pb.default()` as the metatable |
 | `enable_hooks`          | `pb.decode` will call `pb.hooks()` hook functions            |
-| `disable_hooks`         | `pb.decode` do not call hooks **(default)**                  |
-| `encode_default_values` | default values also encode |
+| `disable_hooks`         | `pb.decode` do not call hooks **(default)**            |
+| `enable_enchooks` | `pb.encode` will call `pb.encode_hook()` hook functions |
+| `disable_enchooks` | do not call hooks when encoding messages **(default)** |
+| `encode_default_values` | `pb.encode` encode the default value into the wire format |
 | `no_encode_default_values` | do not encode default values **(default)** |
 | `decode_default_array`  | work with `no_default_values`,decode null to empty table for array |
 | `no_decode_default_array`  | work with `no_default_values`,decode null to nil for array **(default)** |
-| `encode_order`          | guarantees the same message will be encoded into the same result with the same schema and the same data (but the order itself is not specified) |
+| `encode_order`          | `pb.encode` encode the messages with field number order |
 | `no_encode_order`       | do not have guarantees about encode orders **(default)** |
-| `decode_default_message`  | decode null message to default message table |
-| `no_decode_default_message`  | decode null message to null  **(default)** |
+| `decode_default_message`  | `pb.decode` decode the empty messages as a empty table |
+| `no_decode_default_message`  | `pb.decode` decode the empty messages as `nil` **(default)** |
 
  *Note*: The string returned by `int64_as_string` or `int64_as_hexstring` will prefix a `'#'` character. Because Lua may convert between string with number, prefix a `'#'` makes Lua return the string as-is.
 
