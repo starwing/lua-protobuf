@@ -839,6 +839,13 @@ static int Lbuf_pack(lua_State *L) {
     return 1;
 }
 
+static int Lbuf_ptr(lua_State *L) {
+    pb_Buffer *buf = check_buffer(L, 1);
+    lua_pushlightuserdata(L, buf->buff);
+    lua_pushinteger(L, buf->size);
+    return 2;
+}
+
 LUALIB_API int luaopen_pb_buffer(lua_State *L) {
     luaL_Reg libs[] = {
         { "__tostring", Lbuf_tostring },
@@ -852,6 +859,7 @@ LUALIB_API int luaopen_pb_buffer(lua_State *L) {
         ENTRY(new),
         ENTRY(reset),
         ENTRY(pack),
+        ENTRY(ptr),
 #undef  ENTRY
         { NULL, NULL }
     };
