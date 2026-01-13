@@ -567,6 +567,25 @@ function _G.test_enum()
              { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "ONE" } },
              { aliased_enumf = { "ZERO", "FIRST", "TWO", 23, "FIRST" } })
    assert(pb.type ".google.protobuf.FileDescriptorSet")
+   check_load [[
+   enum Common {
+    COMMON_NONE = 0;
+    val1 = 20;
+    val2 = 63;
+    val3 = 801;
+    val4 = 255;
+    val5 = -1;  // 这个值会丢失
+    val6 = 25;
+    val7 = 256;
+    val8 = 99;
+    val9 = 50;
+}
+   ]]
+   local neg_count = 0
+   for field_name, number in pb.fields("Common") do
+      if number < 0 then neg_count = neg_count + 1 end
+   end
+   assert(neg_count == 1)
 end
 
 function _G.test_packed()

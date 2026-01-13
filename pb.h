@@ -267,8 +267,9 @@ struct pb_Table {
 };
 
 struct pb_Entry {
-    ptrdiff_t next;
     pb_Key    key;
+    int       next;
+    unsigned  dead : 1;
 };
 
 /* fields */
@@ -821,7 +822,6 @@ PB_API void pb_poolfree(pb_Pool *pool, void *obj)
 
 /* hash table */
 
-#define PBT_DEADKEY     (~(pb_Key)0)
 #define pbT_offset(a,b) ((char*)(a) - (char*)(b))
 #define pbT_index(a,b)  ((pb_Entry*)((char*)(a) + (b)))
 
@@ -840,11 +840,10 @@ static pb_Entry *pbT_hash(const pb_Table *t, pb_Key key) {
 static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
     pb_Entry *mp, *on, *next, *f = NULL;
     if (t->size == 0 && pb_resizetable(t, (size_t)t->size*2) == 0) return NULL;
-    if ((mp = pbT_hash(t, key))->key != 0 && mp->key != PBT_DEADKEY) {
+    if ((mp = pbT_hash(t, key))->key != 0 && !mp->dead) {
         while (f == NULL) {
             pb_Entry *cur = pbT_index(t->hash, t->lastfree -= t->entry_size);
-            if ((cur->key == 0 || cur->key == PBT_DEADKEY) && cur->next == 0)
-                f = cur;
+            if ((cur->key == 0 || cur->dead) && cur->next == 0) f = cur;
         }
         if (f == t->hash)
             return pb_resizetable(t, (size_t)t->size*2u) ?
@@ -861,7 +860,7 @@ static pb_Entry *pbT_newkey(pb_Table *t, pb_Key key) {
             mp = f;
         }
     }
-    mp->key = key;
+    mp->key = key, mp->dead = 0;
     if (t->entry_size != sizeof(pb_Entry))
         memset(mp+1, 0, t->entry_size - sizeof(pb_Entry));
     return mp;
@@ -879,7 +878,7 @@ PB_API size_t pb_resizetable(pb_Table *t, size_t size) {
     nt.hash     = (pb_Entry*)malloc(nt.lastfree);
     if (nt.hash == NULL) return 0;
     memset(nt.hash, 0, nt.lastfree);
-    nt.hash->key = PBT_DEADKEY;
+    nt.hash->dead = 1;
     for (i = 0; i < rawsize; i += t->entry_size) {
         pb_Entry *olde = (pb_Entry*)((char*)t->hash + i);
         pb_Entry *newe = pbT_newkey(&nt, olde->key);
@@ -895,7 +894,7 @@ PB_API pb_Entry *pb_gettable(const pb_Table *t, pb_Key key) {
     pb_Entry *entry;
     if (t == NULL || t->size == 0) return NULL;
     for (entry = pbT_hash(t, key);
-            entry->key != key;
+            entry->key != key || entry->dead;
             entry = pbT_index(entry, entry->next))
         if (entry->next == 0) return NULL;
     return entry;
@@ -910,11 +909,11 @@ PB_API pb_Entry *pb_settable(pb_Table *t, pb_Key key) {
 PB_API int pb_nextentry(const pb_Table *t, const pb_Entry **pentry) {
     size_t i = *pentry ? pbT_offset(*pentry, t->hash) : 0;
     size_t size = (size_t)t->size*t->entry_size;
-    if (*pentry == NULL && t->hash && t->hash->key != PBT_DEADKEY)
+    if (*pentry == NULL && t->hash && !t->hash->dead)
         return (*pentry = t->hash), 1;
     while (i += t->entry_size, i < size) {
         pb_Entry *entry = pbT_index(t->hash, i);
-        if (entry->key != 0) return (*pentry = entry), 1;
+        if (entry->key && !entry->dead) return (*pentry = entry), 1;
     }
     return (*pentry = NULL), 0;
 }
@@ -1231,7 +1230,7 @@ PB_API void pb_deltype(pb_State *S, pb_Type *t) {
             pb_FieldEntry *of = (pb_FieldEntry*)pb_gettable(
                     &t->field_tags, nf->value->number);
             if (of && of->value == nf->value)
-                of->entry.key = PBT_DEADKEY, of->value = NULL;
+                of->entry.dead = 1, of->value = NULL;
             pbT_freefield(S, nf->value);
         }
     }
@@ -1286,9 +1285,9 @@ PB_API void pb_delfield(pb_State *S, pb_Type *t, pb_Field *f) {
     nf = (pb_FieldEntry*)pb_gettable(&t->field_names, (pb_Key)f->name);
     tf = (pb_FieldEntry*)pb_gettable(&t->field_tags, (pb_Key)f->number);
     if (nf && nf->value == f)
-        nf->entry.key = PBT_DEADKEY, nf->value = NULL, ++count;
+        nf->entry.dead = 1, nf->value = NULL, ++count;
     if (tf && tf->value == f)
-        tf->entry.key = PBT_DEADKEY, tf->value = NULL, ++count;
+        tf->entry.dead = 1, tf->value = NULL, ++count;
     if (count) {
         if (f->oneof_idx) --t->oneof_field; 
         pbT_freefield(S, f), --t->field_count;
