@@ -962,7 +962,7 @@ function _G.test_buffer()
    eq(#b, 6)
 
    fail("integer format error: 'foo'", function() buffer.pack("v", "foo") end)
-   if _VERSION == "Lua 5.3" or _VERSION == "Lua 5.4" then
+   if _VERSION == "Lua 5.3" or _VERSION == "Lua 5.4" or _VERSION == "Lua 5.5" then
       fail("integer format error", function() buffer.pack("v", 1e308) end)
    else
       fail("number has no integer representation", function() buffer.pack("v", 1e308) end)
