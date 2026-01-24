@@ -267,9 +267,9 @@ static pb_Slice lpb_toslice(lua_State *L, int idx) {
         pb_Buffer *buffer;
         pb_Slice *s;
         if ((buffer = test_buffer(L, idx)) != NULL)
-            return pb_result(buffer);
+            return buffer->buff ? pb_result(buffer) : pb_lslice("", 0);
         else if ((s = test_slice(L, idx)) != NULL)
-            return *s;
+            return s->p ? *s : pb_lslice("", 0);
     }
     return pb_slice(NULL);
 }

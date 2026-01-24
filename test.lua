@@ -1002,6 +1002,9 @@ function _G.test_buffer()
    b = buffer.new()
    eq(b:pack("i", -1):tohex(), "FF FF FF FF FF FF FF FF FF 01")
    assert(pb.type ".google.protobuf.FileDescriptorSet")
+
+   b = buffer.new()
+   eq(b:result(), "")
 end
 
 function _G.test_slice()
@@ -1069,6 +1072,9 @@ function _G.test_slice()
       s1:enter()
       s1:leave(3)
    end)
+
+   s:reset()
+   eq(s:result(), "")
 
    s:reset "\1\2\3"
    eq({s:leave()}, {s, 1})
