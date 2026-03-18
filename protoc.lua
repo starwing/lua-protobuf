@@ -717,7 +717,7 @@ function toplevel:extend(lex, info)
    lex:expected "{"
    while not lex:test "}" do
       local ident, pos = lex:type_name()
-      local f, t = label_field(self, lex, ident)
+      local f, t = label_field(self, lex, ident, {name: name})
       self.locmap[f] = pos
       f.extendee = name
       insert_tab(ft, f)
