@@ -1787,6 +1787,46 @@ function _G.test_limit()
    pb.decode("Test2", b1..b:result())
 end
 
+function _G.test_load_limit()
+   local function varint(v)
+      local t = {}
+      repeat
+         local b = v % 128
+         v = math.floor(v / 128)
+         t[#t + 1] = string.char(b + (v > 0 and 128 or 0))
+      until v == 0
+      return table.concat(t)
+   end
+   -- DescriptorProto: name = 1, nested_type = 3
+   local function message(name, nested)
+      local body = "\10" .. varint(#name) .. name
+      if nested then body = body .. "\26" .. varint(#nested) .. nested end
+      return body
+   end
+   -- FileDescriptorSet: file = 1, FileDescriptorProto: message_type = 4
+   local function load_set(messages)
+      local file = "\34" .. varint(#messages) .. messages
+      return pb.load("\10" .. varint(#file) .. file)
+   end
+   local function nested(depth)
+      local m = message("Level0")
+      for i = 1, depth - 1 do m = message("Level" .. i, m) end
+      return m
+   end
+   local function siblings(count)
+      local t = {}
+      for i = 1, count do t[i] = message("Sibling" .. i) end
+      return table.concat(t)
+   end
+   withstate(function()
+      -- PB_MAX_LEVELS (pb.h) is 100: that depth loads, one more does not
+      is_true(load_set(nested(100)))
+      eq(load_set(nested(101)), false)
+      -- the limit bounds depth, not the number of messages
+      is_true(load_set(siblings(120)))
+   end)
+end
+
 if _VERSION == "Lua 5.1" and not _G.jit then
    lu.LuaUnit.run()
 else

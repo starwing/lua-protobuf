@@ -1319,6 +1319,9 @@ typedef struct pb_ArrayHeader {
 #define pbL_add(A)    (pbL_grow((void*)&(A),sizeof(*(A)))==PB_OK ?\
                        &(A)[pbL_rawh(A)->count++] : NULL)
 
+/* max DescriptorProto nesting depth; DoS bound for untrusted input */
+#define PB_MAX_LEVELS (100)
+
 struct pb_Loader {
     pb_Slice  s;
     pb_Buffer b;
@@ -1512,9 +1515,10 @@ static int pbL_OneofDescriptorProto(pb_Loader *L, pbL_TypeInfo *info) {
     return PB_OK;
 }
 
-static int pbL_DescriptorProto(pb_Loader *L, pbL_TypeInfo *info) {
+static int pbL_DescriptorProto(pb_Loader *L, pbL_TypeInfo *info, int level) {
     pb_Slice s;
     uint32_t tag;
+    if (level > PB_MAX_LEVELS) return PB_ERROR;
     pbCM(info); pbC(pbL_beginmsg(L, &s));
     while (pb_readvarint32(&L->s, &tag)) {
         switch (tag) {
@@ -1525,7 +1529,7 @@ static int pbL_DescriptorProto(pb_Loader *L, pbL_TypeInfo *info) {
         case pb_pair(6, PB_TBYTES): /* FieldDescriptorProto extension */
             pbC(pbL_FieldDescriptorProto(L, pbL_add(info->extension))); break;
         case pb_pair(3, PB_TBYTES): /* DescriptorProto nested_type */
-            pbC(pbL_DescriptorProto(L, pbL_add(info->nested_type))); break;
+            pbC(pbL_DescriptorProto(L, pbL_add(info->nested_type), level + 1)); break;
         case pb_pair(4, PB_TBYTES): /* EnumDescriptorProto enum_type */
             pbC(pbL_EnumDescriptorProto(L, pbL_add(info->enum_type))); break;
         case pb_pair(8, PB_TBYTES): /* OneofDescriptorProto oneof_decl */
@@ -1548,7 +1552,7 @@ static int pbL_FileDescriptorProto(pb_Loader *L, pbL_FileInfo *info) {
         case pb_pair(2, PB_TBYTES): /* string package */
             pbC(pbL_readbytes(L, &info->package)); break;
         case pb_pair(4, PB_TBYTES): /* DescriptorProto message_type */
-            pbC(pbL_DescriptorProto(L, pbL_add(info->message_type))); break;
+            pbC(pbL_DescriptorProto(L, pbL_add(info->message_type), 1)); break;
         case pb_pair(5, PB_TBYTES): /* EnumDescriptorProto enum_type */
             pbC(pbL_EnumDescriptorProto(L, pbL_add(info->enum_type))); break;
         case pb_pair(7, PB_TBYTES): /* FieldDescriptorProto extension */
