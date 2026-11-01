@@ -1,10 +1,10 @@
 #ifdef _MSC_VER
-#    define _CRT_SECURE_NO_WARNINGS
-#    define _CRT_NONSTDC_NO_WARNINGS
-#    pragma warning(disable : 4244) /* int -> char */
-#    pragma warning(disable : 4706) /* = in if condition */
-#    pragma warning(disable : 4709) /* comma in array index */
-#    pragma warning(disable : 4127) /* const in if condition */
+# define _CRT_SECURE_NO_WARNINGS
+# define _CRT_NONSTDC_NO_WARNINGS
+# pragma warning(disable : 4244) /* int -> char */
+# pragma warning(disable : 4706) /* = in if condition */
+# pragma warning(disable : 4709) /* comma in array index */
+# pragma warning(disable : 4127) /* const in if condition */
 #endif
 
 #define PB_STATIC_API
@@ -40,13 +40,13 @@ static size_t lpb_checkmem(lua_State *L, size_t ret)
 /* clang-format on */
 
 #if LUA_VERSION_NUM < 502
-#    include <assert.h>
+# include <assert.h>
 
-#    define LUA_OK                 0
-#    define lua_rawlen             lua_objlen
-#    define luaL_setfuncs(L, l, n) (assert(n == 0), luaL_register(L, NULL, l))
-#    define luaL_setmetatable(L, name) \
-        (luaL_getmetatable((L), (name)), lua_setmetatable(L, -2))
+# define LUA_OK                 0
+# define lua_rawlen             lua_objlen
+# define luaL_setfuncs(L, l, n) (assert(n == 0), luaL_register(L, NULL, l))
+# define luaL_setmetatable(L, name) \
+    (luaL_getmetatable((L), (name)), lua_setmetatable(L, -2))
 
 static void lua_rawgetp(lua_State *L, int idx, const void *p) {
     lua_pushlightuserdata(L, (void *)p);
@@ -59,8 +59,8 @@ static void lua_rawsetp(lua_State *L, int idx, const void *p) {
     lua_rawset(L, lpb_relindex(idx, 1));
 }
 
-#    ifndef LUA_GCISRUNNING /* not LuaJIT 2.1 */
-#        define luaL_newlib(L, l) (lua_newtable(L), luaL_register(L, NULL, l))
+# ifndef LUA_GCISRUNNING /* not LuaJIT 2.1 */
+#   define luaL_newlib(L, l) (lua_newtable(L), luaL_register(L, NULL, l))
 
 static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isint) {
     lua_Integer i = lua_tointeger(L, idx);
@@ -84,10 +84,10 @@ static void *luaL_testudata(lua_State *L, int idx, const char *type) {
     return NULL;
 }
 
-#    endif
+# endif
 
-#    ifdef LUAI_BITSINT /* not LuaJIT */
-#        include <errno.h>
+# ifdef LUAI_BITSINT /* not LuaJIT */
+#   include <errno.h>
 
 static int luaL_fileresult(lua_State *L, int stat, const char *fname) {
     int en = errno;
@@ -99,14 +99,14 @@ static int luaL_fileresult(lua_State *L, int stat, const char *fname) {
     return lua_pushinteger(L, en), 3;
 }
 
-#    endif /* not LuaJIT */
+# endif /* not LuaJIT */
 
 #endif
 
 #if LUA_VERSION_NUM >= 503
-#    define lua53_getfield lua_getfield
-#    define lua53_rawgeti  lua_rawgeti
-#    define lua53_rawgetp  lua_rawgetp
+# define lua53_getfield lua_getfield
+# define lua53_rawgeti  lua_rawgeti
+# define lua53_rawgetp  lua_rawgetp
 #else /* not Lua 5.3 */
 /* clang-format off */
 static int lua53_getfield(lua_State *L, int idx, const char *field)
@@ -480,10 +480,10 @@ static void lpb_pushvalue(lua_State *L, lpb_State *LS, int type, pb_Slice *s) {
 /* io routines */
 
 #ifdef _WIN32
-#    include <fcntl.h>
-#    include <io.h>
+# include <fcntl.h>
+# include <io.h>
 #else
-#    define setmode(a, b) ((void)0)
+# define setmode(a, b) ((void)0)
 #endif
 
 static int lpbF_read(lua_State *L) {
@@ -1786,7 +1786,7 @@ static void lpbD_checktype(lpb_Env *e, const pb_Field *f, uint32_t tag) {
 
 static void lpbD_map(lpb_Env *e, const pb_Field *f) {
     lua_State *L = e->L;
-    pb_Slice   p, *s = e->s;
+    pb_Slice   p = pb_lslice(NULL, 0), *s = e->s;
     int        mask = 0, top = lua_gettop(L);
     uint32_t   tag;
     lpb_readbytes(L, s, &p);

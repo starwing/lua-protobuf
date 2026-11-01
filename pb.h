@@ -2,40 +2,40 @@
 #define pb_h
 
 #ifndef PB_NS_BEGIN
-#    ifdef __cplusplus
-#        define PB_NS_BEGIN extern "C" {
-#        define PB_NS_END   }
-#    else
-#        define PB_NS_BEGIN
-#        define PB_NS_END
-#    endif
+# ifdef __cplusplus
+#   define PB_NS_BEGIN extern "C" {
+#   define PB_NS_END   }
+# else
+#   define PB_NS_BEGIN
+#   define PB_NS_END
+# endif
 #endif /* PB_NS_BEGIN */
 
 #ifndef PB_STATIC
-#    if __GNUC__
-#        define PB_STATIC static __attribute((unused))
-#    else
-#        define PB_STATIC static
-#    endif
+# if __GNUC__
+#   define PB_STATIC static __attribute((unused))
+# else
+#   define PB_STATIC static
+# endif
 #endif
 
 #ifdef PB_STATIC_API
-#    ifndef PB_IMPLEMENTATION
-#        define PB_IMPLEMENTATION
-#    endif
-#    define PB_API PB_STATIC
+# ifndef PB_IMPLEMENTATION
+#   define PB_IMPLEMENTATION
+# endif
+# define PB_API PB_STATIC
 #endif
 
 #if !defined(PB_API) && defined(_WIN32)
-#    ifdef PB_IMPLEMENTATION
-#        define PB_API __declspec(dllexport)
-#    else
-#        define PB_API __declspec(dllimport)
-#    endif
+# ifdef PB_IMPLEMENTATION
+#   define PB_API __declspec(dllexport)
+# else
+#   define PB_API __declspec(dllimport)
+# endif
 #endif
 
 #ifndef PB_API
-#    define PB_API extern
+# define PB_API extern
 #endif
 
 #if defined(_MSC_VER) || defined(__UNIXOS2__) || defined(__SOL64__)
@@ -48,27 +48,27 @@ typedef signed int         int32_t;
 typedef unsigned long long uint64_t;
 typedef signed long long   int64_t;
 
-#    ifndef INT64_MIN
-#        define INT64_MIN LLONG_MIN
-#    endif
+# ifndef INT64_MIN
+#   define INT64_MIN LLONG_MIN
+# endif
 
-#    ifndef INT64_MAX
-#        define INT64_MAX LLONG_MAX
-#    endif
+# ifndef INT64_MAX
+#   define INT64_MAX LLONG_MAX
+# endif
 
 #elif defined(__SCO__) || defined(__USLC__) || defined(__MINGW32__)
-#    include <stdint.h>
+# include <stdint.h>
 #else
-#    include <inttypes.h>
-#    if (defined(__sun__) || defined(__digital__))
-#        if defined(__STDC__) && (defined(__arch64__) || defined(_LP64))
+# include <inttypes.h>
+# if (defined(__sun__) || defined(__digital__))
+#   if defined(__STDC__) && (defined(__arch64__) || defined(_LP64))
 typedef unsigned long int uint64_t;
 typedef signed long int   int64_t;
-#        else
+#   else
 typedef unsigned long long uint64_t;
 typedef signed long long   int64_t;
-#        endif /* LP64 */
-#    endif /* __sun__ || __digital__ */
+#   endif /* LP64 */
+# endif /* __sun__ || __digital__ */
 #endif
 
 #include <limits.h>
