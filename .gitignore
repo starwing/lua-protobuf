@@ -23,3 +23,7 @@ out*
 test*
 test*.lua
 build/
+
+# local-only agent workspace (never commit)
+AGENTS.md
+notes/

@@ -142,6 +142,7 @@ print(require "serpent".block(data2))
 | `p.unknown_import`  | 详情见下   | 处理schema里`import`语句找不到文件的回调              |
 | `p.unknown_type`    | 详情见下   | 处理schema里未知类型的回调                            |
 | `p.include_imports` | bool       | 编译结果中包含所有`import`的文件    |
+| `p.proto3_optional` | bool       | 允许 proto3 的 `optional` 字段（默认 `true`） |
 
 要编译一个文本的schema信息，首先，生成一个编译器实例。一个编译器实例会记住你用它编译的每一个scehma文件，从而能够正确处理schema之间的import关系：
 
@@ -180,6 +181,10 @@ function p:unknown_type(name)
   return ".My"..name, "message"
 end
 ```
+
+proto3 的 `optional` 字段默认被接受（与 protoc 3.15+ 一致）。设置
+`p.proto3_optional = false` 可以恢复旧的拒绝行为（报 `proto3 disallow 'optional' label`）。
+extension 字段也可以写 `optional`（proto3 只允许 extend `google.protobuf.*Options` 消息）。
 
 设置好这些选项或者回调以后，使用`load()`或`compile()`或`parse()`来按照你的需求得到想要的结果。这些函数都需要直接传入scehma的文本内容作为参数，可以可选地多传入当前schema对应的文件名，用于方便schema之间的`import`指令找到对应的文件，但是除非设置了`include_imports`，否则`import`指令即使找到了对应的文件也不会编译/加载对应文件，只是会检查类型引入是否正确。即使没有设置`include_imports`，也可以手动按照拓扑顺序依次load对应文件从而加载所有schema。
 

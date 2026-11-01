@@ -124,6 +124,7 @@ print(require "serpent".block(data2))
 | `p.unknown_import`  | see below     | handle schema import error                           |
 | `p.unknown_type`    | see below     | handle unknown type in schema                        |
 | `p.include_imports` | bool          | auto load imported proto                             |
+| `p.proto3_optional` | bool          | allow proto3 `optional` fields (default `true`)      |
 
 To parse a text schema content, create a compiler instance first:
 
@@ -161,6 +162,11 @@ function p:unknown_type(name)
   -- if cannot find "Type", treat it as ".MyType" and is a message type return ".My"..name, "message"
 end
 ```
+
+proto3 `optional` fields are accepted by default, like protoc 3.15+.  Set
+`p.proto3_optional = false` to reject them again (`proto3 disallow 'optional'
+label`).  `optional` is also accepted on extension fields (proto3 only allows
+extending the `google.protobuf.*Options` messages).
 
 After setting options, use `load()` or `compile()` or `parse()` function to get result.
 

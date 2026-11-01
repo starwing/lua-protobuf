@@ -8,6 +8,8 @@ local table = table
 local math = math
 local assert = assert
 local tostring = tostring
+local next = next
+local pcall = pcall
 local type = type
 local insert_tab = table.insert
 local str_gmatch = string.gmatch
@@ -35,8 +37,8 @@ local escape = {
    r = "\r", t = "\t", v = "\v"
 }
 
-local function tohex(x) return string.byte(tonumber(x, 16)) end
-local function todec(x) return string.byte(tonumber(x, 10)) end
+local function tohex(x) return string.char(tonumber(x, 16)) end
+local function todec(x) return string.char(tonumber(x, 8) % 256) end
 local function toesc(x) return escape[x] or x end
 
 function Lexer.new(name, src)
@@ -185,7 +187,7 @@ function Lexer:number(opt)
    if not ns then
       return self:opterror(opt, 'floating-point number expected')
    end
-   local es, pos2 = self("(^[eE][+-]?[0-9]+)%s*()", pos)
+   local es, pos2 = self("^([eE][+-]?[0-9]+)%s*()", pos)
    if d1 == "." and d2 == "." then
       return self:error "malformed floating-point number"
    end
@@ -211,8 +213,8 @@ function Lexer:quote(opt)
       self.pos = pos
       if s == q then
          return self.src:sub(start, stop-1)
-                        :gsub("\\x(%x+)", tohex)
-                        :gsub("\\(%d+)", todec)
+                        :gsub("\\x(%x%x?)", tohex)
+                        :gsub("\\([0-7][0-7]?[0-7]?)", todec)
                         :gsub("\\(.)", toesc)
       end
    end
@@ -235,7 +237,7 @@ function Lexer:structure(opt)
       local value = self:constant()
       self:test ","
       self:line_end "opt"
-      t[name] = value
+      t[assert(name)] = value
    end
    return t
 end
@@ -324,7 +326,12 @@ end
 
 function Parser:parsefile(name)
    local info = self.loaded[name]
-   if info then return info end
+   if info then
+      if info == true then
+         error("recursive import: "..name)
+      end
+      return info
+   end
    local errors = {}
    for _, path in ipairs(self.paths) do
       local fn = path ~= "" and path.."/"..name or name
@@ -340,6 +347,8 @@ function Parser:parsefile(name)
    local import_fallback = self.unknown_import
    if import_fallback == true then
       info = import_fallback
+   elseif type(import_fallback) == 'string' then
+      info = name:match(import_fallback) and true
    elseif import_fallback then
       info = import_fallback(self, name)
    end
@@ -381,6 +390,8 @@ local function register_type(self, lex, tname, typ)
       return lex:error("type %s already defined", tname)
    end
    self.typemap[tname] = typ
+   local added = self.typemap_added
+   if added then added[#added+1] = tname end
 end
 
 local function type_info(lex, tname)
@@ -461,9 +472,15 @@ local function field(self, lex, ident)
    }
    local options = inline_option(lex)
    if options then
-      info.default_value, options.default = tostring(options.default), nil
-      info.json_name, options.json_name = options.json_name, nil
-      info.options = options
+      if options.default ~= nil then
+         info.default_value, options.default = tostring(options.default), nil
+      end
+      if options.json_name ~= nil then
+         info.json_name, options.json_name = options.json_name, nil
+      end
+      if next(options) ~= nil then
+         info.options = options
+      end
    end
    if info.number <= 0 then
       lex:error("invalid tag number: "..info.number)
@@ -471,7 +488,7 @@ local function field(self, lex, ident)
    return info, map_entry
 end
 
-local function label_field(self, lex, ident, parent)
+local function label_field(self, lex, ident)
    local label = labels[ident]
    local info, map_entry
    if not label then
@@ -481,18 +498,36 @@ local function label_field(self, lex, ident, parent)
       return field(self, lex, ident)
    end
    local proto3_optional = label == labels.optional and self.syntax == "proto3"
-   if proto3_optional and not (self.proto3_optional and parent) then
+   if proto3_optional and not self.proto3_optional then
       return lex:error("proto3 disallow 'optional' label")
    end
    info, map_entry = field(self, lex, lex:type_name())
+   info.label = label
    if proto3_optional then
-      local ot = default(parent, "oneof_decl")
-      info.oneof_index = #ot
-      ot[#ot+1] = { name = "_" .. info.name }
-   else
-      info.label = label
+      info.proto3_optional = true
    end
    return info, map_entry
+end
+
+-- synthetic oneofs exist only in descriptors; they give proto3 optional fields
+-- a presence bit and must be ordered after all real oneofs (like protoc)
+local function add_synthetic_oneofs(typ)
+   local fields = typ.field
+   if not fields then return end
+   local names = {}
+   for _, f in ipairs(fields) do names[f.name] = true end
+   for _, o in ipairs(typ.oneof_decl or {}) do names[o.name] = true end
+   for _, f in ipairs(fields) do
+      if f.proto3_optional then
+         local name = f.name
+         if name:sub(1, 1) ~= "_" then name = "_" .. name end
+         while names[name] do name = "X" .. name end
+         names[name] = true
+         local ot = default(typ, "oneof_decl")
+         f.oneof_index = #ot
+         ot[#ot+1] = { name = name }
+      end
+   end
 end
 
 local toplevel = {} do
@@ -506,8 +541,8 @@ function toplevel:package(lex, info)
 end
 
 function toplevel:import(lex, info)
-   local mode = lex:ident('"weak" or "public"', 'opt') or "public"
-   if mode ~= 'weak' and mode ~= 'public' then
+   local mode = lex:ident('"weak" or "public"', 'opt')
+   if mode and mode ~= 'weak' and mode ~= 'public' then
       return lex:error '"weak or "public" expected'
    end
    local name = lex:quote()
@@ -522,7 +557,7 @@ function toplevel:import(lex, info)
    if mode == "public" then
       local it = default(info, 'public_dependency')
       insert_tab(it, index)
-   else
+   elseif mode == "weak" then
       local it = default(info, 'weak_dependency')
       insert_tab(it, index)
    end
@@ -563,11 +598,11 @@ function msgbody:extensions(lex, info)
       local stop = math.floor(2^29)
       if lex:keyword('to', 'opt') then
          if not lex:keyword('max', 'opt') then
-            stop = lex:integer "field number range end or 'max'"
+            stop = lex:integer "field number range end or 'max'" + 1
          end
          insert_tab(rt, { start = start, ['end'] = stop })
       else
-         insert_tab(rt, { start = start, ['end'] = start })
+         insert_tab(rt, { start = start, ['end'] = start + 1 })
       end
    until not lex:test ','
    rt[idx+1].options = inline_option(lex)
@@ -575,7 +610,7 @@ function msgbody:extensions(lex, info)
    return self
 end
 
-function msgbody:reserved(lex, info)
+function msgbody:reserved(lex, info, enum)
    lex:whitespace()
    if not lex '^%d' then
       local rt = default(info, 'reserved_name')
@@ -590,13 +625,13 @@ function msgbody:reserved(lex, info)
                                     or 'field number range')
          if lex:keyword('to', 'opt') then
             if lex:keyword('max', 'opt') then
-               insert_tab(rt, { start = start, ['end'] = 2^29-1 })
+               insert_tab(rt, { start = start, ['end'] = enum and 2^31-1 or 2^29 })
             else
                local stop = lex:integer 'field number range end'
-               insert_tab(rt, { start = start, ['end'] = stop })
+               insert_tab(rt, { start = start, ['end'] = enum and stop or stop + 1 })
             end
          else
-            insert_tab(rt, { start = start, ['end'] = start })
+            insert_tab(rt, { start = start, ['end'] = enum and start or start + 1 })
          end
          first = false
       until not lex:test ','
@@ -648,7 +683,7 @@ function toplevel:message(lex, info)
          body_parser(self, lex, typ)
       else
          local fs = default(typ, 'field')
-         local f, t = label_field(self, lex, ident, typ)
+         local f, t = label_field(self, lex, ident)
          self.locmap[f] = pos
          insert_tab(fs, f)
          if t then
@@ -659,6 +694,7 @@ function toplevel:message(lex, info)
       lex:line_end 'opt'
    end
    lex:line_end 'opt'
+   add_synthetic_oneofs(typ)
    if info then
       info = default(info, 'message_type')
       insert_tab(info, typ)
@@ -678,7 +714,7 @@ function toplevel:enum(lex, info)
       if ident == 'option' then
          toplevel.option(self, lex, enum)
       elseif ident == 'reserved' then
-         msgbody.reserved(self, lex, enum)
+         msgbody.reserved(self, lex, enum, true)
       else
          local values  = default(enum, 'value')
          local number  = lex:expected '=' :integer()
@@ -802,8 +838,7 @@ local function make_context(self, lex)
    ctx.loaded  = self.loaded
    ctx.typemap = self.typemap
    ctx.paths   = self.paths
-   ctx.proto3_optional =
-      self.proto3_optional or self.experimental_allow_proto3_optional
+   ctx.proto3_optional = self.proto3_optional ~= false
    ctx.unknown_type = self.unknown_type
    ctx.unknown_import = self.unknown_import
    ctx.on_import = self.on_import
@@ -824,27 +859,38 @@ function Parser:parse(src, name)
    self.loaded[name] = true
    local lex = Lexer.new(name, src)
    local ctx = make_context(self, lex)
+   ctx.typemap_added = {}
    local info = { name = lex.name, syntax = ctx.syntax }
 
-   local syntax = lex:keyword('syntax', 'opt')
-   if syntax then
-      info.syntax = lex:expected '=' :quote()
-      ctx.syntax  = info.syntax
-      lex:line_end()
-   end
-
-   while not lex:eof() do
-      local ident = lex:ident()
-      local top_parser = toplevel[ident]
-      if top_parser then
-         top_parser(ctx, lex, info)
-      else
-         lex:error("unknown keyword '"..ident.."'")
+   local ok, err = pcall(function()
+      local syntax = lex:keyword('syntax', 'opt')
+      if syntax then
+         info.syntax = lex:expected '=' :quote()
+         ctx.syntax  = info.syntax
+         lex:line_end()
       end
-      lex:line_end "opt"
+
+      while not lex:eof() do
+         local ident = lex:ident()
+         local top_parser = toplevel[ident]
+         if top_parser then
+            top_parser(ctx, lex, info)
+         else
+            lex:error("unknown keyword '"..ident.."'")
+         end
+         lex:line_end "opt"
+      end
+      self.loaded[name] = name ~= "<input>" and info or nil
+      ctx:resolve(lex, info)
+   end)
+   if not ok then
+      for _, tname in ipairs(ctx.typemap_added) do
+         self.typemap[tname] = nil
+      end
+      self.loaded[name] = nil
+      error(err, 0)
    end
-   self.loaded[name] = name ~= "<input>" and info or nil
-   return ctx:resolve(lex, info)
+   return info
 end
 
 -- resolver
@@ -868,36 +914,38 @@ local function check_dup(self, lex, typ, map, k, v)
 end
 
 local function check_type(self, lex, tname)
-   if tname:match "^%." then
-      local t = self.typemap[tname]
-      if not t then
-         return lex:error("unknown type '%s'", tname)
+   local absolute = tname:match "^%." ~= nil
+   local t
+   if absolute then
+      t = self.typemap[tname]
+      if t then return t, tname end
+   else
+      local prefix = self.prefix
+      for i = #prefix+1, 1, -1 do
+         local op = prefix[i]
+         prefix[i] = tname
+         local tn = table.concat(prefix, ".", 1, i)
+         prefix[i] = op
+         t = self.typemap[tn]
+         if t then return t, tn end
       end
-      return t, tname
    end
-   local prefix = self.prefix
-   for i = #prefix+1, 1, -1 do
-      local op = prefix[i]
-      prefix[i] = tname
-      local tn = table.concat(prefix, ".", 1, i)
-      prefix[i] = op
-      local t = self.typemap[tn]
-      if t then return t, tn end
-   end
-   local tn, t
+   local tn, typ
+   local full = absolute and tname or "."..tname
    local type_fallback = self.unknown_type
-   if type_fallback then
-      if type_fallback == true then
-         tn = true
-      elseif type(type_fallback) == 'string' then
-         tn = tname:match(type_fallback) and true
-      else
-         tn = type_fallback(self, tname)
-      end
+   if type_fallback == true then
+      tn = full
+   elseif type(type_fallback) == 'string' then
+      tn = tname:match(type_fallback) and full
+   elseif type_fallback then
+      tn, typ = type_fallback(self, tname)
+      if tn == true then tn = full end
    end
    if tn then
-      t = types[t or "message"]
-      if tn == true then tn = "."..tname end
+      t = types[typ or "message"]
+      if not t then
+         return lex:error("invalid type '%s'", tostring(typ))
+      end
       return t, tn
    end
    return lex:error("unknown type '%s'", tname)
@@ -937,6 +985,9 @@ local function check_message(self, lex, info)
       check_dup(self, lex, 'field name', names, 'name', v)
       check_dup(self, lex, 'field number', numbers, 'number', v)
       check_field(self, lex, v)
+   end
+   for _, v in iter(info, 'enum_type') do
+      check_enum(self, lex, v)
    end
    for _, v in iter(info, 'nested_type') do
       check_message(self, lex, v)
@@ -1147,13 +1198,21 @@ end
 local function do_compile(self, f, ...)
    if self.include_imports then
       local old = self.on_import
-      local infos = {}
-      function self.on_import(info)
+      local infos, seen = {}, {}
+      local function add(info)
+         if type(info) ~= "table" then return end
+         if info.name ~= nil then
+            if seen[info.name] then return end
+            seen[info.name] = true
+         end
          insert_tab(infos, info)
       end
-      local r = f(...)
-      insert_tab(infos, r)
+      function self.on_import(info)
+         add(info)
+      end
+      local ok, err = pcall(function(...) add(f(...)) end, ...)
       self.on_import = old
+      if not ok then error(err, 0) end
       return { file = infos }
    end
    return { file = { f(...) } }
