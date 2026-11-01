@@ -1821,7 +1821,7 @@ static void lpbD_repeated(lpb_Env *e, const pb_Field *f, uint32_t tag) {
         lua_rawseti(L, -2, (int)lua_rawlen(L, -2) + 1);
     } else {
         int      len = (int)lua_rawlen(L, -1);
-        pb_Slice p, *s = e->s;
+        pb_Slice p = pb_lslice(NULL, 0), *s = e->s;
         lpb_readbytes(L, s, &p);
         while (p.p < p.end)
             lpb_withinput(e, &p, lpbD_field(e, f)), lua_rawseti(L, -2, ++len);
