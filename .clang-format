@@ -80,7 +80,7 @@ AlwaysBreakBeforeMultilineStrings: true
 AttributeMacros:
   - __capability
 BinPackArguments: true
-BinPackParameters: true
+BinPackParameters: BinPack
 BitFieldColonSpacing: Both
 BraceWrapping:
   AfterCaseLabel: false
@@ -160,7 +160,7 @@ IndentCaseBlocks: false
 IndentCaseLabels: false
 IndentExternBlock: AfterExternBlock
 IndentGotoLabels: true
-IndentPPDirectives: Leave
+IndentPPDirectives: AfterHash
 IndentRequiresClause: true
 IndentWidth: 4
 IndentWrappedFunctionNames: false
@@ -238,7 +238,7 @@ RawStringFormats:
     CanonicalDelimiter: pb
     BasedOnStyle: google
 ReferenceAlignment: Pointer
-ReflowComments: false
+ReflowComments: IndentOnly
 RemoveBracesLLVM: false
 RemoveParentheses: Leave
 RemoveSemicolon: false
@@ -246,8 +246,9 @@ RequiresClausePosition: OwnLine
 RequiresExpressionIndentation: OuterScope
 SeparateDefinitionBlocks: Leave
 ShortNamespaceLines: 1
-SkipMacroDefinitionBody: true
-SortIncludes: Never
+SkipMacroDefinitionBody: false
+SortIncludes:
+  Enabled: true
 SortJavaStaticImport: Before
 SortUsingDeclarations: LexicographicNumeric
 SpaceAfterCStyleCast: false
