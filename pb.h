@@ -806,7 +806,7 @@ PB_API void pb_freetable(pb_Table *t)
 /* clang-format on */
 
 static pb_Entry *pbT_hash(const pb_Table *t, pb_Key key) {
-    pb_Key h = (key * 2654435761U) & (t->size - 1);
+    size_t h = ((size_t)key * 2654435761U) & (t->size - 1);
     if (key && h == 0) h = 1;
     return pbT_index(t->hash, h * t->entry_size);
 }

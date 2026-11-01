@@ -970,6 +970,9 @@ function _G.test_buffer()
    eq(b:pack("((vvv))", 1,2,3):tohex(-5), "04 03 01 02 03")
    fail("unmatch '(' in format", function() buffer.pack "(" end)
    fail("unexpected ')' in format", function() buffer.pack ")" end)
+   -- the format is validated before its arguments are consumed
+   fail("unmatch '(' in format", function() buffer.pack("f(", "foo") end)
+   fail("unexpected ')' in format", function() buffer.pack("f)", "foo") end)
    fail("number/'#number' expected for type 'int32', got string", function() buffer.pack("i", "foo") end)
    fail("number/'#number' expected for type 'int32', got boolean", function() buffer.pack("i", true) end)
    fail("invalid formater: '!'", function() buffer.pack '!' end)
@@ -1023,6 +1026,11 @@ function _G.test_slice()
    eq(s:unpack "v", nil)
    eq(s:leave(), s)
    eq(s:unpack("+s", -4), "\1\2\3")
+   -- '+' clamps to the slice start when the target is before it
+   eq(slice.unpack("abc", "+v", -100), 97)
+   local sc = slice.new "abcdef"
+   eq(sc:unpack "v", 97)
+   eq(sc:unpack("+v", -100), 97)
 
    s = slice "\3\1\2\3"
    for i = 2, 20 do
