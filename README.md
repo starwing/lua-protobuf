@@ -64,6 +64,14 @@ On Windows, you could use MinGW or MSVC, create a `*.sln` project or build it on
 cl /O2 /LD /Fepb.dll /I "$LUA_HEADERS" /DLUA_BUILD_AS_DLL pb.c "$LUA_LIBS"
 ```
 
+Or use the bundled `build.bat` to build a release `pb.dll` with MSVC (static CRT, no VC runtime dependency):
+
+```shell
+build.bat 5.5 msvc
+```
+
+The first argument selects `5.4`, `5.5` or `jit`; `LUA_INC` and `LUA_LIB` override the default Lua paths.
+
 ## Example
 
 ```lua

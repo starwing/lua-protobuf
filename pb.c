@@ -1545,7 +1545,8 @@ static uint64_t lpbE_readenum(lpb_Env *e, int idx, const pb_Field *f) {
 
 static void lpbE_field(lpb_Env *e, int idx, const pb_Field *f, lpbE_Mode m) {
     lua_State *L = e->L;
-    size_t     oldlen, len;
+    size_t     len;
+    unsigned   oldlen;
     lpb_Value  v;
     int        r;
     switch (f->type_id) {
@@ -1605,7 +1606,8 @@ static void lpbE_repeated(lpb_Env *e, int idx, int proto3, const pb_Field *f) {
     int        i;
     lpb_checktable(L, idx, f);
     if (f->packed && f->type_id != PB_Tmessage) {
-        size_t len, oldlen = pb_bufflen(b);
+        size_t   len;
+        unsigned oldlen = pb_bufflen(b);
         lpb_checkmem(L, pb_addvarint32(b, pb_pair(f->number, PB_TBYTES)));
         lpb_checkmem(L, pb_addvarint32(b, 0));
         len = pb_bufflen(b);

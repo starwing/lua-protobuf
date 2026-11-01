@@ -80,6 +80,14 @@ Windows的（注意那个Lua_BUILD_AS_DLL！在Windows上必须带这个预处�
 cl /O2 /LD /Fepb.dll /I Lua53\include /DLUA_BUILD_AS_DLL pb.c Lua53\lib\lua53.lib
 ```
 
+也可以用仓库里的 `build.bat` 构建 release 版 `pb.dll`（需要 MSVC，静态 CRT，不依赖 VC 运行时）：
+
+```shell
+build.bat 5.5 msvc
+```
+
+第一个参数可选 `5.4`、`5.5` 或 `jit`；`LUA_INC` 和 `LUA_LIB` 可以覆盖默认的 Lua 路径。
+
 ## 样例
 
 ```lua
