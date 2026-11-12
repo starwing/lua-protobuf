@@ -216,6 +216,8 @@ extension 字段也可以写 `optional`（proto3 只允许 extend `google.protob
 
 **注意**：只有`pb.load()`通过返回值返回是否出错，你要用`assert(pb.load(...))`去调用这个函数！其他的函数会直接扔一个错误异常，不需要你对返回值调用`assert()`函数。
 
+解码畸形消息会被拒绝：`pb.decode()` 和 `pb.unpack()` 在无法跳过未知字段时直接报错（例如 `invalid unknown field 15 at offset 2`），不再静默返回部分数据。
+
 | 接口            | 返回    | 描述                                          |
 | --------------- | ------- | --------------------------------------------- |
 | `pb.clear()`                   | None            | 清除所有类型                                            |

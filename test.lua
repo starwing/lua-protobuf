@@ -90,12 +90,20 @@ function _G.test_io.test()
    eq(pb.decode("Person", "\240\255\255\255\255\255\255\255\255\1\1"), {})
    eq(pb.decode("Person", "\240\255\255\255\255\255\255\255\255\255"), {})
    eq(pb.decode("Person", "\240\255\255\255\255"), {})
-   eq(pb.decode("Person", "\242\255\255\255\255\1\255"), {})
-   eq(pb.decode("Person", "\x71"), {})
-   eq(pb.decode("Person", "\x33\1\2\3\4\x34"), {})
-   eq(pb.decode("Person", "\x33\1\2\3\4\x44"), {})
-   eq(pb.decode("Person", "\x33\1\2\3\4"), {})
-   eq(pb.decode("Person", "\x75"), {})
+   fail("invalid unknown field 536870910 at offset 7",
+        function() pb.decode("Person", "\242\255\255\255\255\1\255") end)
+   fail("invalid unknown field 14 at offset 2",
+        function() pb.decode("Person", "\x71") end)
+   eq(pb.decode("Person", "\x33\8\1\x34"), {})
+   eq(pb.decode("Person", "\x33\x3b\8\1\x3c\x34"), {})
+   fail("invalid unknown field 6 at offset 2",
+        function() pb.decode("Person", "\x33\1\2\3\4\x34") end)
+   fail("invalid unknown field 6 at offset 2",
+        function() pb.decode("Person", "\x33\1\2\3\4\x44") end)
+   fail("invalid unknown field 6 at offset 2",
+        function() pb.decode("Person", "\x33\1\2\3\4") end)
+   fail("invalid unknown field 14 at offset 2",
+        function() pb.decode("Person", "\x75") end)
    eq(pb.decode("Person", "\x75\1\1\1\1"), {})
 
    fail("type 'Foo' does not exists", function() pb.encode("Foo", {}) end)
@@ -721,11 +729,24 @@ function _G.test_map()
       local chunk = pb.encode("TestNum", {f = 123})
       pb.decode("TestMap", chunk)
    end)
-   eq(pb.decode("TestMap", "\10\4\3\10\1\1"), {
-      map = {["\1"] = 0},
+   -- unknown fields in a map entry are skipped, not parsed as key/value
+   local entry = "\10\1k" .. "\26\3\16\7\0"
+   eq(pb.decode("TestMap", "\10" .. string.char(#entry) .. entry), {
+      map = { k = 0 },
       packed_map = {},
       msg_map = {},
    })
+   -- unknown fields can appear before the key and value
+   entry = "\24\5" .. "\10\1k" .. "\16\7"
+   eq(pb.decode("TestMap", "\10" .. string.char(#entry) .. entry), {
+      map = { k = 7 },
+      packed_map = {},
+      msg_map = {},
+   })
+   -- an unknown field that cannot be skipped rejects the message
+   fail("invalid unknown field 0 at offset 4", function()
+      pb.decode("TestMap", "\10\4\3\10\1\1")
+   end)
    eq(pb.decode("TestMap", "\10\0"), {
       map = { [""] = 0 },
       packed_map = {},
@@ -1793,6 +1814,35 @@ function _G.test_limit()
       b:reset():pack("vs", 18, r)
    end
    pb.decode("Test2", b1..b:result())
+end
+
+function _G.test_decode_unknown()
+   check_load [[
+   message BadUnknown {
+      optional int32 a = 1;
+   }
+   ]]
+   -- a tag whose value cannot be skipped rejects the message
+   fail("invalid unknown field 15 at offset 2",
+        function() pb.decode("BadUnknown", "\123\8\42") end)
+   fail("invalid unknown field 15 at offset 2",
+        function() pb.unpack("BadUnknown", "\123\8\42") end)
+   fail("invalid unknown field 15 at offset 2",
+        function() pb.decode("BadUnknown", string.rep("\123", 80000)) end)
+   fail("invalid unknown field 15 at offset 2",
+        function() pb.unpack("BadUnknown", string.rep("\123", 80000)) end)
+   -- the error points at the malformed tag, after the valid field
+   fail("invalid unknown field 15 at offset 4",
+        function() pb.decode("BadUnknown", "\8\5\123") end)
+   -- every valid wire type of an unknown field is still skipped
+   eq(pb.decode("BadUnknown", "\120\150\1"), {})
+   eq(pb.decode("BadUnknown", "\121\1\2\3\4\5\6\7\8"), {})
+   eq(pb.decode("BadUnknown", "\122\3abc"), {})
+   eq(pb.decode("BadUnknown", "\123\8\1\124"), {})
+   eq(pb.decode("BadUnknown", "\123\59\8\1\60\124"), {})
+   eq(pb.decode("BadUnknown", "\125\1\2\3\4"), {})
+   -- decoding continues after the skipped field
+   eq(pb.decode("BadUnknown", "\120\150\1\8\5"), { a = 5 })
 end
 
 function _G.test_load_limit()

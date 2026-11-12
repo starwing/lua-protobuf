@@ -1786,6 +1786,12 @@ static void lpbD_checktype(lpb_Env *e, const pb_Field *f, uint32_t tag) {
                pb_wtypename(pb_gettype(tag), NULL));
 }
 
+static void lpbD_skipunknown(lpb_Env *e, uint32_t tag) {
+    if (pb_skipvalue(e->s, tag) != 0) return;
+    luaL_error(e->L, "invalid unknown field %d at offset %d",
+               (int)pb_gettag(tag), pb_pos(*e->s) + 1);
+}
+
 static void lpbD_map(lpb_Env *e, const pb_Field *f) {
     lua_State *L = e->L;
     pb_Slice   p = pb_lslice(NULL, 0), *s = e->s;
@@ -1795,15 +1801,15 @@ static void lpbD_map(lpb_Env *e, const pb_Field *f) {
     if (f->type == NULL) return;
     lua_pushnil(L), lua_pushnil(L);
     while (pb_readvarint32(&p, &tag)) {
-        int n = pb_gettag(tag);
-        if (n == 1 || n == 2) {
-            const pb_Field *vf = pb_field(f->type, n);
-            if (vf == NULL) continue;
-            mask |= n;
-            lpb_withinput(e, &p,
-                          (lpbD_checktype(e, vf, tag), lpbD_field(e, vf)));
-            lua_replace(L, top + n);
+        int             n = pb_gettag(tag);
+        const pb_Field *vf = n == 1 || n == 2 ? pb_field(f->type, n) : NULL;
+        if (vf == NULL) {
+            lpb_withinput(e, &p, lpbD_skipunknown(e, tag));
+            continue;
         }
+        mask |= n;
+        lpb_withinput(e, &p, (lpbD_checktype(e, vf, tag), lpbD_field(e, vf)));
+        lua_replace(L, top + n);
     }
     if (!(mask & 1) && lpb_pushdeffield(L, pb_field(f->type, 1), 1))
         lua_replace(L, top + 1), mask |= 1;
@@ -1838,7 +1844,7 @@ static int lpbD_message(lpb_Env *e, const pb_Type *t) {
     while (pb_readvarint32(s, &tag)) {
         const pb_Field *f = pb_field(t, pb_gettag(tag));
         if (f == NULL)
-            pb_skipvalue(s, tag);
+            lpbD_skipunknown(e, tag);
         else if (f->type && f->type->is_map) {
             lpb_fetchtable(L, e->LS, f);
             lpbD_checktype(e, f, tag);
@@ -1894,7 +1900,7 @@ static void lpb_pushunpackdef(lua_State *L, const pb_Type *t, int top) {
 }
 
 static int lpb_unpackfield(lpb_Env *e, const pb_Field *f, uint32_t tag) {
-    if (f == NULL) return pb_skipvalue(e->s, tag), 0;
+    if (f == NULL) return lpbD_skipunknown(e, tag), 0;
     if (f->type && f->type->is_map) {
         lpbD_checktype(e, f, tag);
         lpbD_map(e, f);

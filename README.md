@@ -198,6 +198,8 @@ In below table of functions, we have several types that have special means:
 
 **NOTICE**: Only `pb.load()` returns error on failure, *do check* the result it returns. Other routines raise a error when failure for convenience.
 
+Malformed messages are rejected: `pb.decode()` and `pb.unpack()` raise an error instead of silently returning a partial table when an unknown field cannot be skipped (for example, `invalid unknown field 15 at offset 2`).
+
 | Function                       | Returns         | Description                                             |
 | ------------------------------ | --------------- | ------------------------------------------------------- |
 | `pb.clear()`                   | None            | clear all types                                         |
