@@ -200,6 +200,8 @@ In below table of functions, we have several types that have special means:
 
 Malformed messages are rejected: `pb.decode()` and `pb.unpack()` raise an error instead of silently returning a partial table when an unknown field cannot be skipped (for example, `invalid unknown field 15 at offset 2`).
 
+Encoding and decoding also cap the message nesting depth and raise `message too complex` when it is exceeded.
+
 | Function                       | Returns         | Description                                             |
 | ------------------------------ | --------------- | ------------------------------------------------------- |
 | `pb.clear()`                   | None            | clear all types                                         |

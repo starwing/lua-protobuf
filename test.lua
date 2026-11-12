@@ -1845,6 +1845,36 @@ function _G.test_decode_unknown()
    eq(pb.decode("BadUnknown", "\120\150\1\8\5"), { a = 5 })
 end
 
+function _G.test_encode_limit()
+   check_load [[
+   syntax = "proto3";
+   message EncodeNode {
+      EncodeNode child = 1;
+      repeated EncodeNode kids = 2;
+      map<string, EncodeNode> map = 3;
+   }
+   ]]
+   local value = {}
+   value.child = value
+   fail("message too complex", function() pb.encode("EncodeNode", value) end)
+   value = {}; value.kids = { value }
+   fail("message too complex", function() pb.encode("EncodeNode", value) end)
+   value = {}; value.map = { one = value }
+   fail("message too complex", function() pb.encode("EncodeNode", value) end)
+
+   local function chain(depth)
+      local root = {}
+      local cur = root
+      for _ = 2, depth do cur.child = {}; cur = cur.child end
+      return root
+   end
+   assert(pb.encode("EncodeNode", chain(1000)))
+   fail("message too complex", function()
+      pb.encode("EncodeNode", chain(1001))
+   end)
+   assert(pb.decode("EncodeNode", pb.encode("EncodeNode", chain(1000))))
+end
+
 function _G.test_load_limit()
    local function varint(v)
       local t = {}

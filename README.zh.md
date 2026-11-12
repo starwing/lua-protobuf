@@ -218,6 +218,8 @@ extension 字段也可以写 `optional`（proto3 只允许 extend `google.protob
 
 解码畸形消息会被拒绝：`pb.decode()` 和 `pb.unpack()` 在无法跳过未知字段时直接报错（例如 `invalid unknown field 15 at offset 2`），不再静默返回部分数据。
 
+编码和解码也都限制了消息的嵌套深度，超过上限时抛出 `message too complex`。
+
 | 接口            | 返回    | 描述                                          |
 | --------------- | ------- | --------------------------------------------- |
 | `pb.clear()`                   | None            | 清除所有类型                                            |

@@ -1564,7 +1564,11 @@ static void lpbE_field(lpb_Env *e, int idx, const pb_Field *f, lpbE_Mode m) {
         assert(m != lpbE_Raw), lpbE_writetag(e, f);
         lpb_checkmem(L, pb_addvarint32(e->b, 0));
         len = pb_bufflen(e->b); /* len != 0 because tag written */
-        if (f->type) lpbE_encode(e, idx, f->type);
+        if (f->type) {
+            if (--e->levels == 0) luaL_error(L, "message too complex");
+            lpbE_encode(e, idx, f->type);
+            ++e->levels;
+        }
         if (m == lpbE_NoZero && len == pb_bufflen(e->b))
             pb_bufflen(e->b) = oldlen;
         else
